@@ -7,6 +7,25 @@ feature the middle one, a breaking change the first. The current version is the
 `Version` constant in `internal/version/version.go`; it is shown bottom right in the
 page for signed-in people, by `blasta version`, and in `/api/health`.
 
+## [2.3.0] - 2026-10-05
+
+### Added
+- Search engine and AI discoverability: full metadata on the home page (title, description,
+  keywords, canonical address, Open Graph and Twitter cards, `WebSite` and
+  `SoftwareApplication` structured data, a share image) and a no-JavaScript summary for
+  crawlers that do not run scripts.
+- A crawlable page for the template catalogue at `/templates/` and one for every template at
+  `/templates/<id>`, listing all of its jobs with their notes, the settings it needs and
+  structured data (`TechArticle`, `ItemList`, `BreadcrumbList`).
+- `/robots.txt` (the API stays disallowed), `/sitemap.xml` and `/llms.txt` (a Markdown map
+  of the site for AI assistants). Addresses follow `BLASTA_PUBLIC_URL` or the address the
+  request came in on. All of it is generated from the built-in catalogue.
+
+### Changed
+- Visitors without an account can now browse the templates and read every job. Using a job
+  still needs an account: the button says "Sign in to use". The catalogue API
+  (`/api/presets`) is read-only and open; everything else is unchanged.
+
 ## [2.2.0] - 2026-10-05
 
 ### Added

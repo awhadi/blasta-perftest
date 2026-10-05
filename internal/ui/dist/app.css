@@ -753,3 +753,6 @@ nav { min-width: 0; overflow-x: auto; scrollbar-width: none; }
 nav::-webkit-scrollbar { display: none; }
 /* small screens: just the name, the tagline would crowd the header */
 @media (max-width: 600px) { .byline { display: none; } .brand-name { font-size: 21px; } }
+
+/* Shown only when JavaScript is off (search engines and AI crawlers that do not run scripts). */
+.noscript { max-width: 760px; margin: 0 auto; padding: 32px 20px; color: var(--text); }

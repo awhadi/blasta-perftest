@@ -47,6 +47,17 @@ make build
 | [docs/ENTERPRISE.md](docs/ENTERPRISE.md) | the enterprise test plan on every template |
 | [docs/COVERAGE.md](docs/COVERAGE.md) | what is and is not covered |
 
+## Search engines and AI
+
+The app is a single page, which crawlers cannot read, so BLASTA also serves plain pages
+for them, all generated from the built-in catalogue: `/` carries full metadata (title,
+description, Open Graph and Twitter cards, canonical address, structured data) and a
+no-JavaScript summary; `/templates/` lists every template and `/templates/<id>` has a
+page per template with all of its jobs; `/robots.txt`, `/sitemap.xml` and `/llms.txt`
+(a Markdown map for AI assistants) tie it together. Addresses in them follow
+`BLASTA_PUBLIC_URL`, or the address the request came in on, so set that to your real
+domain. The API stays disallowed for crawlers.
+
 ## Presets
 
 BLASTA ships 77 built-in job templates (1,803 jobs), each with an enterprise test plan (smoke, baseline, load, stress, spike, soak, breakpoint, failover window, with SLO gates; see [docs/ENTERPRISE.md](docs/ENTERPRISE.md)). Besides the CMS, shop and
@@ -216,7 +227,8 @@ read-only filesystem and all capabilities dropped, and has a health check.
 - **Behind a reverse proxy or under a path** (Pangolin, Traefik, nginx, `/blasta`):
   see [docs/PROXY.md](docs/PROXY.md).
 - **Visitors without an account** land on the Test page and can run a few small,
-  time-limited tests; templates and history ask them to sign in or register.
+  time-limited tests. They can also browse and read every template, but using a job
+  and history ask them to sign in or register.
 - Without Compose: `docker build -t blasta .` then
   `docker run -d -p 8080:8080 blasta`.
 

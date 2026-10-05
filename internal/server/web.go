@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/awhadi/blasta-perftest/internal/seo"
 )
 
 // Server is the local web surface: the JSON API plus the embedded UI.
@@ -28,8 +30,9 @@ func NewServer(addr string, mgr *Manager, ui fs.FS, log *slog.Logger, opts ...Op
 	// API handlers keep their own "/api/..." patterns; mount them unstripped
 	// so ServeMux route matching lines up exactly.
 	mux.Handle("/api/", api)
+	seoRoutes(mux, api)
 	if ui != nil {
-		mux.Handle("/", noCache(uiHandler(ui)))
+		mux.Handle("/", noCache(uiHandler(ui, api.siteBase)))
 	}
 	var csp cspExtras
 	if api.auth != nil {
@@ -79,20 +82,31 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	return s.http.Shutdown(ctx)
 }
 
-func uiHandler(fsys fs.FS) http.Handler {
+func uiHandler(fsys fs.FS, base func(*http.Request) string) http.Handler {
 	fileServer := http.FileServer(http.FS(fsys))
+	// index.html carries the page's search and sharing metadata, which needs this site's
+	// address and the catalogue size, so it is filled in on the way out.
+	index := func(w http.ResponseWriter, r *http.Request) {
+		raw, err := fs.ReadFile(fsys, "index.html")
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write(seo.Home(raw, base(r)))
+	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Single-page app: unknown paths fall back to index.html.
 		p := r.URL.Path
-		if p != "/" {
-			if f, err := fsys.Open(stringsTrim(p)); err == nil {
-				f.Close()
-			} else {
-				r2 := r.Clone(r.Context())
-				r2.URL.Path = "/"
-				fileServer.ServeHTTP(w, r2)
-				return
-			}
+		if p == "/" || p == "/index.html" {
+			index(w, r)
+			return
+		}
+		if f, err := fsys.Open(stringsTrim(p)); err == nil {
+			f.Close()
+		} else {
+			index(w, r)
+			return
 		}
 		fileServer.ServeHTTP(w, r)
 	})

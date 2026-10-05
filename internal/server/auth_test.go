@@ -97,14 +97,14 @@ func TestEverythingNeedsSignInWhenGuestsAreOff(t *testing.T) {
 	e := newAuthEnvWith(t, auth.Config{Registration: auth.RegOpen, Guest: off})
 	anon := &person{e: e, c: &http.Client{}}
 	for _, tc := range []struct{ method, path string }{
-		{"GET", "/api/jobs"}, {"GET", "/api/runs"}, {"GET", "/api/presets"}, {"GET", "/api/executors"},
+		{"GET", "/api/jobs"}, {"GET", "/api/runs"}, {"GET", "/api/executors"},
 		{"POST", "/api/jobs"}, {"GET", "/api/runs/run_x/report"}, {"GET", "/api/admin/users"},
 	} {
 		if code, _ := anon.do(tc.method, tc.path, jobBody()); code != 401 {
 			t.Errorf("%s %s without a session = %d, want 401", tc.method, tc.path, code)
 		}
 	}
-	for _, path := range []string{"/api/health", "/api/auth/config"} {
+	for _, path := range []string{"/api/health", "/api/auth/config", "/api/presets", "/api/presets/wordpress"} { // the catalogue is read-only and open to visitors
 		if code, _ := anon.do("GET", path, ""); code != 200 {
 			t.Errorf("%s must stay public (the container health check uses it), got %d", path, code)
 		}
@@ -190,8 +190,13 @@ func TestGuestsGetAShortLimitedTrial(t *testing.T) {
 	public := func(extra string) string {
 		return `{"name":"t","executor":"http","target":{"url":"http://203.0.113.9/"},"concurrency":1,"rps":5,"duration":200000000,"timeout":100000000` + extra + `}`
 	}
-	// Templates, other people's data and settings are closed to guests.
-	for _, path := range []string{"/api/presets", "/api/presets/wordpress", "/api/admin/users", "/api/admin/settings"} {
+	// The template catalogue can be browsed; other people's data and settings are closed to guests.
+	for _, path := range []string{"/api/presets", "/api/presets/wordpress"} {
+		if code, _ := guest.do("GET", path, ""); code != 200 {
+			t.Errorf("guest GET %s = %d, want 200 (browsing templates is open)", path, code)
+		}
+	}
+	for _, path := range []string{"/api/admin/users", "/api/admin/settings"} {
 		if code, _ := guest.do("GET", path, ""); code != 401 {
 			t.Errorf("guest GET %s = %d, want 401", path, code)
 		}

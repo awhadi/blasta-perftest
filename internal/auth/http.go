@@ -127,7 +127,9 @@ func publicPath(p string) bool {
 		"/api/auth/guest", "/api/auth/forgot", "/api/auth/reset", "/api/auth/confirm", "/api/auth/resend", "/api/auth/email/confirm", "/api/auth/guest/captcha", "/api/auth/otp/request", "/api/auth/otp/verify":
 		return true
 	}
-	return strings.HasPrefix(p, "/api/auth/oidc/")
+	// The template catalogue is read-only and the same for everyone: visitors may browse it
+	// (using a job is a different matter, and needs an account).
+	return strings.HasPrefix(p, "/api/auth/oidc/") || p == "/api/presets" || strings.HasPrefix(p, "/api/presets/")
 }
 
 // Gate authenticates an API request. It returns the request to serve (carrying
@@ -471,6 +473,10 @@ func (s *Service) siteBase(r *http.Request) string {
 	}
 	return scheme + "://" + host + forwardedPrefix(r)
 }
+
+// SiteBase is where BLASTA is reached from outside (see siteBase), for absolute links in
+// pages meant for crawlers.
+func (s *Service) SiteBase(r *http.Request) string { return s.siteBase(r) }
 
 // redirectURL is the address the identity provider sends people back to: the
 // Public URL if one is set, otherwise what this request was addressed to.

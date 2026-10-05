@@ -230,7 +230,7 @@ function route() {
   const seg = parts[0].split('?')[0];
   let view = ['reset', 'confirm', 'confirm-email'].includes(seg) ? 'login' : VIEWS.includes(seg) ? seg : 'test';   // emailed links open on the sign-in page
   // A visitor on a free trial can use the Test page only: templates and history ask them to sign in.
-  if (guestMode && (view === 'templates' || view === 'history' || view === 'admin' || view === 'account')) {
+  if (guestMode && (view === 'history' || view === 'admin' || view === 'account')) {   // templates can be browsed; using them needs an account
     history.replaceState(null, '', '#/test');
     route();
     openGate(view);
@@ -257,6 +257,7 @@ function route() {
   if (view === 'account') loadAccount();
   if (view === 'admin') showAdmin(parts[1]);
   if (view === 'templates') {
+    document.querySelectorAll('.tpl-guest-note').forEach((n) => { n.hidden = !guestMode; });
     if (parts[1]) openTemplate(decodeURIComponent(parts[1])); else showTemplateList();
   }
   // Move focus to the new page's heading so keyboard and screen-reader users land in context.
@@ -324,7 +325,7 @@ async function startApp() {
   if (url) $('url').value = url;
   updateSafety();
   loadRuns();
-  if (!guestMode) loadPresets();      // templates are for signed-in users
+  loadPresets();      // visitors can browse the templates; using a job needs an account
   wireHistory();
   pollHealth();
   setInterval(pollHealth, 10000);
@@ -1438,7 +1439,7 @@ function jobCard(j) {
   const gate = j.job.slo ? '<span class="tag gate" title="Has pass/fail targets (SLO)">SLO</span>' : '';
   return '<div class="pjob"><div><div class="pjob-name">' + esc(j.name) + ' ' + tag + gate +
     '</div><div class="pjob-id">' + esc(j.jobId) + '</div></div>' +
-    '<button class="btn primary-sm" type="button" data-use="' + esc(j.jobId) + '">Use this job</button>' +
+    '<button class="btn primary-sm" type="button" data-use="' + esc(j.jobId) + '">' + (guestMode ? 'Sign in to use' : 'Use this job') + '</button>' +
     (j.notes ? '<div class="pjob-notes">' + esc(j.notes) + '</div>' : '') +
     (shown ? '<div class="pjob-target">' + esc(shown) + '</div>' : '') + '</div>';
 }
@@ -1463,6 +1464,7 @@ function renderJobList() {
   $('presetJobs').innerHTML = html;
   $('presetJobs').querySelectorAll('[data-use]').forEach((b) => {
     b.onclick = () => {
+      if (guestMode) { openGate('use'); return; }
       const job = renderedJobs.find((x) => x.jobId === b.dataset.use);
       if (job) useJob(job);
     };
@@ -1969,6 +1971,7 @@ function applyGuestLimits() {
 function openGate(what) {
   const t = {
     templates: ['Sign in to use templates', 'Ready-made templates for WordPress, identity providers, databases, caches and more are part of the full app. Sign in, or create an account, to use them.'],
+    use: ['Sign in to use this job', 'You can browse every template and read what each job does. Using a job, adding it to a test, needs an account. Sign in, or create one.'],
     history: ['Sign in to see your history', 'Test history is saved to your account. Sign in, or create an account, to keep and compare your runs.'],
     admin: ['Sign in', 'That page needs an account.'],
     trial: ['Your free trial is used up', 'Sign in, or create an account, to keep testing with higher limits, templates and saved history.'],

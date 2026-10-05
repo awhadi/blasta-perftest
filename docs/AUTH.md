@@ -104,8 +104,9 @@ is lost, BLASTA reports the saved secrets as unreadable and you enter them again
 ## Free trial for visitors
 
 By default a visitor without an account lands on the **Test** page and can run a
-few small tests for a short while. Templates, history and everything else show
-"sign in or create an account". Defaults (all changeable in Settings): a 15 minute
+few small tests for a short while. They can also **browse every template** and read
+what each job does (the catalogue is the same for everyone and read-only), but using a
+job, history and everything else show "sign in or create an account". Defaults (all changeable in Settings): a 15 minute
 trial, 3 tests, 30 seconds each, 50 requests per second, 20 connections, 20 tests
 per network address per day. A trial can only run plain HTTP(S) tests, **only
 against public addresses** (the private-network guard cannot be turned off), one at

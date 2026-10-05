@@ -412,3 +412,21 @@ func TestSavedButDisabledMailStaysVisible(t *testing.T) {
 		t.Error("the password must never be returned")
 	}
 }
+
+// Visitors may browse the template catalogue (read-only); using anything else still
+// needs an account.
+func TestCatalogueIsPublicButJobsAreNot(t *testing.T) {
+	e := newAdminEnv(t)
+	for _, p := range []string{"/api/presets", "/api/presets/wordpress", "/api/presets/wordpress/render"} {
+		req := httptest.NewRequest("GET", p, nil)
+		if _, ok := e.svc.Gate(httptest.NewRecorder(), req); !ok {
+			t.Errorf("%s must be open to visitors", p)
+		}
+	}
+	for _, p := range []string{"/api/runs/r1/stop", "/api/admin/users", "/api/presetsx"} {
+		w := httptest.NewRecorder()
+		if _, ok := e.svc.Gate(w, httptest.NewRequest("POST", p, nil)); ok || w.Code != 401 {
+			t.Errorf("%s must still need an account (ok=%v code=%d)", p, ok, w.Code)
+		}
+	}
+}
