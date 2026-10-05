@@ -1,7 +1,10 @@
 package server
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"io/fs"
 	"log/slog"
@@ -39,7 +42,7 @@ func NewServer(addr string, mgr *Manager, ui fs.FS, log *slog.Logger, opts ...Op
 		csp = api.auth.CaptchaCSP
 	}
 	var handler http.Handler = securityHeaders(mux, csp)
-	handler = api.stripBase(handler)
+	handler = api.stripBase(gzipSite(handler))
 	handler = accessLog(handler, log, func(r *http.Request) string {
 		if api.auth != nil {
 			return api.auth.ClientIP(r)
@@ -83,32 +86,48 @@ func (s *Server) Shutdown(ctx context.Context) error {
 }
 
 func uiHandler(fsys fs.FS, base func(*http.Request) string) http.Handler {
-	fileServer := http.FileServer(http.FS(fsys))
 	// index.html carries the page's search and sharing metadata, which needs this site's
 	// address and the catalogue size, so it is filled in on the way out.
-	index := func(w http.ResponseWriter, r *http.Request) {
+	index := func(w http.ResponseWriter, r *http.Request, status int) {
 		raw, err := fs.ReadFile(fsys, "index.html")
 		if err != nil {
 			http.NotFound(w, r)
 			return
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		if status != http.StatusOK {
+			w.Header().Set("X-Robots-Tag", "noindex")
+		}
+		w.WriteHeader(status)
 		_, _ = w.Write(seo.Home(raw, base(r)))
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Single-page app: unknown paths fall back to index.html.
 		p := r.URL.Path
 		if p == "/" || p == "/index.html" {
-			index(w, r)
+			index(w, r, http.StatusOK)
 			return
 		}
-		if f, err := fsys.Open(stringsTrim(p)); err == nil {
-			f.Close()
+		if p == "/favicon.ico" {
+			p = "/favicon.png" // browsers ask for this by name
+		}
+		b, err := fs.ReadFile(fsys, stringsTrim(p))
+		if err != nil {
+			// The app routes with the # part of the address, so any other path is not a
+			// page: answer 404 (search engines must not index it), still with the app so a
+			// person who mistyped lands somewhere useful.
+			index(w, r, http.StatusNotFound)
+			return
+		}
+		// Files are checked with an ETag on each visit (so an upgrade shows at once) and
+		// answered with 304 when unchanged; the fonts never change and may be kept for a year.
+		sum := sha256.Sum256(b)
+		w.Header().Set("ETag", `"`+hex.EncodeToString(sum[:8])+`"`)
+		if strings.HasPrefix(p, "/fonts/") {
+			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 		} else {
-			index(w, r)
-			return
+			w.Header().Set("Cache-Control", "no-cache")
 		}
-		fileServer.ServeHTTP(w, r)
+		http.ServeContent(w, r, p, time.Time{}, bytes.NewReader(b))
 	})
 }
 
@@ -121,7 +140,7 @@ func stringsTrim(p string) string {
 
 func noCache(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Cache-Control", "no-store") // the page itself; files override this (see uiHandler)
 		next.ServeHTTP(w, r)
 	})
 }

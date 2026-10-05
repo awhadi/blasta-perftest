@@ -224,6 +224,7 @@ var layout = template.Must(template.New("page").Parse(`<!doctype html>
 <meta name="twitter:image" content="{{.Base}}/og.png">
 <meta name="theme-color" content="#e8663a">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23e8663a'/%3E%3Cpath d='M18 4 8 18h7l-1 10 10-14h-7z' fill='%231a1207'/%3E%3C/svg%3E">
+<link rel="icon" type="image/png" sizes="48x48" href="{{.Base}}/favicon.png">
 <link rel="alternate" type="text/plain" href="{{.Base}}/llms.txt" title="BLASTA for AI assistants">
 <link rel="stylesheet" href="{{.Base}}/page.css">
 {{.LD}}

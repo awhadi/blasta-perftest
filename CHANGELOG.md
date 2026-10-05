@@ -7,6 +7,23 @@ feature the middle one, a breaking change the first. The current version is the
 `Version` constant in `internal/version/version.go`; it is shown bottom right in the
 page for signed-in people, by `blasta version`, and in `/api/health`.
 
+## [2.4.1] - 2026-10-05
+
+### Fixed
+- `/favicon.ico` returned the app's HTML page; it now serves a real icon (`favicon.png`,
+  also linked from every page).
+- Unknown addresses returned `200` (a "soft 404" that search engines may index); they now
+  answer `404` with `X-Robots-Tag: noindex`, still showing the app so a mistyped address
+  lands somewhere useful. `/templates` redirects to `/templates/` instead of duplicating it.
+- Pages, scripts, styles and the sitemap are compressed with gzip for clients that ask for
+  it; the API and its live run stream are not touched.
+- Static files carry an `ETag` and answer `304 Not Modified` when unchanged (an upgrade is
+  still picked up at once), and the fonts are cached for a year.
+
+### Added
+- A small footer in the app links to `/templates/`, `llms.txt` and the sitemap, so the
+  template pages are reachable by a link from the home page.
+
 ## [2.4.0] - 2026-10-05
 
 ### Added

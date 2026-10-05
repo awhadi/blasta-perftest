@@ -1,10 +1,15 @@
 package server
 
 import (
+	"compress/gzip"
+	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/awhadi/blasta-perftest/internal/ui"
 )
 
 func TestCrawlerRoutes(t *testing.T) {
@@ -38,5 +43,58 @@ func TestCrawlerRoutes(t *testing.T) {
 	}
 	if c, _, b := get("/templates/nope"); c != 404 || !strings.Contains(b, "noindex") {
 		t.Errorf("unknown template: %d", c)
+	}
+}
+
+func TestSiteBehavesLikeAWebsiteForCrawlers(t *testing.T) {
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	h := NewServer("127.0.0.1:0", NewManager(log), ui.Assets(), log).http.Handler
+	do := func(path string, hdr map[string]string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest("GET", path, nil)
+		for k, v := range hdr {
+			req.Header.Set(k, v)
+		}
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, req)
+		return w
+	}
+	if w := do("/favicon.ico", nil); w.Code != 200 || w.Header().Get("Content-Type") != "image/png" {
+		t.Errorf("favicon.ico: %d %s", w.Code, w.Header().Get("Content-Type"))
+	}
+	if w := do("/no/such/page", nil); w.Code != 404 || w.Header().Get("X-Robots-Tag") != "noindex" {
+		t.Errorf("an unknown path must be a 404 that is not indexed: %d %q", w.Code, w.Header().Get("X-Robots-Tag"))
+	}
+	if w := do("/", nil); w.Code != 200 || !strings.Contains(w.Body.String(), "<title>BLASTA") {
+		t.Errorf("home: %d", w.Code)
+	}
+	if w := do("/templates", nil); w.Code != 301 || !strings.HasSuffix(w.Header().Get("Location"), "/templates/") {
+		t.Errorf("/templates must redirect to /templates/: %d %s", w.Code, w.Header().Get("Location"))
+	}
+	// Files: an ETag, a 304 when unchanged, long caching for fonts, gzip for text.
+	w := do("/app.js", nil)
+	etag := w.Header().Get("ETag")
+	if w.Code != 200 || etag == "" || w.Header().Get("Cache-Control") != "no-cache" {
+		t.Errorf("app.js: %d etag=%q cache=%q", w.Code, etag, w.Header().Get("Cache-Control"))
+	}
+	if w := do("/app.js", map[string]string{"If-None-Match": etag}); w.Code != 304 {
+		t.Errorf("an unchanged file must be 304, got %d", w.Code)
+	}
+	if w := do("/fonts/dm-sans-latin-wght.woff2", nil); !strings.Contains(w.Header().Get("Cache-Control"), "immutable") {
+		t.Errorf("fonts should be cached for a long time: %q", w.Header().Get("Cache-Control"))
+	}
+	z := do("/templates/wordpress", map[string]string{"Accept-Encoding": "gzip"})
+	if z.Header().Get("Content-Encoding") != "gzip" {
+		t.Fatalf("pages should be compressed for clients that accept it")
+	}
+	zr, err := gzip.NewReader(z.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plain, _ := io.ReadAll(zr)
+	if !strings.Contains(string(plain), "<h1>WordPress load testing template</h1>") {
+		t.Error("the compressed page does not decompress to the page")
+	}
+	if w := do("/og.png", map[string]string{"Accept-Encoding": "gzip"}); w.Header().Get("Content-Encoding") != "" {
+		t.Error("images must not be compressed again")
 	}
 }

@@ -54,6 +54,9 @@ func seoRoutes(mux *http.ServeMux, a *API) {
 		w.WriteHeader(status)
 		_, _ = w.Write(b)
 	}
+	mux.HandleFunc("GET /templates", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, a.siteBase(r)+"/templates/", http.StatusMovedPermanently)
+	})
 	mux.HandleFunc("GET /templates/{$}", func(w http.ResponseWriter, r *http.Request) {
 		html(w, http.StatusOK, seo.Index(a.siteBase(r)))
 	})
