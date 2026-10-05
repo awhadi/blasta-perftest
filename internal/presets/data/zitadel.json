@@ -3,6 +3,7 @@
   "title": "ZITADEL",
   "category": "Identity",
   "summary": "ZITADEL OIDC endpoints and health. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Load tests ZITADEL's OpenID Connect endpoints and health: discovery, keys, and the authorization and token endpoints with their error cases. It shows how sign-in and token issuing scale.",
   "stack": "ZITADEL",
   "variables": [
     {

@@ -3,6 +3,7 @@
   "title": "Discourse",
   "category": "Forum",
   "summary": "Discourse forum: categories, topics and the JSON API. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Load tests a Discourse forum: the latest topics list, a category, a single topic as JSON, JSON search and the latest JSON feed. Discourse runs on Rails with PostgreSQL and Redis, so this shows how caching and the JSON API hold up as readers arrive.",
   "stack": "Ruby on Rails + PostgreSQL + Redis",
   "variables": [
     {

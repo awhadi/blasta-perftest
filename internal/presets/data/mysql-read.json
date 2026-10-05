@@ -3,6 +3,7 @@
   "title": "MySQL / MariaDB reads",
   "category": "Database",
   "summary": "Read-only queries against MySQL or MariaDB. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Load tests MySQL or MariaDB with read-only queries: a single-row select, COUNT(*), an indexed lookup and a connection pool saturation test. It shows query latency under concurrency and the point where the connection limit is hit. Nothing is written.",
   "stack": "MySQL / MariaDB",
   "variables": [
     {

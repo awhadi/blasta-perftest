@@ -3,6 +3,7 @@
   "title": "Generic LAMP / LEMP",
   "category": "Generic",
   "summary": "Hostile starting point for any PHP or Python stack. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "A gentle starting point for any PHP or Python stack behind nginx or Apache: the root document, the application entry point, 404 handling and the server's response headers. Use it first to learn the baseline of a new server before running heavier templates.",
   "stack": "nginx/Apache + PHP or Python",
   "variables": [
     {

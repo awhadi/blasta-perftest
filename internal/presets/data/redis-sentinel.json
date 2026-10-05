@@ -3,6 +3,7 @@
   "title": "Redis Sentinel",
   "category": "Cache",
   "summary": "Sentinel health, master discovery and quorum checks. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Load tests Redis Sentinel on port 26379: PING, master address discovery, the masters and replicas lists, a quorum check and a reconnect storm after a failover. It shows how clients behave when the master changes.",
   "stack": "Redis Sentinel (port 26379)",
   "variables": [
     {

@@ -115,11 +115,44 @@ func LLMs(base string) string {
 	for _, c := range cats {
 		fmt.Fprintf(&b, "## %s templates\n\n", c)
 		for _, p := range byCat[c] {
-			fmt.Fprintf(&b, "- [%s](%s/templates/%s): %s\n", p.Title, base, url.PathEscape(p.ID), oneLine(clean(p.Summary), 160))
+			fmt.Fprintf(&b, "- [%s](%s/templates/%s): %s\n", p.Title, base, url.PathEscape(p.ID), oneLine(blurb(p), 160))
 		}
 		b.WriteString("\n")
 	}
 	return b.String()
+}
+
+// blurb is what a template covers: its description, or the short summary when it has none.
+func blurb(p presets.Preset) string {
+	if d := strings.TrimSpace(p.Description); d != "" {
+		return d
+	}
+	return clean(p.Summary)
+}
+
+// sentences keeps whole sentences of s while they fit in max characters (a search result
+// cuts text at about 155), or the first one cut at a word if even that is too long.
+func sentences(s string, max int) string {
+	s = strings.Join(strings.Fields(s), " ")
+	if len(s) <= max {
+		return s
+	}
+	out := ""
+	for _, part := range strings.SplitAfter(s, ". ") {
+		if len(out)+len(part) > max {
+			break
+		}
+		out += part
+	}
+	if out = strings.TrimSpace(out); out != "" {
+		return out
+	}
+	// One long sentence: end at the last comma that fits, so it does not stop mid-phrase.
+	cut := s[:max-1]
+	if i := strings.LastIndexAny(cut, ",;"); i > max/2 {
+		return strings.TrimRight(cut[:i], " ,;:") + "…"
+	}
+	return oneLine(s, max)
 }
 
 // clean drops the boilerplate sentence about the enterprise plan from a summary.
@@ -261,7 +294,7 @@ func Index(base string) []byte {
 			n++
 			link := base + "/templates/" + url.PathEscape(p.ID)
 			fmt.Fprintf(&b, "<li><a href=\"%s\"><strong>%s</strong></a><p>%s</p><span class=\"meta\">%d jobs</span></li>",
-				esc(link), esc(p.Title), esc(oneLine(clean(p.Summary), 170)), len(p.Jobs))
+				esc(link), esc(p.Title), esc(oneLine(blurb(p), 170)), len(p.Jobs))
 			items = append(items, map[string]any{"@type": "ListItem", "position": n, "name": p.Title, "url": link})
 		}
 		b.WriteString("</ul></section>")
@@ -309,18 +342,13 @@ func templateTitle(name string) string {
 	return oneLine(shortName(name), 50) + " | BLASTA"
 }
 
-// templateDesc is what the template is (its summary) plus how many jobs it holds, kept
-// within about 155 characters (what search results show).
+// templateDesc is the meta description: what the template covers, in whole sentences
+// that fit what search results show (about 155 characters).
 func templateDesc(p presets.Preset, sum string) string {
-	tail := fmt.Sprintf(" %d load test jobs in BLASTA.", len(p.Jobs))
-	if len(sum) < 50 {
-		sum = strings.TrimRight(sum, " .") + ". Ready-made load tests for " + shortName(p.Title) + "."
+	if len(sum) < 70 {
+		sum = strings.TrimRight(sum, " .") + ". Ready-made load tests for " + shortName(p.Title) + " with " + fmt.Sprint(len(p.Jobs)) + " jobs."
 	}
-	sum = oneLine(sum, 155-len(tail))
-	if !strings.HasSuffix(sum, ".") && !strings.HasSuffix(sum, "…") {
-		sum += "."
-	}
-	return sum + tail
+	return sentences(sum, 158)
 }
 
 // Page is the page for one template, or false if there is none with that id.
@@ -330,7 +358,7 @@ func Page(base, id string) ([]byte, bool) {
 		return nil, false
 	}
 	canon := base + "/templates/" + url.PathEscape(p.ID)
-	sum := clean(p.Summary)
+	sum := blurb(p)
 	title, desc := templateTitle(p.Title), templateDesc(p, sum)
 	var b strings.Builder
 	b.WriteString("<p class=\"facts\">")
@@ -425,7 +453,7 @@ func Page(base, id string) ([]byte, bool) {
 		breadcrumbLD(crumbs),
 	}})
 	return render(page{Title: title, Desc: desc, Canonical: canon, Base: base, Type: "article",
-		H1: shortName(p.Title) + " load testing template", Lead: sum, Crumbs: crumbs, LD: ld, Body: template.HTML(b.String())}), true
+		H1: shortName(p.Title) + " load testing template", Lead: clean(p.Summary), Crumbs: crumbs, LD: ld, Body: template.HTML(b.String())}), true
 }
 
 // NotFound is the page for an unknown template.

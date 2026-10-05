@@ -3,6 +3,7 @@
   "title": "Caching and CDN",
   "category": "Web performance",
   "summary": "Cache hit versus bypass, conditional requests, compression, large files and redirects. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Measures how a CDN, reverse proxy or browser cache behaves under load: a normal cached request against a cache bypass that reaches the origin, conditional requests that should return 304, compressed responses, static assets, large downloads, redirects and 404 pages. Comparing the first two shows how much the cache protects your origin.",
   "stack": "CDN, reverse proxy or browser caching",
   "variables": [
     {

@@ -3,6 +3,7 @@
   "title": "Grafana and Prometheus",
   "category": "Operations",
   "summary": "Dashboards API, health and PromQL queries. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Load tests Grafana and Prometheus: the Grafana health API and login page, Prometheus health, an instant query and a one-hour range query. It shows how dashboards and queries behave when many people open them at once.",
   "stack": "Grafana, Prometheus",
   "variables": [
     {

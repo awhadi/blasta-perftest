@@ -65,12 +65,14 @@ type Secret struct {
 
 // Preset is a named group of related job templates.
 type Preset struct {
-	ID        string     `json:"id"`
-	Title     string     `json:"title"`
-	Category  string     `json:"category"`
-	Summary   string     `json:"summary,omitempty"`
-	Stack     string     `json:"stack,omitempty"`
-	Variables []Variable `json:"variables,omitempty"`
+	ID       string `json:"id"`
+	Title    string `json:"title"`
+	Category string `json:"category"`
+	Summary  string `json:"summary,omitempty"`
+	// Description says what the template covers and what it shows, in a few sentences.
+	Description string     `json:"description,omitempty"`
+	Stack       string     `json:"stack,omitempty"`
+	Variables   []Variable `json:"variables,omitempty"`
 	// Secrets maps each ${ENV_NAME} credential used by this preset to guidance
 	// on getting it. Values are never part of a preset.
 	Secrets map[string]Secret `json:"secrets,omitempty"`

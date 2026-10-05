@@ -3,6 +3,7 @@
   "title": "Dex",
   "category": "Identity",
   "summary": "Dex OIDC provider with its connectors. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Load tests Dex as an OpenID Connect provider: discovery, signing keys, the authorization endpoint, silent authentication, and the token endpoint with its error cases, all with the connectors you have configured. It shows how Dex copes with a burst of sign-ins.",
   "stack": "Dex",
   "variables": [
     {

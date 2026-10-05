@@ -3,6 +3,7 @@
   "title": "Static site (Hugo, Jekyll, Astro)",
   "category": "Static",
   "summary": "Prebuilt HTML, images and build metadata. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Load tests a static site built with Hugo, Jekyll or Astro: the home page, an inner page, sitemap.xml, a static asset and the 404 page. It shows the ceiling of your web server or CDN when no application code is involved.",
   "stack": "Static files + CDN",
   "variables": [
     {

@@ -3,6 +3,7 @@
   "title": "WebSocket",
   "category": "WebSocket",
   "summary": "Handshake latency and message round-trip time. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Load tests a WebSocket endpoint: a handshake-only test and an echo round trip. It shows the time to open a connection and the message round-trip latency.",
   "stack": "WebSocket",
   "variables": [
     {

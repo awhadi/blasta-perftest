@@ -3,6 +3,7 @@
   "title": "CouchDB",
   "category": "Data services",
   "summary": "Liveness, database info, document reads and writes. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Load tests Apache CouchDB: the _up liveness check, the welcome document, database info, listing documents with _all_docs, listing databases and creating documents. It shows read and write throughput; the write job creates real documents, so use a staging database.",
   "stack": "Apache CouchDB",
   "variables": [
     {

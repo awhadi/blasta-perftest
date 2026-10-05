@@ -3,6 +3,7 @@
   "title": "authentik",
   "category": "Identity",
   "summary": "Per-application OIDC provider, flows and health. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Load tests authentik's per-application OpenID Connect provider: discovery, keys, the authorization and token endpoints with their error cases, plus the flow and health endpoints. It shows how login flows and token issuing behave as concurrent sign-ins grow.",
   "stack": "authentik",
   "variables": [
     {

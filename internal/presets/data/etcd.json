@@ -3,6 +3,7 @@
   "title": "etcd",
   "category": "Infrastructure",
   "summary": "Health, version and key-value reads and writes through the gRPC gateway. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Load tests etcd v3 through its gRPC gateway: health, version, linearizable and serializable key reads, key writes and a metrics scrape. Comparing the two read types shows the cost of consensus, and the write job shows how fast the cluster commits.",
   "stack": "etcd v3",
   "variables": [
     {

@@ -3,6 +3,7 @@
   "title": "REST API patterns (any service)",
   "category": "API",
   "summary": "Every common REST scenario: lists, pagination, filters, items, caching, writes, bulk, uploads, content negotiation, error handling and auth. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Covers every common REST scenario for any JSON API: lists, pagination (first page and deep offset), filtering, sorting, sparse fields and expanded relations, single and missing items, conditional requests, create, replace, patch and delete, bulk and large bodies, uploads, content negotiation, error handling and authentication.",
   "stack": "Any JSON REST API",
   "variables": [
     {

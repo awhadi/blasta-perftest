@@ -3,6 +3,7 @@
   "title": "InfluxDB",
   "category": "Data services",
   "summary": "Health, ping and queries on InfluxDB 1.x and 2.x. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Load tests InfluxDB 1.x and 2.x: ping and health, SHOW DATABASES, a query of recent points, writing a single point and writing a batch of twenty. It shows ingest and query behaviour; the write jobs create real data, so use a test database.",
   "stack": "InfluxDB",
   "variables": [
     {

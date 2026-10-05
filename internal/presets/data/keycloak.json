@@ -3,6 +3,7 @@
   "title": "Keycloak (OIDC)",
   "category": "Identity",
   "summary": "Keycloak realm endpoints, tokens, admin API and health, with every OIDC scenario. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "A complete OpenID Connect and OAuth 2.0 test of a Keycloak realm: discovery, keys, authorization, every common token grant and its error cases, introspection, userinfo, the admin API and the health endpoints. It is the quickest way to find which Keycloak endpoint slows down first.",
   "stack": "Keycloak 22+ (include /auth in the URL on legacy installs)",
   "variables": [
     {

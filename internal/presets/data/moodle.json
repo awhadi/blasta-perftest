@@ -3,6 +3,7 @@
   "title": "Moodle",
   "category": "Self-hosted apps",
   "summary": "Front page, login, course page and AJAX service. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Load tests Moodle: the front page, the login page, a course page and the AJAX service. Moodle leans heavily on its database and cache, so this shows where PHP, PostgreSQL or MySQL, and Redis or Memcached start to slow down.",
   "stack": "PHP + PostgreSQL/MySQL + Redis/Memcached",
   "variables": [
     {

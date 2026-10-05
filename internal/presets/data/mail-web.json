@@ -3,6 +3,7 @@
   "title": "Mail web services (webmail, autodiscover, MTA-STS, spam filter)",
   "category": "Mail",
   "summary": "HTTP side of a mail system: Roundcube / SOGo, autodiscover and autoconfig, MTA-STS, rspamd and Mailpit. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Load tests the HTTP side of a mail system: the Roundcube and SOGo login pages, a webmail inbox without a session, Thunderbird autoconfig, Outlook autodiscover, the MTA-STS policy, the JMAP session resource, rspamd and Mailpit endpoints, and a login page ramp.",
   "stack": "Roundcube, SOGo, Mailcow, Mailu, rspamd, Mailpit, MailHog, JMAP",
   "variables": [
     {

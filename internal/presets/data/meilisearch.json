@@ -3,6 +3,7 @@
   "title": "Meilisearch",
   "category": "Search",
   "summary": "Health and typo-tolerant search. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Load tests Meilisearch with a health check and typo-tolerant search queries. It shows search latency as many people type at once, which is the pattern search-as-you-type interfaces create.",
   "stack": "Meilisearch",
   "variables": [
     {

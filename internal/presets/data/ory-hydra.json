@@ -3,6 +3,7 @@
   "title": "Ory Hydra",
   "category": "Identity",
   "summary": "Hydra public API (and admin introspection) endpoints. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Load tests Ory Hydra's public API and the admin introspection endpoint: discovery, keys, and the authorization and token endpoints with their error cases. It shows how the token endpoint scales as clients ask for tokens at the same time.",
   "stack": "Ory Hydra",
   "variables": [
     {

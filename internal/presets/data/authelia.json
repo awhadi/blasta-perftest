@@ -3,6 +3,7 @@
   "title": "Authelia",
   "category": "Identity",
   "summary": "OIDC provider plus the forward-auth endpoint your reverse proxy calls on every request. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Load tests Authelia as an OpenID Connect provider (discovery, keys, the authorization and token endpoints with their error cases) and the forward-auth endpoint your reverse proxy calls before every protected request, which is where Authelia usually becomes the bottleneck.",
   "stack": "Authelia",
   "variables": [
     {

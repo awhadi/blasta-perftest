@@ -3,6 +3,7 @@
   "title": "Keycloak (SAML)",
   "category": "SAML",
   "summary": "Keycloak realm acting as a SAML IdP: descriptor, SSO, IdP-initiated login and logout. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Load tests a Keycloak realm acting as a SAML 2.0 identity provider: the IdP descriptor, SP-initiated sign-on in both bindings, passive and forced re-authentication, IdP-initiated login, single logout, unknown and malformed requests, a login spike and a capacity ramp.",
   "stack": "Keycloak SAML",
   "variables": [
     {

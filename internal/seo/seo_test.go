@@ -2,6 +2,7 @@ package seo
 
 import (
 	"encoding/json"
+	stdhtml "html"
 	"os"
 	"regexp"
 	"strings"
@@ -35,11 +36,11 @@ func TestEveryTemplateHasACompletePage(t *testing.T) {
 		if len(title[1]) > 60 {
 			t.Errorf("%s: title is %d chars: %s", p.ID, len(title[1]), title[1])
 		}
-		if len(desc[1]) < 70 || len(desc[1]) > 160 {
-			t.Errorf("%s: description is %d chars: %s", p.ID, len(desc[1]), desc[1])
+		if n := len([]rune(stdhtml.UnescapeString(desc[1]))); n < 70 || n > 160 {
+			t.Errorf("%s: description is %d chars: %s", p.ID, n, desc[1])
 		}
-		for _, bad := range []string{"free", "self-hosted", "alternative", "best "} {
-			if strings.Contains(strings.ToLower(title[1]+" "+desc[1]), bad) {
+		for _, bad := range []string{"free", "self-hosted", "alternative", "best"} {
+			if regexp.MustCompile(`\b` + bad + `\b`).MatchString(strings.ToLower(title[1] + " " + desc[1])) {
 				t.Errorf("%s: metadata must not make claims like %q: %s / %s", p.ID, bad, title[1], desc[1])
 			}
 		}
@@ -118,11 +119,11 @@ func TestHomeAndIndexMetadata(t *testing.T) {
 	}
 	for name, html := range map[string]string{"index": string(Index(base)), "home": string(Home(raw, base))} {
 		title, desc := titleRe.FindStringSubmatch(html), descRe.FindStringSubmatch(html)
-		if title == nil || desc == nil || len(title[1]) > 60 || len(desc[1]) < 70 || len(desc[1]) > 160 {
+		if title == nil || desc == nil || len(title[1]) > 60 || len(stdhtml.UnescapeString(desc[1])) < 70 || len(stdhtml.UnescapeString(desc[1])) > 160 {
 			t.Errorf("%s: title %v description %v", name, title, desc)
 			continue
 		}
-		if m := strings.ToLower(title[1] + " " + desc[1]); strings.Contains(m, "free") || strings.Contains(m, "self-hosted") {
+		if m := strings.ToLower(title[1] + " " + desc[1]); regexp.MustCompile(`\bfree\b`).MatchString(m) || strings.Contains(m, "self-hosted") {
 			t.Errorf("%s: no marketing claims in the title or description: %s / %s", name, title[1], desc[1])
 		}
 		if strings.Contains(html, `name="keywords"`) {

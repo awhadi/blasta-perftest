@@ -3,6 +3,7 @@
   "title": "SOAP web services",
   "category": "SOAP",
   "summary": "SOAP 1.1 and 1.2 calls, WSDL, faults, WS-Security, large messages and hardening checks. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Load tests any SOAP service (JAX-WS, WCF, Axis, Spring-WS, PHP SoapServer): the WSDL, SOAP 1.1 and 1.2 calls, WS-Security, and hardening checks such as malformed XML, unknown operations, a wrong SOAPAction or content type and a DTD in the request, plus large messages, a capacity ramp and a ten-minute soak.",
   "stack": "Any SOAP service (JAX-WS, WCF, Axis, Spring-WS, Zeep, PHP SoapServer)",
   "variables": [
     {

@@ -3,6 +3,7 @@
   "title": "GraphQL API",
   "category": "API",
   "summary": "Queries, an aliased batch, and introspection. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Load tests a GraphQL endpoint with a simple query, a field query and schema introspection. It shows how query parsing and resolvers hold up as the request rate grows, where latency starts to climb, and whether introspection, which is expensive, behaves the way you expect in production.",
   "stack": "Any",
   "variables": [
     {

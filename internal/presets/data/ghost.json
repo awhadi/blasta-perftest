@@ -3,6 +3,7 @@
   "title": "Ghost",
   "category": "CMS",
   "summary": "Ghost blog: public pages, tag archives and the Content API. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Load tests a Ghost blog: the front page, a single post bypassing the cache, a tag archive, the Content API and the RSS feed. It shows how Node.js and MySQL cope as readers and API clients arrive.",
   "stack": "Node.js + MySQL",
   "variables": [
     {

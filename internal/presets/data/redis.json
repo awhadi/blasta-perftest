@@ -3,6 +3,7 @@
   "title": "Redis / Valkey / KeyDB / Dragonfly",
   "category": "Cache",
   "summary": "Common Redis workload patterns: data types, transactions, scripting, pub/sub, streams, big values, replication wait, connection churn and ramps. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Covers the common Redis, Valkey, KeyDB and Dragonfly workload patterns over the RESP protocol: strings, counters, hashes, lists, sets, sorted sets, transactions, Lua scripts, pub/sub, streams, big values, key scans, replication wait, connection churn and ramps.",
   "stack": "Redis, Valkey, KeyDB, Dragonfly (RESP protocol)",
   "variables": [
     {

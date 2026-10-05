@@ -3,6 +3,7 @@
   "title": "Java (Spring Boot / Tomcat)",
   "category": "Frameworks",
   "summary": "Actuator health and metrics, pages, static files and session creation. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Load tests a Java web application on Spring Boot, Tomcat or Jetty: the actuator health endpoint, a Prometheus metrics scrape, the home page, a static resource and a session-creation flood. The session job shows how much memory each new visitor costs.",
   "stack": "Spring Boot, Tomcat, Jetty",
   "variables": [
     {

@@ -3,6 +3,7 @@
   "title": "HashiCorp Vault",
   "category": "Infrastructure",
   "summary": "Health, seal status and token lookups. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Load tests HashiCorp Vault: the health and seal-status endpoints, token lookup, KV v2 secret reads and writes, and a request with an invalid token. It shows how token validation and secret access scale. The write job creates a secret, so use a test Vault.",
   "stack": "Vault",
   "variables": [
     {

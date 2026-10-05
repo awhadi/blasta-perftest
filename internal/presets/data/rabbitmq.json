@@ -3,6 +3,7 @@
   "title": "RabbitMQ",
   "category": "Messaging",
   "summary": "AMQP connection handshake, management API and health checks. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Load tests RabbitMQ: the AMQP protocol handshake, the alarms health check, the management API overview, queue list and connection list, and a management call without credentials that must be refused. It shows how connections and the management API scale.",
   "stack": "RabbitMQ",
   "variables": [
     {

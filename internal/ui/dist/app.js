@@ -1185,7 +1185,7 @@ async function loadPresets() {
     try {
       const { presets } = await api('/presets');
       tplList = presets.map((p) => Object.assign(p, {
-        _hay: [p.id, p.title, p.category, p.summary, p.stack,
+        _hay: [p.id, p.title, p.category, p.summary, p.description, p.stack,
           ...(p.jobList || []).map((x) => x.name + ' ' + x.id)].join(' ').toLowerCase(),
       })).sort((a, b) => a.title.localeCompare(b.title));
     } catch (e) {
@@ -1271,7 +1271,7 @@ function renderTemplateList() {
     return '<a class="tcard" href="#/templates/' + encodeURIComponent(p.id) + '">' +
       '<div class="tcard-head"><span class="ticon">' + catIcon(p.category) + '</span><h3>' + esc(p.title) + '</h3></div>' +
       '<div><span class="tag">' + esc(p.category) + '</span></div>' +
-      '<p class="tsum">' + esc((p.summary || '').replace(/ Includes an enterprise test plan.*$/, '')) + '</p>' +
+      '<p class="tsum">' + esc(p.description || (p.summary || '').replace(/ Includes an enterprise test plan.*$/, '')) + '</p>' +
       (p.stack ? '<div class="tstack">' + esc(p.stack) + '</div>' : '') + matched +
       '<div class="tfoot"><span>' + p.jobs + ' jobs</span><span class="go">Open &rarr;</span></div></a>';
   }).join('');
@@ -1335,7 +1335,7 @@ function buildTemplateHeader() {
   $('tplTitle').textContent = presetDef.title;
   $('tplCat').textContent = presetDef.category || '';
   $('tplIcon').innerHTML = catIcon(presetDef.category);
-  $('presetSummary').textContent = (presetDef.summary || '').replace(/ Includes an enterprise test plan.*$/, '');
+  $('presetSummary').textContent = presetDef.description || (presetDef.summary || '').replace(/ Includes an enterprise test plan.*$/, '');
   $('tplStack').textContent = presetDef.stack ? 'Stack: ' + presetDef.stack : '';
   const box = $('presetVars');
   box.innerHTML = '';

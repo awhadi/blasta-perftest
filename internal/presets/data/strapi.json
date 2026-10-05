@@ -3,6 +3,7 @@
   "title": "Strapi / Directus (headless CMS)",
   "category": "Headless CMS",
   "summary": "REST or GraphQL content APIs. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Load tests a headless CMS such as Strapi or Directus: a REST collection, a single REST entry and a GraphQL query. It shows how the content API and its database cope with front ends fetching content.",
   "stack": "Node.js + PostgreSQL/MySQL",
   "variables": [
     {

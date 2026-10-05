@@ -15,8 +15,10 @@ type presetSummary struct {
 	Title    string `json:"title"`
 	Category string `json:"category"`
 	Summary  string `json:"summary,omitempty"`
-	Stack    string `json:"stack,omitempty"`
-	Jobs     int    `json:"jobs"`
+	// Description says what the template covers, for the cards and the detail page.
+	Description string `json:"description,omitempty"`
+	Stack       string `json:"stack,omitempty"`
+	Jobs        int    `json:"jobs"`
 	// JobList names every job so the UI can search across templates by what
 	// they test (for example "spike" or "login storm") without fetching all 77.
 	JobList []presetJobRef `json:"jobList"`
@@ -41,7 +43,7 @@ func (a *API) handleListPresets(w http.ResponseWriter, r *http.Request) {
 		}
 		out = append(out, presetSummary{
 			ID: p.ID, Title: p.Title, Category: p.Category,
-			Summary: p.Summary, Stack: p.Stack, Jobs: len(p.Jobs), JobList: refs,
+			Summary: p.Summary, Description: p.Description, Stack: p.Stack, Jobs: len(p.Jobs), JobList: refs,
 		})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"presets": out})

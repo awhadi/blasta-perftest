@@ -3,6 +3,7 @@
   "title": "WooCommerce",
   "category": "E-commerce",
   "summary": "Shop, product, Store API, cart fragments and checkout on WordPress. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Load tests WooCommerce on WordPress: the shop page, a product page, the Store API, cart fragments, the cart, the checkout page and the my account login form. It shows where uncacheable shop pages and cart calls start to hurt.",
   "stack": "WordPress + WooCommerce + MySQL",
   "variables": [
     {

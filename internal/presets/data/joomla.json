@@ -3,6 +3,7 @@
   "title": "Joomla",
   "category": "CMS",
   "summary": "Joomla 4/5 front end, REST API, search and administrator. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Load tests Joomla 4 or 5: the front page, an article page, the REST API for articles, smart search, the login form and the administrator, plus a capacity ramp. It shows how the page cache, search and the admin behave as concurrency rises.",
   "stack": "PHP + MySQL/MariaDB",
   "variables": [
     {

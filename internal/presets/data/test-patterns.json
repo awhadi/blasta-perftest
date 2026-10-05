@@ -3,6 +3,7 @@
   "title": "Test patterns (any URL)",
   "category": "Test patterns",
   "summary": "The standard test shapes: smoke, average load, stress, spike, breakpoint and soak. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "The standard test shapes against any URL: a smoke test, average load, a stress ramp to four times normal, a sudden spike, a breakpoint ramp that runs until the target breaks, a 30-minute soak and a maximum-throughput run. Start here if you are new to load testing.",
   "stack": "Any HTTP target",
   "variables": [
     {

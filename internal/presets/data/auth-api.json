@@ -3,6 +3,7 @@
   "title": "Authenticated APIs",
   "category": "API",
   "summary": "Bearer tokens, API keys, login endpoints, unauthorised requests and CORS preflight. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Load tests APIs that sit behind authentication: requests with a bearer token or an API key, the login endpoint, unauthenticated calls that must be refused with 401, and CORS preflight requests. It shows what authentication costs per request and confirms that rejected requests stay cheap and correct under load.",
   "stack": "REST APIs behind authentication",
   "variables": [
     {

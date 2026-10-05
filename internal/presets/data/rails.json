@@ -3,6 +3,7 @@
   "title": "Ruby on Rails",
   "category": "Frameworks",
   "summary": "Health check, pages, assets and JSON. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Load tests a Ruby on Rails app on Puma: the /up health check, the home page, a JSON endpoint and a compiled asset. It shows request throughput per worker and thread, and what the asset pipeline costs.",
   "stack": "Puma + Rails",
   "variables": [
     {

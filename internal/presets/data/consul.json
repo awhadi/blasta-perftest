@@ -3,6 +3,7 @@
   "title": "HashiCorp Consul",
   "category": "Infrastructure",
   "summary": "Leader, catalog, service health, KV and agent calls. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Load tests a HashiCorp Consul agent or server through its HTTP API: leader status, the service catalog, service health (including stale reads that any server can answer), key-value reads and writes, and the agent self endpoint. It shows how read-heavy service discovery traffic and KV writes scale.",
   "stack": "Consul",
   "variables": [
     {

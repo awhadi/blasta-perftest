@@ -3,6 +3,7 @@
   "title": "Nextcloud",
   "category": "Self-hosted apps",
   "summary": "Status, login page, WebDAV and capabilities API. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Load tests Nextcloud: status.php, the login page, the OCS capabilities API and a WebDAV PROPFIND file listing. It shows how PHP, the database and Redis cope with sync clients, which poll constantly.",
   "stack": "PHP + MySQL/PostgreSQL + Redis",
   "variables": [
     {

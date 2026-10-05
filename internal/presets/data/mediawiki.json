@@ -3,6 +3,7 @@
   "title": "MediaWiki",
   "category": "Wiki",
   "summary": "MediaWiki pages, API queries and search. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Load tests MediaWiki: the main page, action=parse, a list query through the API, full-text search and the parse of an edit form. It shows how the parser cache, search and the API cope with readers and bots.",
   "stack": "PHP + MySQL/SQLite",
   "variables": [
     {

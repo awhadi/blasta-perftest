@@ -3,6 +3,7 @@
   "title": "Laravel",
   "category": "Frameworks",
   "summary": "Health route, CSRF cookie, JSON API and login page. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Load tests a Laravel app on PHP-FPM: the /up health route, the home page, a JSON API route, the Sanctum CSRF cookie endpoint and the login page. It shows the cost of framework boot, sessions and middleware per request.",
   "stack": "PHP-FPM + Laravel",
   "variables": [
     {

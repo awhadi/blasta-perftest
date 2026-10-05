@@ -3,6 +3,7 @@
   "title": "Next.js / Nuxt / SSR",
   "category": "JavaScript",
   "summary": "Server-rendered routes and data endpoints. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Load tests a server-rendered JavaScript app (Next.js, Nuxt or similar) on Node.js: the SSR home page, an application route, the framework's data endpoint and a static asset. It shows the cost of rendering on the server compared with serving files.",
   "stack": "Node.js",
   "variables": [
     {

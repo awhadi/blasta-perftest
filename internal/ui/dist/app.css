@@ -312,7 +312,7 @@ td a:hover { text-decoration: underline; }
 .tcard:hover .ticon { background: var(--accent); color: var(--on-accent); }
 .ticon svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
 .tcard h3 { margin: 0; flex: 1; min-width: 0; font-size: 16px; font-weight: 600; text-transform: none; letter-spacing: -.015em; color: var(--text); line-height: 1.25; }
-.tsum { margin: 0; font-size: 14px; color: var(--dim); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; text-wrap: pretty; }
+.tsum { margin: 0; font-size: 14px; color: var(--dim); display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; text-wrap: pretty; }
 .tstack { font: 11.5px var(--mono); color: var(--dim); }
 .tmatch { font-size: 12.5px; color: var(--text); background: var(--bg-alt); border-radius: 9px; padding: 7px 10px; }
 .tfoot { margin-top: auto; padding-top: 8px; display: flex; justify-content: space-between; align-items: center; font-size: 12.5px; color: var(--dim); }

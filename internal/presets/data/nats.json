@@ -3,6 +3,7 @@
   "title": "NATS",
   "category": "Messaging",
   "summary": "NATS server greeting and monitoring endpoints. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Load tests a NATS server: connecting and reading the INFO greeting, and the monitoring endpoints healthz, varz and connz. It shows how quickly the server accepts connections and answers monitoring scrapes.",
   "stack": "NATS",
   "variables": [
     {

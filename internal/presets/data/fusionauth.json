@@ -3,6 +3,7 @@
   "title": "FusionAuth",
   "category": "Identity",
   "summary": "FusionAuth OAuth endpoints, status and JWT validation API. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Load tests FusionAuth: its OAuth 2.0 and OpenID Connect endpoints (discovery, keys, authorize and token with their error cases), the status endpoint and the JWT validation API that applications call on every request.",
   "stack": "FusionAuth",
   "variables": [
     {

@@ -3,6 +3,7 @@
   "title": "WordPress database (MySQL)",
   "category": "Database",
   "summary": "The queries WordPress runs most, straight against MySQL/MariaDB. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Runs the queries WordPress executes most straight against MySQL or MariaDB: the size of autoloaded options, recent published posts, posts joined to postmeta, a LIKE search on content and a count of expired transients. It finds database bottlenecks without PHP in the way.",
   "stack": "MySQL / MariaDB",
   "variables": [
     {

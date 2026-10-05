@@ -7,6 +7,16 @@ feature the middle one, a breaking change the first. The current version is the
 `Version` constant in `internal/version/version.go`; it is shown bottom right in the
 page for signed-in people, by `blasta version`, and in `/api/health`.
 
+## [2.4.0] - 2026-10-05
+
+### Added
+- Every template now has a description that says what it covers and what it shows, written
+  for each of the 77 templates from its real jobs (for example which pages, endpoints or
+  protocols it exercises, and what to watch for). It is shown on the template cards and at
+  the top of the template page in the app, is searchable, is returned by the API and
+  `blasta preset show`, and is the basis of each template's search-engine page, its meta
+  description and `llms.txt`. A test requires one for every template.
+
 ## [2.3.2] - 2026-10-05
 
 ### Changed

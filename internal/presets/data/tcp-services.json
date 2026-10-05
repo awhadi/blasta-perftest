@@ -3,6 +3,7 @@
   "title": "Common TCP services",
   "category": "TCP",
   "summary": "Redis, Memcached, SMTP and SSH probes that wait for a real reply. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Probes common TCP services and waits for a real reply: a Redis PING, a Memcached version, the SMTP banner and the SSH banner. It shows that these services answer, not just accept connections.",
   "stack": "Redis, Memcached, SMTP, SSH",
   "variables": [
     {

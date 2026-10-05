@@ -3,6 +3,7 @@
   "title": "Auth0",
   "category": "Identity",
   "summary": "Tenant endpoints including the audience-based client credentials flow. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Load tests an Auth0 tenant: the discovery document and signing keys, the authorization endpoint, silent authentication, error cases for unknown clients and wrong redirect addresses, and the token endpoint (client credentials with an audience, refresh tokens, wrong secrets and invalid codes). Auth0 applies rate limits to tenants, so run it against a test tenant.",
   "stack": "Auth0 (hosted)",
   "variables": [
     {

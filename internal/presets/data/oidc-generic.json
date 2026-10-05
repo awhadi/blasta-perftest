@@ -3,6 +3,7 @@
   "title": "OIDC / OAuth 2.0 (any provider)",
   "category": "Identity",
   "summary": "Every standard OIDC and OAuth endpoint: discovery, keys, authorize, tokens, introspection, userinfo, device, PAR, logout. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "A complete OpenID Connect and OAuth 2.0 test for any provider: discovery, keys, authorization, silent authentication, every standard token grant with its error cases, introspection, userinfo, device authorization, pushed authorization requests and logout.",
   "stack": "Any OpenID Connect provider",
   "variables": [
     {

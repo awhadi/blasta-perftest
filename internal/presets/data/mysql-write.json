@@ -3,6 +3,7 @@
   "title": "MySQL / MariaDB writes",
   "category": "Database",
   "summary": "INSERT throughput. Creates real rows: STAGING ONLY. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Load tests MySQL or MariaDB write throughput with single-row and multi-row INSERTs. The jobs create real rows, so run them only against a staging database.",
   "stack": "MySQL / MariaDB",
   "variables": [
     {

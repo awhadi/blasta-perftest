@@ -3,6 +3,7 @@
   "title": "phpBB",
   "category": "Forum",
   "summary": "phpBB forum index, topic reads and the unread search. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Load tests a phpBB forum: the forum index, a forum view, a topic view, search and the user control panel. It shows how PHP and MySQL handle readers and the unread search.",
   "stack": "PHP + MySQL",
   "variables": [
     {

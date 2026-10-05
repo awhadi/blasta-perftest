@@ -3,6 +3,7 @@
   "title": "Django",
   "category": "Frameworks",
   "summary": "Public pages, the admin login, static files and a JSON API. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Load tests a Django site behind Gunicorn or uWSGI: the home page, the admin login page, a static file and a Django REST framework list endpoint. Comparing the static file with the dynamic pages shows how much of the load is Python and how much is your web server.",
   "stack": "Gunicorn/uWSGI + Django",
   "variables": [
     {

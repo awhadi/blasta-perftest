@@ -3,6 +3,7 @@
   "title": "SAML 2.0 IdP (any provider)",
   "category": "SAML",
   "summary": "Metadata, SP-initiated SSO in both bindings, passive and forced login, unknown and malformed requests, logout, spike and ramp. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Load tests any SAML 2.0 identity provider: metadata, SP-initiated sign-on in both bindings, passive and forced login, unknown and malformed requests, single logout, IdP-initiated sign-on, a login spike and a capacity ramp.",
   "stack": "Any SAML 2.0 identity provider",
   "variables": [
     {

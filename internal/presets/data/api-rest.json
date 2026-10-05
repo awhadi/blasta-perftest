@@ -3,6 +3,7 @@
   "title": "REST API (generic)",
   "category": "API",
   "summary": "Collection, single resource and a write. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "A starting point for any JSON REST API: reading a collection, fetching a single resource, a HEAD probe and a POST that creates data. It shows the latency and error rate of the common read and write paths, and the enterprise plan then pushes the API through smoke, load, stress, spike and soak stages.",
   "stack": "Any",
   "variables": [
     {

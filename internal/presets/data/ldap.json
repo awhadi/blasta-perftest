@@ -3,6 +3,7 @@
   "title": "LDAP / Active Directory",
   "category": "Directory",
   "summary": "Connection capacity, anonymous bind and RootDSE search with the replies checked, plus the connect-per-login pattern. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Load tests a directory server such as OpenLDAP, 389 Directory Server, Active Directory or FreeIPA: plain and LDAPS connection accepts, an anonymous bind, a bind followed by a RootDSE search with the replies checked, a connection ramp and a ten-minute bind-and-search soak. It models the connect-per-login pattern many applications use.",
   "stack": "OpenLDAP, 389 Directory Server, Active Directory, FreeIPA",
   "variables": [
     {

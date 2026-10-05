@@ -3,6 +3,7 @@
   "title": "Shopware 6",
   "category": "E-commerce",
   "summary": "Storefront, product listing and the Store API. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Load tests Shopware 6: the home page, a product listing, a product detail page and the Store API. It shows how the storefront cache and the API cope with shoppers.",
   "stack": "PHP + MySQL",
   "variables": [
     {

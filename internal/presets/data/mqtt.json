@@ -3,6 +3,7 @@
   "title": "MQTT broker (Mosquitto / EMQX / HiveMQ / VerneMQ)",
   "category": "Messaging",
   "summary": "MQTT v3.1.1 and v5 connect handshakes with the CONNACK checked, plus reconnect-storm ramps. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Load tests an MQTT broker (Mosquitto, EMQX, HiveMQ, VerneMQ): MQTT 3.1.1 and 5 connect handshakes with the CONNACK checked, a TCP accept-only test and a reconnect-storm ramp. It models thousands of devices reconnecting at once after an outage.",
   "stack": "Any MQTT broker",
   "variables": [
     {

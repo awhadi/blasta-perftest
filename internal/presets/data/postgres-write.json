@@ -3,6 +3,7 @@
   "title": "PostgreSQL writes",
   "category": "Database",
   "summary": "INSERT throughput. Creates real rows: STAGING ONLY. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Load tests PostgreSQL write throughput with INSERT and INSERT ... SELECT. The jobs create real rows, so use a staging database only.",
   "stack": "PostgreSQL",
   "variables": [
     {

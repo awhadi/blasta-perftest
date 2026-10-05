@@ -3,6 +3,7 @@
   "title": "Real-time (Socket.IO / SignalR)",
   "category": "WebSocket",
   "summary": "Socket.IO polling handshake and WebSocket upgrade, plus SignalR negotiate. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Load tests real-time servers: the Socket.IO polling handshake, the Socket.IO WebSocket upgrade and the SignalR negotiate call. It shows how many connections per second the server can set up.",
   "stack": "Socket.IO, SignalR",
   "variables": [
     {

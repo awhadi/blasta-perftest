@@ -3,6 +3,7 @@
   "title": "Drupal",
   "category": "CMS",
   "summary": "Drupal front end, JSON:API, search and admin. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Load tests Drupal: the front page, a node page, the JSON:API collection, core search, a views listing and the admin overview. It shows what the page cache and the dynamic page cache save, and which views or search queries get expensive.",
   "stack": "PHP + MySQL/PostgreSQL + nginx/Apache",
   "variables": [
     {

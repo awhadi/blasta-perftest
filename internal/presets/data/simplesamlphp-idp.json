@@ -3,6 +3,7 @@
   "title": "SimpleSAMLphp IdP",
   "category": "SAML",
   "summary": "SimpleSAMLphp as an IdP. Every request creates a PHP session file, so watch disk and inodes. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Load tests SimpleSAMLphp as a SAML identity provider: metadata, sign-on in both bindings, passive and forced login, unknown and malformed requests, logout, a login spike and a capacity ramp, plus a theme resource. Every request creates a PHP session file, so watch disk space and inodes.",
   "stack": "PHP + SimpleSAMLphp",
   "variables": [
     {

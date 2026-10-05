@@ -3,6 +3,7 @@
   "title": "Okta",
   "category": "Identity",
   "summary": "Org authorization server: discovery, keys, authorize, token, userinfo, introspect, revoke. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Load tests an Okta org authorization server: discovery, keys, authorize, token, userinfo, introspect and revoke. Okta enforces rate limits per org, so use a test org and expect 429 responses at higher rates.",
   "stack": "Okta (hosted)",
   "variables": [
     {

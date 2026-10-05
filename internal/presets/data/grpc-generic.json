@@ -3,6 +3,7 @@
   "title": "gRPC unary",
   "category": "gRPC",
   "summary": "Unary calls against a reflection-enabled server. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Load tests a gRPC server that has reflection turned on: a unary call and a call with a small payload. It shows per-call latency and throughput over HTTP/2 without needing the .proto files.",
   "stack": "gRPC",
   "variables": [
     {

@@ -3,6 +3,7 @@
   "title": "WordPress",
   "category": "CMS",
   "summary": "Core front end, REST API, search and wp-admin. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Load tests WordPress: the front page, a single post bypassing the page cache, REST API posts, search, the RSS feed and the wp-admin dashboard, plus a capacity ramp and a ten-minute soak. It shows what your page cache saves and how much PHP and MySQL can take on their own.",
   "stack": "PHP + MySQL/MariaDB + nginx/Apache",
   "variables": [
     {

@@ -3,6 +3,7 @@
   "title": "Health checks and rate limiting",
   "category": "Reliability",
   "summary": "Health endpoints, and verifying that rate limits and WAF rules really trigger. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Checks the guard rails in front of your service: a health endpoint, traffic just under a rate limit, traffic well over it, and a burst followed by silence. It proves that rate limits and WAF rules really trigger, and that your service recovers afterwards.",
   "stack": "Load balancer, API gateway, WAF",
   "variables": [
     {

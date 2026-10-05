@@ -3,6 +3,7 @@
   "title": "Shibboleth IdP",
   "category": "SAML",
   "summary": "Shibboleth Identity Provider v4/v5: metadata, SSO bindings, unsolicited SSO, logout and status. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Load tests a Shibboleth Identity Provider (v4 and v5): metadata, SP-initiated SSO in both bindings, passive and forced login, unknown and malformed requests, single logout, unsolicited SSO, the status page, a login spike and a capacity ramp.",
   "stack": "Shibboleth IdP",
   "variables": [
     {

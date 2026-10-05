@@ -406,3 +406,13 @@ func TestEveryVariableAndCredentialHasAGuide(t *testing.T) {
 		}
 	}
 }
+
+// Every template says what it covers: the cards, the detail page, the CLI and the search
+// pages all show this description.
+func TestEveryPresetHasADescription(t *testing.T) {
+	for _, p := range All() {
+		if n := len(strings.TrimSpace(p.Description)); n < 100 {
+			t.Errorf("%s: description is %d characters, write one that says what the template covers", p.ID, n)
+		}
+	}
+}

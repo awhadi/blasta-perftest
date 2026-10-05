@@ -147,12 +147,7 @@ func overview(p presets.Preset) template.HTML {
 	s, name := statsOf(p), shortName(p.Title)
 	var b strings.Builder
 	fmt.Fprintf(&b, "<h2>About this %s load test</h2>", esc(name))
-	fmt.Fprintf(&b, "<p>This template load tests <strong>%s</strong>", esc(name))
-	if p.Stack != "" {
-		fmt.Fprintf(&b, " (%s)", esc(p.Stack))
-	}
-	fmt.Fprintf(&b, " in the %s category. %s", esc(p.Category), esc(clean(p.Summary)))
-	b.WriteString("</p>")
+	fmt.Fprintf(&b, "<p>%s</p>", esc(blurb(p)))
 	fmt.Fprintf(&b, "<p>It holds %s", esc(plural(s.jobs, "ready-made job", "ready-made jobs")))
 	if s.plan > 0 {
 		fmt.Fprintf(&b, ": %s and an enterprise test plan of %s to run in order", esc(plural(s.scenarios, "single scenario", "single scenarios")), esc(plural(s.plan, "stage", "stages")))

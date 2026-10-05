@@ -3,6 +3,7 @@
   "title": "Elasticsearch / OpenSearch",
   "category": "Search",
   "summary": "Cluster health, searches, counts and indexing. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Load tests Elasticsearch or OpenSearch: cluster health, a match_all search, a full-text match, a terms aggregation, the count API and indexing a document. It shows search latency under concurrency and the cost of aggregations; the indexing job writes real documents.",
   "stack": "Elasticsearch 7+/OpenSearch",
   "variables": [
     {

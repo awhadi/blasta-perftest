@@ -3,6 +3,7 @@
   "title": "ClickHouse",
   "category": "Data services",
   "summary": "HTTP interface: ping, trivial and heavy queries. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Load tests ClickHouse over its HTTP interface: a ping, a trivial SELECT 1, a scan of ten million generated rows, a GROUP BY on generated data and a system.metrics read. It separates connection and parsing overhead from heavy analytical work, so you can see where concurrency starts to hurt.",
   "stack": "ClickHouse",
   "variables": [
     {

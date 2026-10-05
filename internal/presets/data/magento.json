@@ -3,6 +3,7 @@
   "title": "Magento / OpenMage",
   "category": "E-commerce",
   "summary": "Catalog, cart and the REST API. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Load tests Magento or OpenMage: the home page, a category listing, a product page, the cart page and the REST products API. It shows how the full-page cache, the catalogue and Elasticsearch or OpenSearch hold up as shoppers arrive.",
   "stack": "PHP + MySQL + Elasticsearch",
   "variables": [
     {

@@ -3,6 +3,7 @@
   "title": "PrestaShop",
   "category": "E-commerce",
   "summary": "Catalog, search and the webservice API. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Load tests PrestaShop: the home page, a category listing, a product page, search and the webservice API. It shows how the catalogue and search cope as shoppers arrive.",
   "stack": "PHP + MySQL",
   "variables": [
     {

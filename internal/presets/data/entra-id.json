@@ -3,6 +3,7 @@
   "title": "Microsoft Entra ID (Azure AD)",
   "category": "Identity",
   "summary": "v2.0 endpoints for one tenant: discovery, keys, authorize, token, device code. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Load tests the Microsoft Entra ID (Azure AD) v2.0 endpoints for one tenant: discovery, signing keys, the authorize endpoint, token requests (client credentials, refresh and error cases) and device code. Microsoft throttles heavy traffic, so use a dedicated tenant and keep rates modest.",
   "stack": "Microsoft identity platform",
   "variables": [
     {

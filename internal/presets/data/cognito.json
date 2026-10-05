@@ -3,6 +3,7 @@
   "title": "AWS Cognito",
   "category": "Identity",
   "summary": "User pool discovery and hosted UI endpoints. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Load tests an Amazon Cognito user pool: the discovery document, the JSON web key set, and the hosted UI login page, token (client credentials) and userinfo endpoints. Cognito enforces request quotas, so use a test pool and watch for throttling responses.",
   "stack": "Amazon Cognito",
   "variables": [
     {

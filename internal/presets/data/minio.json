@@ -3,6 +3,7 @@
   "title": "MinIO / S3-compatible storage",
   "category": "Data services",
   "summary": "Health probes, public object reads and bucket listing. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Load tests MinIO, Ceph RGW or any S3-compatible storage: the live, ready and cluster health probes, GET and HEAD of an object, bucket listing, a missing object and a ranged read of the first kilobyte. It separates metadata calls from data transfer.",
   "stack": "MinIO, Ceph RGW, S3",
   "variables": [
     {

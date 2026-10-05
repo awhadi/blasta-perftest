@@ -3,6 +3,7 @@
   "title": "AD FS (SAML, WS-Fed and OIDC)",
   "category": "SAML",
   "summary": "AD FS federation metadata, SAML SSO, WS-Federation sign-in, OIDC and the load balancer probe. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Load tests an AD FS federation server through every door it exposes: the federation metadata, SAML 2.0 single sign-on in the Redirect and POST bindings (including passive and forced re-authentication), single logout, WS-Federation and IdP-initiated sign-in, and the load balancer probe. It also checks how AD FS answers unknown relying parties and malformed requests, and how it copes with a login spike.",
   "stack": "Windows Server AD FS",
   "variables": [
     {

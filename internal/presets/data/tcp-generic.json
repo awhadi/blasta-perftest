@@ -3,6 +3,7 @@
   "title": "TCP service",
   "category": "TCP",
   "summary": "Connection and round-trip time to a TCP endpoint. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Load tests any TCP service: connecting and closing, and an echo round trip. It shows connection setup time and round-trip latency.",
   "stack": "Any TCP service",
   "variables": [
     {

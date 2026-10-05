@@ -3,6 +3,7 @@
   "title": "Memcached",
   "category": "Cache",
   "summary": "Every common Memcached pattern: get/set, multi-get, counters, touch, CAS, stats, large items and the meta protocol. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Covers every common Memcached pattern over the text protocol: set and get, hits and misses, multi-get, counters, touch, compare-and-swap, delete, a 64 KB item, stats scrapes, the meta commands and a connection ramp. It shows the throughput and latency of a cache and what a connection storm does to it.",
   "stack": "Memcached (text protocol)",
   "variables": [
     {

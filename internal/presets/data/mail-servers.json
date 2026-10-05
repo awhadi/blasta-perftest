@@ -3,6 +3,7 @@
   "title": "Mail servers (SMTP / IMAP / POP3)",
   "category": "Mail",
   "summary": "Greeting checks and connection capacity for SMTP, submission, IMAP and POP3, including the implicit-TLS ports. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Load tests the mail protocols of Postfix, Exim, Dovecot, Courier, Sendmail, Stalwart or Exchange: greeting checks for SMTP, submission, IMAP and POP3, accepting connections on the implicit-TLS ports, and inbound connection ramps on ports 25 and 143. It shows how many simultaneous connections the server accepts before it refuses them.",
   "stack": "Postfix, Exim, Dovecot, Courier, Sendmail, Stalwart, Exchange",
   "variables": [
     {

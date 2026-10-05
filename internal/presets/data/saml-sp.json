@@ -3,6 +3,7 @@
   "title": "SAML service provider (Shibboleth SP / mod_auth_mellon / SimpleSAMLphp SP)",
   "category": "SAML",
   "summary": "What the SP does per request: session check, redirect to the IdP, ACS handling, metadata and logout. Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Load tests a SAML service provider such as Shibboleth SP, mod_auth_mellon, SimpleSAMLphp SP or Spring Security SAML: SP metadata, a public page, a protected page without a session (the redirect to the IdP), the login handler, session status, assertion consumer calls with garbage or empty data, logout and an unauthenticated ramp.",
   "stack": "Shibboleth SP, mod_auth_mellon, SimpleSAMLphp SP, Spring Security SAML",
   "variables": [
     {

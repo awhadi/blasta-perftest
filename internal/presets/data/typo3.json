@@ -3,6 +3,7 @@
   "title": "TYPO3",
   "category": "CMS",
   "summary": "TYPO3 front end and the backend login flow (read-only). Includes an enterprise test plan (jobs starting ent-).",
+  "description": "Load tests TYPO3: the front page, a rendered page, the sitemap and the backend login form (read-only). It shows how the page cache and rendering perform.",
   "stack": "PHP + MySQL",
   "variables": [
     {
