@@ -7,6 +7,14 @@ feature the middle one, a breaking change the first. The current version is the
 `Version` constant in `internal/version/version.go`; it is shown bottom right in the
 page for signed-in people, by `blasta version`, and in `/api/health`.
 
+## [2.1.2] - 2026-10-05
+
+### Fixed
+- `docker-compose.yml` no longer sets `BLASTA_PUBLIC_URL` to `http://127.0.0.1:<port>` by
+  default. Left empty, BLASTA uses the address each request came in on, so it works at a
+  domain behind a proxy (no port in the address) without any setting. Set
+  `BLASTA_PUBLIC_URL` in `.env` for SSO redirects and links in emails.
+
 ## [2.1.1] - 2026-10-05
 
 ### Changed

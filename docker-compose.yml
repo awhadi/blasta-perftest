@@ -21,7 +21,7 @@ services:
     environment:
       # Sign-in is on by default. The first account created becomes the administrator.
       BLASTA_AUTH: ${BLASTA_AUTH:-true}
-      BLASTA_PUBLIC_URL: ${BLASTA_PUBLIC_URL:-http://127.0.0.1:${BLASTA_PORT:-8080}}
+      BLASTA_PUBLIC_URL: ${BLASTA_PUBLIC_URL:-}
       BLASTA_REGISTRATION: ${BLASTA_REGISTRATION:-open}
       BLASTA_GUEST: ${BLASTA_GUEST:-true}
     # The database (blasta.db: accounts, sessions, history, settings) and the key that

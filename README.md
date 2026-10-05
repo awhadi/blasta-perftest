@@ -192,7 +192,8 @@ read-only filesystem and all capabilities dropped, and has a health check.
   Sign-in is on, but a load generator is a request amplifier: put it behind HTTPS
   (see [docs/PROXY.md](docs/PROXY.md)), and if you want it reachable from this
   machine only, change the port line to `"127.0.0.1:${BLASTA_PORT:-8080}:8080"` or
-  use a firewall.
+  use a firewall. Behind a domain, set `BLASTA_PUBLIC_URL` in `.env`
+  (for example `https://blasta.example.com`, no port); empty works too.
 - **Testing services on your machine.** From inside the container `localhost`
   is the container itself. Use `http://host.docker.internal:PORT` and turn off
   *Block private & loopback addresses* under Advanced limits.
