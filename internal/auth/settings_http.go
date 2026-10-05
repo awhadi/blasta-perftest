@@ -71,9 +71,21 @@ func (s *Service) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 			Trust: c.Trust, AdminEmails: c.AdminEmails, AdminGroup: c.AdminGroup, GroupsClaim: c.GroupsClaim},
 			SecretSet: c.ClientSecret != ""}
 	}
+	// A section that was saved but switched off is not part of the running config, yet the form
+	// must still show what was typed, or saving with the toggle off looks like losing it all.
+	if v, ok, err := s.settings.GetSSO(); err == nil && ok && !v.Enabled {
+		sso = ssoView{SSO: settings.SSO{Name: v.Name, Issuer: v.Issuer, DiscoveryURL: v.DiscoveryURL,
+			ClientID: v.ClientID, Scopes: v.Scopes, AllowInsecure: v.AllowInsecure, AutoCreate: v.AutoCreate,
+			Trust: v.Trust, AdminEmails: v.AdminEmails, AdminGroup: v.AdminGroup, GroupsClaim: v.GroupsClaim},
+			SecretSet: v.ClientSecret != ""}
+	}
 	m := cfg.SMTP
 	mail := smtpView{SMTP: settings.SMTP{Enabled: m.Host != "", Host: m.Host, Port: m.Port, Security: m.Security,
 		Username: m.Username, From: m.From, FromName: senderName(m.FromName)}, PasswordSet: m.Password != ""}
+	if v, ok, err := s.settings.GetSMTP(); err == nil && ok && !v.Enabled {
+		mail = smtpView{SMTP: settings.SMTP{Host: v.Host, Port: v.Port, Security: v.Security,
+			Username: v.Username, From: v.From, FromName: senderName(v.FromName)}, PasswordSet: v.Password != ""}
+	}
 	if mail.Port == 0 {
 		mail.Port, mail.Security = 587, "starttls"
 	}

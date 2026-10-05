@@ -393,3 +393,22 @@ func TestSMTPCanBeCheckedBeforeSaving(t *testing.T) {
 		t.Errorf("anonymous = %d", code)
 	}
 }
+
+// Saving mail settings with the Enable toggle off must not make the form come back
+// empty: what was typed (and that a password is set) stays visible.
+func TestSavedButDisabledMailStaysVisible(t *testing.T) {
+	e := newAdminEnv(t)
+	body := `{"enabled":false,"host":"smtp.example.test","port":587,"security":"starttls","username":"u","password":"secret-pw","from":"a@example.test","fromName":"X"}`
+	if code, b := e.do("POST", "/api/admin/settings/smtp", body, true); code != 200 {
+		t.Fatalf("%d %s", code, b)
+	}
+	_, got := e.do("GET", "/api/admin/settings", "", true)
+	for _, want := range []string{`"host":"smtp.example.test"`, `"from":"a@example.test"`, `"passwordSet":true`, `"enabled":false`} {
+		if !strings.Contains(got, want) {
+			t.Errorf("settings view lost %s: %s", want, got)
+		}
+	}
+	if strings.Contains(got, "secret-pw") {
+		t.Error("the password must never be returned")
+	}
+}
