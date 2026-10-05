@@ -42,6 +42,11 @@ func seoRoutes(mux *http.ServeMux, a *API) {
 	}
 	mux.HandleFunc("GET /robots.txt", text("text/plain; charset=utf-8", seo.Robots))
 	mux.HandleFunc("GET /sitemap.xml", text("application/xml; charset=utf-8", seo.Sitemap))
+	mux.HandleFunc("GET /sitemap.xsl", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/xsl; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-cache")
+		_, _ = w.Write([]byte(seo.SitemapXSL))
+	})
 	mux.HandleFunc("GET /llms.txt", text("text/markdown; charset=utf-8", seo.LLMs))
 	html := func(w http.ResponseWriter, status int, b []byte) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")

@@ -48,7 +48,8 @@ func Robots(base string) string {
 // Sitemap lists the home page, the template index and one page per template.
 func Sitemap(base string) string {
 	var b strings.Builder
-	b.WriteString(`<?xml version="1.0" encoding="UTF-8"?>` + "\n" + `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">` + "\n")
+	b.WriteString(`<?xml version="1.0" encoding="UTF-8"?>` + "\n" + `<?xml-stylesheet type="text/xsl" href="sitemap.xsl"?>` + "\n" +
+		`<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">` + "\n")
 	add := func(loc string, prio string) {
 		fmt.Fprintf(&b, "  <url><loc>%s</loc><priority>%s</priority></url>\n", template.HTMLEscapeString(loc), prio)
 	}
@@ -60,6 +61,37 @@ func Sitemap(base string) string {
 	b.WriteString("</urlset>\n")
 	return b.String()
 }
+
+// SitemapXSL turns sitemap.xml into a readable table when a person opens it in a browser;
+// crawlers ignore it. It links the site's own stylesheet because inline styles are not
+// allowed by the page's security policy.
+const SitemapXSL = `<?xml version="1.0" encoding="UTF-8"?>
+<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform" xmlns:s="http://www.sitemaps.org/schemas/sitemap/0.9">
+<xsl:output method="html" encoding="UTF-8" indent="yes" doctype-system="about:legacy-compat"/>
+<xsl:template match="/">
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<meta name="robots" content="noindex"/>
+<title>BLASTA sitemap</title>
+<link rel="stylesheet" href="page.css"/>
+</head>
+<body>
+<main class="wrap">
+<h1>BLASTA sitemap</h1>
+<p class="lead">This is the XML sitemap that search engines read. It lists <xsl:value-of select="count(s:urlset/s:url)"/> pages.</p>
+<ul class="urls">
+<xsl:for-each select="s:urlset/s:url">
+<li><a href="{s:loc}"><xsl:value-of select="s:loc"/></a></li>
+</xsl:for-each>
+</ul>
+</main>
+</body>
+</html>
+</xsl:template>
+</xsl:stylesheet>
+`
 
 // LLMs is /llms.txt: a plain Markdown map of the site for AI assistants.
 func LLMs(base string) string {

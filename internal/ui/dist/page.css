@@ -38,3 +38,5 @@ h3 a { color: var(--text); text-decoration: none; }
 code { font: 13.5px ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 1px 6px; }
 .related { columns: 2; padding-left: 20px; }
 .foot { padding-top: 20px; padding-bottom: 32px; color: var(--dim); font-size: 13px; border-top: 1px solid var(--border); }
+.urls { padding-left: 20px; }
+.urls li { margin: 4px 0; overflow-wrap: anywhere; }

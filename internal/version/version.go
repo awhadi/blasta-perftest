@@ -6,4 +6,4 @@ package version
 
 // Version is shown in the page (bottom right, when signed in), by `blasta version`
 // and in /api/health.
-const Version = "2.3.0"
+const Version = "2.3.1"

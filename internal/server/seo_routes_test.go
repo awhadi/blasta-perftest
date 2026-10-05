@@ -24,6 +24,9 @@ func TestCrawlerRoutes(t *testing.T) {
 	if c, ct, b := get("/sitemap.xml"); c != 200 || !strings.Contains(ct, "xml") || !strings.Contains(b, "https://perftest.example.test/templates/wordpress") {
 		t.Errorf("sitemap: %d %s", c, ct)
 	}
+	if c, ct, b := get("/sitemap.xsl"); c != 200 || !strings.HasPrefix(ct, "text/xsl") || !strings.Contains(b, "xsl:stylesheet") {
+		t.Errorf("sitemap stylesheet: %d %s", c, ct)
+	}
 	if c, _, b := get("/llms.txt"); c != 200 || !strings.Contains(b, "# BLASTA") {
 		t.Errorf("llms: %d", c)
 	}

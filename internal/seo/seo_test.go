@@ -72,6 +72,9 @@ func TestSitemapRobotsAndLLMs(t *testing.T) {
 	if got, want := strings.Count(sm, "<loc>"), len(presets.All())+2; got != want {
 		t.Errorf("sitemap has %d urls, want %d", got, want)
 	}
+	if !strings.Contains(sm, `<?xml-stylesheet type="text/xsl" href="sitemap.xsl"?>`) {
+		t.Error("the sitemap should point at its stylesheet")
+	}
 	r := Robots(base)
 	if !strings.Contains(r, "Disallow: /api/") || !strings.Contains(r, "Sitemap: "+base+"/sitemap.xml") || strings.Contains(r, "Disallow: /\n") {
 		t.Errorf("robots.txt: %s", r)
