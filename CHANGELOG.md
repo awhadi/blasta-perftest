@@ -7,6 +7,14 @@ feature the middle one, a breaking change the first. The current version is the
 `Version` constant in `internal/version/version.go`; it is shown bottom right in the
 page for signed-in people, by `blasta version`, and in `/api/health`.
 
+## [2.6.1] - 2026-10-05
+
+### Fixed
+- Text at the top of a page could appear small for a moment and then grow when the web fonts
+  arrived (most visible over a slow connection or a proxy). The fonts now use
+  `font-display: block`: they are preloaded and small, so the text appears once, already at
+  its final size, instead of being drawn in a fallback font first.
+
 ## [2.6.0] - 2026-10-05
 
 ### Added
