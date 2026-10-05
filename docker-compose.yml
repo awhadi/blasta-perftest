@@ -8,7 +8,7 @@ services:
     container_name: blasta
     # Published on loopback only. To expose it, put it behind HTTPS (docs/PROXY.md).
     ports:
-      - "127.0.0.1:${BLASTA_PORT:-8080}:8080"
+      - "${BLASTA_PORT:-8080}:8080"
     # Lets jobs target services running on this machine as
     # http://host.docker.internal:PORT (turn off the SSRF guard for those).
     extra_hosts:

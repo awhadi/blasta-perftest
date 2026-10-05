@@ -7,6 +7,12 @@ feature the middle one, a breaking change the first. The current version is the
 `Version` constant in `internal/version/version.go`; it is shown bottom right in the
 page for signed-in people, by `blasta version`, and in `/api/health`.
 
+## [2.1.1] - 2026-10-05
+
+### Changed
+- `docker-compose.yml` no longer forces the published port onto `127.0.0.1`; it is
+  published on all interfaces. The README explains how to limit it to this machine.
+
 ## [2.1.0] - 2026-10-05
 
 ### Added

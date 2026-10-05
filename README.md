@@ -188,11 +188,11 @@ docker compose down
 The image is a ~23 MB static binary on Alpine, runs as a non-root user with a
 read-only filesystem and all capabilities dropped, and has a health check.
 
-- **Loopback by default.** Inside the container BLASTA listens on all interfaces
-  (it needs `--allow-remote` for that), but `docker-compose.yml` publishes the
-  port on `127.0.0.1` only. Sign-in is on, but a load generator is a request
-  amplifier: put it behind HTTPS (see [docs/PROXY.md](docs/PROXY.md)) before
-  publishing it more widely.
+- **Network access.** `docker-compose.yml` publishes the port on all interfaces.
+  Sign-in is on, but a load generator is a request amplifier: put it behind HTTPS
+  (see [docs/PROXY.md](docs/PROXY.md)), and if you want it reachable from this
+  machine only, change the port line to `"127.0.0.1:${BLASTA_PORT:-8080}:8080"` or
+  use a firewall.
 - **Testing services on your machine.** From inside the container `localhost`
   is the container itself. Use `http://host.docker.internal:PORT` and turn off
   *Block private & loopback addresses* under Advanced limits.
@@ -210,7 +210,7 @@ read-only filesystem and all capabilities dropped, and has a health check.
 - **Visitors without an account** land on the Test page and can run a few small,
   time-limited tests; templates and history ask them to sign in or register.
 - Without Compose: `docker build -t blasta .` then
-  `docker run -d -p 127.0.0.1:8080:8080 blasta`.
+  `docker run -d -p 8080:8080 blasta`.
 
 ## Kubernetes
 
