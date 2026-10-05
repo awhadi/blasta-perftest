@@ -1,0 +1,533 @@
+{
+  "id": "elasticsearch",
+  "title": "Elasticsearch / OpenSearch",
+  "category": "Search",
+  "summary": "Cluster health, searches, counts and indexing. Includes an enterprise test plan (jobs starting ent-).",
+  "stack": "Elasticsearch 7+/OpenSearch",
+  "variables": [
+    {
+      "name": "url",
+      "default": "http://localhost:9200",
+      "description": "Cluster URL, no trailing slash",
+      "placeholder": true,
+      "guide": "The address of the system to test, starting with https:// (or http://) and with no trailing slash, for example https://staging.example.com. Use a system you own, ideally a staging copy. BLASTA runs in a container, so for a service on your own machine use host.docker.internal instead of localhost."
+    },
+    {
+      "name": "index",
+      "default": "my-index",
+      "description": "Index or alias to query",
+      "placeholder": true,
+      "guide": "The name of an index. Elasticsearch/OpenSearch: `GET /_cat/indices` lists them. Meilisearch: `GET /indexes`."
+    },
+    {
+      "name": "term",
+      "default": "test",
+      "description": "A search term that exists in your data",
+      "guide": "A word that appears in your data, so the search returns results."
+    }
+  ],
+  "jobs": [
+    {
+      "id": "health",
+      "name": "cluster health",
+      "notes": "Master-node call. Cheap, but green/yellow/red matters during load.",
+      "safety": "read",
+      "job": {
+        "name": "cluster health",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/_cluster/health"
+        },
+        "method": "GET",
+        "concurrency": 5,
+        "rps": 10,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Accept": "application/json"
+        }
+      }
+    },
+    {
+      "id": "match-all",
+      "name": "match_all search (size 10)",
+      "notes": "Baseline search cost with no scoring work.",
+      "safety": "read",
+      "job": {
+        "name": "match_all search (size 10)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/{{index}}/_search"
+        },
+        "method": "POST",
+        "concurrency": 20,
+        "rps": 25,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": "{\"size\":10,\"query\":{\"match_all\":{}}}"
+      }
+    },
+    {
+      "id": "match",
+      "name": "full-text match search",
+      "notes": "A typical user query: analysis, scoring and fetch.",
+      "safety": "read",
+      "job": {
+        "name": "full-text match search",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/{{index}}/_search"
+        },
+        "method": "POST",
+        "concurrency": 20,
+        "rps": 25,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": "{\"size\":10,\"query\":{\"match\":{\"_all\":\"{{term}}\"}}}"
+      }
+    },
+    {
+      "id": "aggregation",
+      "name": "terms aggregation",
+      "notes": "Aggregations are memory hungry. Raise the rate slowly and watch the circuit breakers.",
+      "safety": "read",
+      "job": {
+        "name": "terms aggregation",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/{{index}}/_search?size=0"
+        },
+        "method": "POST",
+        "concurrency": 10,
+        "rps": 10,
+        "duration": 60000000000,
+        "timeout": 30000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": "{\"aggs\":{\"top\":{\"terms\":{\"field\":\"_index\",\"size\":10}}}}"
+      }
+    },
+    {
+      "id": "count",
+      "name": "count API",
+      "notes": "Cheap and index-wide.",
+      "safety": "read",
+      "job": {
+        "name": "count API",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/{{index}}/_count"
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 25,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Accept": "application/json"
+        }
+      }
+    },
+    {
+      "id": "index-doc",
+      "name": "index a document",
+      "notes": "WRITES a document per request. Use a throwaway index and watch refresh and merge load. Staging only.",
+      "safety": "write",
+      "job": {
+        "name": "index a document",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/{{index}}/_doc"
+        },
+        "method": "POST",
+        "concurrency": 10,
+        "rps": 50,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          201
+        ],
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": "{\"message\":\"blasta load test\",\"@timestamp\":\"2026-01-01T00:00:00Z\"}"
+      }
+    },
+    {
+      "id": "ent-01-smoke",
+      "name": "Elasticsearch / OpenSearch: 01 smoke",
+      "notes": "Enterprise plan, step 1 of 10. One request a second for 30 seconds. Run this first, every time: it proves the address, credentials and headers are right and that the environment is up before any real load is applied. Gate: zero errors. Reference request: full-text match search.",
+      "safety": "read",
+      "job": {
+        "name": "Elasticsearch / OpenSearch: 01 smoke",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/{{index}}/_search"
+        },
+        "method": "POST",
+        "concurrency": 1,
+        "rps": 1,
+        "duration": 30000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": "{\"size\":10,\"query\":{\"match\":{\"_all\":\"{{term}}\"}}}",
+        "slo": {
+          "maxErrorRate": 0
+        }
+      }
+    },
+    {
+      "id": "ent-02-baseline",
+      "name": "Elasticsearch / OpenSearch: 02 baseline (20% load)",
+      "notes": "Step 2 of 10. About a fifth of normal traffic for 5 minutes: the uncontended latency of this request. Every later result is judged against it, so record p50 and p95. Gate: at most 0.5% errors and the default latency targets. Reference request: full-text match search.",
+      "safety": "read",
+      "job": {
+        "name": "Elasticsearch / OpenSearch: 02 baseline (20% load)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/{{index}}/_search"
+        },
+        "method": "POST",
+        "concurrency": 4,
+        "rps": 5,
+        "duration": 300000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": "{\"size\":10,\"query\":{\"match\":{\"_all\":\"{{term}}\"}}}",
+        "slo": {
+          "maxErrorRate": 0.5,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-03-average-load",
+      "name": "Elasticsearch / OpenSearch: 03 average load (SLO check)",
+      "notes": "Step 3 of 10. Normal busy-hour traffic for 10 minutes. The rate is the reference job's rate: raise it to your measured production peak-hour rate. This is the run that proves (or breaks) your SLO. Gate: at most 1% errors, p95 and p99 inside the targets. Reference request: full-text match search.",
+      "safety": "read",
+      "job": {
+        "name": "Elasticsearch / OpenSearch: 03 average load (SLO check)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/{{index}}/_search"
+        },
+        "method": "POST",
+        "concurrency": 20,
+        "rps": 25,
+        "duration": 600000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": "{\"size\":10,\"query\":{\"match\":{\"_all\":\"{{term}}\"}}}",
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-04-peak-load",
+      "name": "Elasticsearch / OpenSearch: 04 peak load (2x average)",
+      "notes": "Step 4 of 10. Twice the average for 10 minutes: the busiest hour of the year plus headroom. Latency may rise, but must stay in SLO; if it does not, you have no headroom. Gate: at most 2% errors, latency targets doubled. Reference request: full-text match search.",
+      "safety": "read",
+      "job": {
+        "name": "Elasticsearch / OpenSearch: 04 peak load (2x average)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/{{index}}/_search"
+        },
+        "method": "POST",
+        "concurrency": 40,
+        "rps": 50,
+        "duration": 600000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": "{\"size\":10,\"query\":{\"match\":{\"_all\":\"{{term}}\"}}}",
+        "slo": {
+          "maxErrorRate": 2,
+          "maxP95": 2000000000,
+          "maxP99": 4000000000
+        }
+      }
+    },
+    {
+      "id": "ent-05-stress",
+      "name": "Elasticsearch / OpenSearch: 05 stress (ramp to 4x)",
+      "notes": "Step 5 of 10. Ramps to four times average over 10 minutes, then holds for 2. Finds where it degrades and HOW: gracefully (latency rises, errors stay low) or badly (errors, timeouts, crashes, restarts). Observation only, no gate. Reference request: full-text match search.",
+      "safety": "read",
+      "job": {
+        "name": "Elasticsearch / OpenSearch: 05 stress (ramp to 4x)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/{{index}}/_search"
+        },
+        "method": "POST",
+        "concurrency": 80,
+        "rps": 100,
+        "duration": 720000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": "{\"size\":10,\"query\":{\"match\":{\"_all\":\"{{term}}\"}}}",
+        "ramp": 600000000000
+      }
+    },
+    {
+      "id": "ent-06-spike",
+      "name": "Elasticsearch / OpenSearch: 06 spike (10x in 10 s)",
+      "notes": "Step 6 of 10. Reaches ten times average within 10 seconds and holds for 2 minutes: a campaign email, a news link, a failover. Checks autoscaling, queue limits and load shedding. Gate: at most 5% errors, because shedding load is acceptable and crashing is not. Reference request: full-text match search.",
+      "safety": "read",
+      "job": {
+        "name": "Elasticsearch / OpenSearch: 06 spike (10x in 10 s)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/{{index}}/_search"
+        },
+        "method": "POST",
+        "concurrency": 200,
+        "rps": 250,
+        "duration": 130000000000,
+        "timeout": 15000000000,
+        "queueSize": 1250,
+        "onQueueFull": "reject",
+        "maxWorkers": 400,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": "{\"size\":10,\"query\":{\"match\":{\"_all\":\"{{term}}\"}}}",
+        "ramp": 10000000000,
+        "slo": {
+          "maxErrorRate": 5
+        }
+      }
+    },
+    {
+      "id": "ent-07-recovery",
+      "name": "Elasticsearch / OpenSearch: 07 recovery after the spike",
+      "notes": "Step 7 of 10. Run IMMEDIATELY after the spike, at average load for 5 minutes. Latency and errors must return to the baseline from step 2. If they do not, something is stuck: queues, connection pools, GC, an autoscaler cool-down. Gate: same as average load. Reference request: full-text match search.",
+      "safety": "read",
+      "job": {
+        "name": "Elasticsearch / OpenSearch: 07 recovery after the spike",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/{{index}}/_search"
+        },
+        "method": "POST",
+        "concurrency": 20,
+        "rps": 25,
+        "duration": 300000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": "{\"size\":10,\"query\":{\"match\":{\"_all\":\"{{term}}\"}}}",
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-08-soak",
+      "name": "Elasticsearch / OpenSearch: 08 soak (1 hour at 60%)",
+      "notes": "Step 8 of 10. One hour of steady load. Finds leaks and slow decay in memory, connections, file descriptors, disk, log volume and cache churn. Watch the resource graphs: any line that climbs and never flattens is a finding. Gate: at most 0.5% errors. Reference request: full-text match search.",
+      "safety": "read",
+      "job": {
+        "name": "Elasticsearch / OpenSearch: 08 soak (1 hour at 60%)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/{{index}}/_search"
+        },
+        "method": "POST",
+        "concurrency": 12,
+        "rps": 15,
+        "duration": 3600000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": "{\"size\":10,\"query\":{\"match\":{\"_all\":\"{{term}}\"}}}",
+        "slo": {
+          "maxErrorRate": 0.5,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-09-breakpoint",
+      "name": "Elasticsearch / OpenSearch: 09 breakpoint (find the ceiling)",
+      "notes": "Step 9 of 10. Ramps to twenty times average over 20 minutes. Stop it when errors pass about 5%: the rate at that moment is your ceiling, and ceiling divided by peak is your capacity margin. Use a production-like environment, never production. Reference request: full-text match search.",
+      "safety": "read",
+      "job": {
+        "name": "Elasticsearch / OpenSearch: 09 breakpoint (find the ceiling)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/{{index}}/_search"
+        },
+        "method": "POST",
+        "concurrency": 400,
+        "rps": 500,
+        "duration": 1380000000000,
+        "timeout": 15000000000,
+        "queueSize": 2500,
+        "onQueueFull": "reject",
+        "maxWorkers": 800,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": "{\"size\":10,\"query\":{\"match\":{\"_all\":\"{{term}}\"}}}",
+        "ramp": 1200000000000
+      }
+    },
+    {
+      "id": "ent-10-failover-window",
+      "name": "Elasticsearch / OpenSearch: 10 resilience window (failover / deploy)",
+      "notes": "Step 10 of 10. Average load for 15 minutes. About 5 minutes in, cause the event you are testing: kill a pod or node, fail over the database, roll out a new version, drain a zone. Errors in the window are your real availability loss. Gate: at most 1% errors overall; read the time series for how long the dip lasted. Reference request: full-text match search.",
+      "safety": "read",
+      "job": {
+        "name": "Elasticsearch / OpenSearch: 10 resilience window (failover / deploy)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/{{index}}/_search"
+        },
+        "method": "POST",
+        "concurrency": 20,
+        "rps": 25,
+        "duration": 900000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": "{\"size\":10,\"query\":{\"match\":{\"_all\":\"{{term}}\"}}}",
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    }
+  ]
+}

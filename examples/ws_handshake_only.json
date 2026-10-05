@@ -1,0 +1,15 @@
+{
+  "name": "websocket handshake only",
+  "description": "Empty body measures connect plus handshake latency without waiting for a server message.",
+  "executor": "ws",
+  "target": { "url": "ws://127.0.0.1:9097/socket" },
+  "concurrency": 20,
+  "rps": 100,
+  "burst": 100,
+  "duration": 20000000000,
+  "queueSize": 1000,
+  "onQueueFull": "reject",
+  "timeout": 10000000000,
+  "maxWorkers": 100,
+  "blockPrivate": false
+}

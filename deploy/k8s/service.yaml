@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: blasta
+  labels: {app.kubernetes.io/name: blasta}
+spec:
+  # ClusterIP only. blasta has no authentication, so do not put it on a
+  # LoadBalancer or a public Ingress. Reach it with:
+  #   kubectl port-forward svc/blasta 8080:80
+  type: ClusterIP
+  selector: {app.kubernetes.io/name: blasta}
+  ports:
+    - {name: http, port: 80, targetPort: http}

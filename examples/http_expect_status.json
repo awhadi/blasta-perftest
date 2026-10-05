@@ -1,0 +1,17 @@
+{
+  "name": "endpoint that legitimately returns 404",
+  "description": "A 404 here is the expected answer, so list it instead of counting it as an error.",
+  "executor": "http",
+  "target": { "url": "https://staging.example.com/wp-json/wp/v2/posts/does-not-exist" },
+  "method": "GET",
+  "expectStatus": [404],
+  "concurrency": 10,
+  "rps": 25,
+  "burst": 25,
+  "duration": 20000000000,
+  "queueSize": 500,
+  "onQueueFull": "reject",
+  "timeout": 10000000000,
+  "maxWorkers": 50,
+  "blockPrivate": true
+}

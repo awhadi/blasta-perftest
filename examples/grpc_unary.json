@@ -1,0 +1,18 @@
+{
+  "name": "grpc unary call",
+  "description": "meta.method is the full method path; meta.target is the server address. The payload is raw protobuf bytes as text.",
+  "executor": "grpc",
+  "target": {
+    "url": "grpc://127.0.0.1:50051",
+    "meta": { "method": "/helloworld.Greeter/SayHello", "target": "127.0.0.1:50051" }
+  },
+  "concurrency": 10,
+  "rps": 50,
+  "burst": 50,
+  "duration": 20000000000,
+  "queueSize": 1000,
+  "onQueueFull": "reject",
+  "timeout": 10000000000,
+  "maxWorkers": 100,
+  "blockPrivate": false
+}

@@ -1,0 +1,1185 @@
+{
+  "id": "simplesamlphp-idp",
+  "title": "SimpleSAMLphp IdP",
+  "category": "SAML",
+  "summary": "SimpleSAMLphp as an IdP. Every request creates a PHP session file, so watch disk and inodes. Includes an enterprise test plan (jobs starting ent-).",
+  "stack": "PHP + SimpleSAMLphp",
+  "variables": [
+    {
+      "name": "metadataUrl",
+      "default": "https://idp.example.com/simplesaml/saml2/idp/metadata.php",
+      "description": "URL of the IdP's SAML metadata",
+      "placeholder": true,
+      "guide": "Where the IdP publishes its SAML metadata. Keycloak: /realms/<realm>/protocol/saml/descriptor. Shibboleth: /idp/shibboleth. AD FS: /FederationMetadata/2007-06/FederationMetadata.xml."
+    },
+    {
+      "name": "ssoUrl",
+      "default": "https://idp.example.com/simplesaml/saml2/idp/SSOService.php",
+      "description": "The IdP single sign-on URL (HTTP-Redirect / POST binding)",
+      "placeholder": true,
+      "guide": "The IdP's single sign-on address. Open the IdP's metadata XML and find <SingleSignOnService> with the HTTP-Redirect binding: its Location is this value."
+    },
+    {
+      "name": "sloUrl",
+      "default": "https://idp.example.com/simplesaml/saml2/idp/SingleLogoutService.php",
+      "description": "The IdP single logout URL",
+      "placeholder": true,
+      "guide": "The IdP's single logout address. In the metadata XML, <SingleLogoutService> with the HTTP-Redirect binding: its Location."
+    },
+    {
+      "name": "spEntityId",
+      "default": "https://sp.example.com/saml/metadata",
+      "description": "Entity ID of a service provider registered at the IdP",
+      "placeholder": true,
+      "guide": "The entity ID of a service provider that is REGISTERED at the IdP. In the IdP's SAML client or relying-party list, copy its entity ID (or client ID). An unregistered one is refused."
+    },
+    {
+      "name": "acsUrl",
+      "default": "https://sp.example.com/saml/acs",
+      "description": "That service provider's assertion consumer URL",
+      "placeholder": true,
+      "guide": "That service provider's assertion consumer service address, from its registration at the IdP (it must match exactly)."
+    },
+    {
+      "name": "nameId",
+      "default": "blasta-test-user",
+      "description": "NameID used in logout requests",
+      "guide": "Any user name or ID. It is only used in logout requests."
+    },
+    {
+      "name": "samlRequest",
+      "default": "",
+      "description": "AuthnRequest, HTTP-Redirect binding (built when rendered)",
+      "derived": "saml-authnrequest-redirect"
+    },
+    {
+      "name": "samlRequestPassive",
+      "default": "",
+      "description": "AuthnRequest with IsPassive",
+      "derived": "saml-authnrequest-redirect-passive"
+    },
+    {
+      "name": "samlRequestForce",
+      "default": "",
+      "description": "AuthnRequest with ForceAuthn",
+      "derived": "saml-authnrequest-redirect-force"
+    },
+    {
+      "name": "samlRequestPost",
+      "default": "",
+      "description": "AuthnRequest, HTTP-POST binding",
+      "derived": "saml-authnrequest-post"
+    },
+    {
+      "name": "samlRequestUnknownSp",
+      "default": "",
+      "description": "AuthnRequest from an unregistered SP",
+      "derived": "saml-authnrequest-redirect-unknownsp"
+    },
+    {
+      "name": "samlLogout",
+      "default": "",
+      "description": "LogoutRequest, HTTP-Redirect binding",
+      "derived": "saml-logoutrequest-redirect"
+    }
+  ],
+  "jobs": [
+    {
+      "id": "metadata",
+      "name": "IdP metadata",
+      "notes": "Fetched by every SP at start-up and refreshed on a timer; with many SPs it is polled constantly.",
+      "safety": "read",
+      "job": {
+        "name": "IdP metadata",
+        "executor": "http",
+        "target": {
+          "url": "{{metadataUrl}}"
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 30,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Accept": "application/samlmetadata+xml, application/xml"
+        }
+      }
+    },
+    {
+      "id": "metadata-nocache",
+      "name": "IdP metadata (cache bypass)",
+      "notes": "Forces the origin to generate and sign the metadata.",
+      "safety": "read",
+      "job": {
+        "name": "IdP metadata (cache bypass)",
+        "executor": "http",
+        "target": {
+          "url": "{{metadataUrl}}"
+        },
+        "method": "GET",
+        "concurrency": 5,
+        "rps": 10,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Cache-Control": "no-cache",
+          "Pragma": "no-cache",
+          "Accept": "application/xml"
+        }
+      }
+    },
+    {
+      "id": "sso-redirect",
+      "name": "SP-initiated SSO (HTTP-Redirect binding)",
+      "notes": "The AuthnRequest is generated when you render this template, unsigned, with a fresh ID and the current time: render it shortly before the run, and register the SP entity ID at the IdP first. The start of every SAML login: the IdP parses the request, looks up the SP and shows a login page or continues an existing session. Redirects are not followed.",
+      "safety": "read",
+      "job": {
+        "name": "SP-initiated SSO (HTTP-Redirect binding)",
+        "executor": "http",
+        "target": {
+          "url": "{{ssoUrl}}?SAMLRequest={{samlRequest}}&RelayState=blasta",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 20,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302,
+          303
+        ],
+        "headers": {
+          "Accept": "text/html"
+        }
+      }
+    },
+    {
+      "id": "sso-post",
+      "name": "SP-initiated SSO (HTTP-POST binding)",
+      "notes": "The AuthnRequest is generated when you render this template, unsigned, with a fresh ID and the current time: render it shortly before the run, and register the SP entity ID at the IdP first. Same login, sent as a form POST. Some IdPs handle the two bindings in different code paths.",
+      "safety": "read",
+      "job": {
+        "name": "SP-initiated SSO (HTTP-POST binding)",
+        "executor": "http",
+        "target": {
+          "url": "{{ssoUrl}}",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "POST",
+        "concurrency": 10,
+        "rps": 20,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302,
+          303
+        ],
+        "headers": {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "Accept": "text/html"
+        },
+        "body": "SAMLRequest={{samlRequestPost}}&RelayState=blasta"
+      }
+    },
+    {
+      "id": "sso-passive",
+      "name": "passive SSO (IsPassive)",
+      "notes": "The AuthnRequest is generated when you render this template, unsigned, with a fresh ID and the current time: render it shortly before the run, and register the SP entity ID at the IdP first. Must answer WITHOUT showing a login page: either a response or a NoPassive status. Used by silent session checks.",
+      "safety": "read",
+      "job": {
+        "name": "passive SSO (IsPassive)",
+        "executor": "http",
+        "target": {
+          "url": "{{ssoUrl}}?SAMLRequest={{samlRequestPassive}}&RelayState=blasta",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 20,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302,
+          303
+        ],
+        "headers": {
+          "Accept": "text/html"
+        }
+      }
+    },
+    {
+      "id": "sso-force-authn",
+      "name": "forced re-authentication (ForceAuthn)",
+      "notes": "The AuthnRequest is generated when you render this template, unsigned, with a fresh ID and the current time: render it shortly before the run, and register the SP entity ID at the IdP first. Ignores the existing session and demands a fresh login: the login page is rendered every time.",
+      "safety": "read",
+      "job": {
+        "name": "forced re-authentication (ForceAuthn)",
+        "executor": "http",
+        "target": {
+          "url": "{{ssoUrl}}?SAMLRequest={{samlRequestForce}}&RelayState=blasta",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 15,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302,
+          303
+        ],
+        "headers": {
+          "Accept": "text/html"
+        }
+      }
+    },
+    {
+      "id": "sso-unknown-sp",
+      "name": "request from an unknown SP",
+      "notes": "The AuthnRequest is generated when you render this template, unsigned, with a fresh ID and the current time: render it shortly before the run, and register the SP entity ID at the IdP first. Error path: an unregistered entity ID must be refused cheaply with an error page, never redirected to its ACS URL.",
+      "safety": "read",
+      "job": {
+        "name": "request from an unknown SP",
+        "executor": "http",
+        "target": {
+          "url": "{{ssoUrl}}?SAMLRequest={{samlRequestUnknownSp}}&RelayState=blasta",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 20,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          400,
+          403,
+          404
+        ],
+        "headers": {
+          "Accept": "text/html"
+        }
+      }
+    },
+    {
+      "id": "sso-malformed",
+      "name": "malformed SAMLRequest",
+      "notes": "Garbage that is not deflated XML. The IdP must answer with a 4xx or an error page and must not log stack traces per request or crash.",
+      "safety": "read",
+      "job": {
+        "name": "malformed SAMLRequest",
+        "executor": "http",
+        "target": {
+          "url": "{{ssoUrl}}?SAMLRequest=bm90LXNhbWw%3D&RelayState=blasta",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 20,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          400,
+          403
+        ],
+        "headers": {
+          "Accept": "text/html"
+        }
+      }
+    },
+    {
+      "id": "sso-missing-request",
+      "name": "SSO endpoint with no request",
+      "notes": "Bots and health checks hit the SSO URL bare. It should return an error page quickly.",
+      "safety": "read",
+      "job": {
+        "name": "SSO endpoint with no request",
+        "executor": "http",
+        "target": {
+          "url": "{{ssoUrl}}",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 30,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          400,
+          403,
+          404,
+          405
+        ],
+        "headers": {
+          "Accept": "text/html"
+        }
+      }
+    },
+    {
+      "id": "slo-redirect",
+      "name": "single logout request (HTTP-Redirect)",
+      "notes": "The AuthnRequest is generated when you render this template, unsigned, with a fresh ID and the current time: render it shortly before the run, and register the SP entity ID at the IdP first. Logout of a session that does not exist: should return a logout response or an error page quickly. The SP also needs a single-logout URL registered at the IdP: in testing, a Keycloak client without one answered 500 ('uri parameter is null') instead of a clean error, which this job will show as errors.",
+      "safety": "read",
+      "job": {
+        "name": "single logout request (HTTP-Redirect)",
+        "executor": "http",
+        "target": {
+          "url": "{{sloUrl}}?SAMLRequest={{samlLogout}}&RelayState=blasta",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 15,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302,
+          303,
+          400
+        ],
+        "headers": {
+          "Accept": "text/html"
+        }
+      }
+    },
+    {
+      "id": "sso-spike",
+      "name": "login spike (10x in 10 s)",
+      "notes": "The AuthnRequest is generated when you render this template, unsigned, with a fresh ID and the current time: render it shortly before the run, and register the SP entity ID at the IdP first. Everyone logs in at 09:00. Reaches a high rate in ten seconds and holds, then watch recovery.",
+      "safety": "read",
+      "job": {
+        "name": "login spike (10x in 10 s)",
+        "executor": "http",
+        "target": {
+          "url": "{{ssoUrl}}?SAMLRequest={{samlRequest}}&RelayState=blasta",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 200,
+        "rps": 300,
+        "duration": 120000000000,
+        "timeout": 15000000000,
+        "queueSize": 5000,
+        "onQueueFull": "reject",
+        "maxWorkers": 500,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302,
+          303
+        ],
+        "headers": {
+          "Accept": "text/html"
+        },
+        "ramp": 10000000000
+      }
+    },
+    {
+      "id": "sso-ramp",
+      "name": "login capacity ramp",
+      "notes": "The AuthnRequest is generated when you render this template, unsigned, with a fresh ID and the current time: render it shortly before the run, and register the SP entity ID at the IdP first. Slow ramp to find the rate where the IdP's latency climbs. Staging only.",
+      "safety": "read",
+      "job": {
+        "name": "login capacity ramp",
+        "executor": "http",
+        "target": {
+          "url": "{{ssoUrl}}?SAMLRequest={{samlRequest}}&RelayState=blasta",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 100,
+        "rps": 100,
+        "duration": 420000000000,
+        "timeout": 15000000000,
+        "queueSize": 5000,
+        "onQueueFull": "reject",
+        "maxWorkers": 300,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302,
+          303
+        ],
+        "headers": {
+          "Accept": "text/html"
+        },
+        "ramp": 300000000000
+      }
+    },
+    {
+      "id": "static-resource",
+      "name": "theme resource",
+      "notes": "Static files served through PHP in some setups: the cheapest request on the site.",
+      "safety": "read",
+      "job": {
+        "name": "theme resource",
+        "executor": "http",
+        "target": {
+          "url": "https://idp.example.com/simplesaml/resources/default.css"
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 100,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          404
+        ]
+      }
+    },
+    {
+      "id": "ent-01-smoke",
+      "name": "SimpleSAMLphp IdP: 01 smoke",
+      "notes": "Enterprise plan, step 1 of 10. One request a second for 30 seconds. Run this first, every time: it proves the address, credentials and headers are right and that the environment is up before any real load is applied. Gate: zero errors. Reference request: SP-initiated SSO (HTTP-Redirect binding).",
+      "safety": "read",
+      "job": {
+        "name": "SimpleSAMLphp IdP: 01 smoke",
+        "executor": "http",
+        "target": {
+          "url": "{{ssoUrl}}?SAMLRequest={{samlRequest}}&RelayState=blasta",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 1,
+        "rps": 1,
+        "duration": 30000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302,
+          303
+        ],
+        "headers": {
+          "Accept": "text/html"
+        },
+        "slo": {
+          "maxErrorRate": 0
+        }
+      }
+    },
+    {
+      "id": "ent-02-baseline",
+      "name": "SimpleSAMLphp IdP: 02 baseline (20% load)",
+      "notes": "Step 2 of 10. About a fifth of normal traffic for 5 minutes: the uncontended latency of this request. Every later result is judged against it, so record p50 and p95. Gate: at most 0.5% errors and the default latency targets. Reference request: SP-initiated SSO (HTTP-Redirect binding).",
+      "safety": "read",
+      "job": {
+        "name": "SimpleSAMLphp IdP: 02 baseline (20% load)",
+        "executor": "http",
+        "target": {
+          "url": "{{ssoUrl}}?SAMLRequest={{samlRequest}}&RelayState=blasta",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 2,
+        "rps": 4,
+        "duration": 300000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302,
+          303
+        ],
+        "headers": {
+          "Accept": "text/html"
+        },
+        "slo": {
+          "maxErrorRate": 0.5,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-03-average-load",
+      "name": "SimpleSAMLphp IdP: 03 average load (SLO check)",
+      "notes": "Step 3 of 10. Normal busy-hour traffic for 10 minutes. The rate is the reference job's rate: raise it to your measured production peak-hour rate. This is the run that proves (or breaks) your SLO. Gate: at most 1% errors, p95 and p99 inside the targets. Reference request: SP-initiated SSO (HTTP-Redirect binding).",
+      "safety": "read",
+      "job": {
+        "name": "SimpleSAMLphp IdP: 03 average load (SLO check)",
+        "executor": "http",
+        "target": {
+          "url": "{{ssoUrl}}?SAMLRequest={{samlRequest}}&RelayState=blasta",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 20,
+        "duration": 600000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302,
+          303
+        ],
+        "headers": {
+          "Accept": "text/html"
+        },
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-04-peak-load",
+      "name": "SimpleSAMLphp IdP: 04 peak load (2x average)",
+      "notes": "Step 4 of 10. Twice the average for 10 minutes: the busiest hour of the year plus headroom. Latency may rise, but must stay in SLO; if it does not, you have no headroom. Gate: at most 2% errors, latency targets doubled. Reference request: SP-initiated SSO (HTTP-Redirect binding).",
+      "safety": "read",
+      "job": {
+        "name": "SimpleSAMLphp IdP: 04 peak load (2x average)",
+        "executor": "http",
+        "target": {
+          "url": "{{ssoUrl}}?SAMLRequest={{samlRequest}}&RelayState=blasta",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 40,
+        "duration": 600000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302,
+          303
+        ],
+        "headers": {
+          "Accept": "text/html"
+        },
+        "slo": {
+          "maxErrorRate": 2,
+          "maxP95": 2000000000,
+          "maxP99": 4000000000
+        }
+      }
+    },
+    {
+      "id": "ent-05-stress",
+      "name": "SimpleSAMLphp IdP: 05 stress (ramp to 4x)",
+      "notes": "Step 5 of 10. Ramps to four times average over 10 minutes, then holds for 2. Finds where it degrades and HOW: gracefully (latency rises, errors stay low) or badly (errors, timeouts, crashes, restarts). Observation only, no gate. Reference request: SP-initiated SSO (HTTP-Redirect binding).",
+      "safety": "read",
+      "job": {
+        "name": "SimpleSAMLphp IdP: 05 stress (ramp to 4x)",
+        "executor": "http",
+        "target": {
+          "url": "{{ssoUrl}}?SAMLRequest={{samlRequest}}&RelayState=blasta",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 40,
+        "rps": 80,
+        "duration": 720000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302,
+          303
+        ],
+        "headers": {
+          "Accept": "text/html"
+        },
+        "ramp": 600000000000
+      }
+    },
+    {
+      "id": "ent-06-spike",
+      "name": "SimpleSAMLphp IdP: 06 spike (10x in 10 s)",
+      "notes": "Step 6 of 10. Reaches ten times average within 10 seconds and holds for 2 minutes: a campaign email, a news link, a failover. Checks autoscaling, queue limits and load shedding. Gate: at most 5% errors, because shedding load is acceptable and crashing is not. Reference request: SP-initiated SSO (HTTP-Redirect binding).",
+      "safety": "read",
+      "job": {
+        "name": "SimpleSAMLphp IdP: 06 spike (10x in 10 s)",
+        "executor": "http",
+        "target": {
+          "url": "{{ssoUrl}}?SAMLRequest={{samlRequest}}&RelayState=blasta",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 100,
+        "rps": 200,
+        "duration": 130000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302,
+          303
+        ],
+        "headers": {
+          "Accept": "text/html"
+        },
+        "ramp": 10000000000,
+        "slo": {
+          "maxErrorRate": 5
+        }
+      }
+    },
+    {
+      "id": "ent-07-recovery",
+      "name": "SimpleSAMLphp IdP: 07 recovery after the spike",
+      "notes": "Step 7 of 10. Run IMMEDIATELY after the spike, at average load for 5 minutes. Latency and errors must return to the baseline from step 2. If they do not, something is stuck: queues, connection pools, GC, an autoscaler cool-down. Gate: same as average load. Reference request: SP-initiated SSO (HTTP-Redirect binding).",
+      "safety": "read",
+      "job": {
+        "name": "SimpleSAMLphp IdP: 07 recovery after the spike",
+        "executor": "http",
+        "target": {
+          "url": "{{ssoUrl}}?SAMLRequest={{samlRequest}}&RelayState=blasta",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 20,
+        "duration": 300000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302,
+          303
+        ],
+        "headers": {
+          "Accept": "text/html"
+        },
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-08-soak",
+      "name": "SimpleSAMLphp IdP: 08 soak (1 hour at 60%)",
+      "notes": "Step 8 of 10. One hour of steady load. Finds leaks and slow decay in memory, connections, file descriptors, disk, log volume and cache churn. Watch the resource graphs: any line that climbs and never flattens is a finding. Gate: at most 0.5% errors. Reference request: SP-initiated SSO (HTTP-Redirect binding).",
+      "safety": "read",
+      "job": {
+        "name": "SimpleSAMLphp IdP: 08 soak (1 hour at 60%)",
+        "executor": "http",
+        "target": {
+          "url": "{{ssoUrl}}?SAMLRequest={{samlRequest}}&RelayState=blasta",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 6,
+        "rps": 12,
+        "duration": 3600000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302,
+          303
+        ],
+        "headers": {
+          "Accept": "text/html"
+        },
+        "slo": {
+          "maxErrorRate": 0.5,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-09-breakpoint",
+      "name": "SimpleSAMLphp IdP: 09 breakpoint (find the ceiling)",
+      "notes": "Step 9 of 10. Ramps to twenty times average over 20 minutes. Stop it when errors pass about 5%: the rate at that moment is your ceiling, and ceiling divided by peak is your capacity margin. Use a production-like environment, never production. Reference request: SP-initiated SSO (HTTP-Redirect binding).",
+      "safety": "read",
+      "job": {
+        "name": "SimpleSAMLphp IdP: 09 breakpoint (find the ceiling)",
+        "executor": "http",
+        "target": {
+          "url": "{{ssoUrl}}?SAMLRequest={{samlRequest}}&RelayState=blasta",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 200,
+        "rps": 400,
+        "duration": 1380000000000,
+        "timeout": 15000000000,
+        "queueSize": 2000,
+        "onQueueFull": "reject",
+        "maxWorkers": 400,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302,
+          303
+        ],
+        "headers": {
+          "Accept": "text/html"
+        },
+        "ramp": 1200000000000
+      }
+    },
+    {
+      "id": "ent-10-failover-window",
+      "name": "SimpleSAMLphp IdP: 10 resilience window (failover / deploy)",
+      "notes": "Step 10 of 10. Average load for 15 minutes. About 5 minutes in, cause the event you are testing: kill a pod or node, fail over the database, roll out a new version, drain a zone. Errors in the window are your real availability loss. Gate: at most 1% errors overall; read the time series for how long the dip lasted. Reference request: SP-initiated SSO (HTTP-Redirect binding).",
+      "safety": "read",
+      "job": {
+        "name": "SimpleSAMLphp IdP: 10 resilience window (failover / deploy)",
+        "executor": "http",
+        "target": {
+          "url": "{{ssoUrl}}?SAMLRequest={{samlRequest}}&RelayState=blasta",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 20,
+        "duration": 900000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302,
+          303
+        ],
+        "headers": {
+          "Accept": "text/html"
+        },
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-x-connection-close",
+      "name": "SimpleSAMLphp IdP: no keep-alive (new connection per request)",
+      "notes": "Sends Connection: close, so every request pays for a new TCP and TLS handshake: the cost for clients that do not reuse connections (scripts, some mobile SDKs, health checkers). Shows load balancer and TLS termination limits. Reference request: SP-initiated SSO (HTTP-Redirect binding).",
+      "safety": "read",
+      "job": {
+        "name": "SimpleSAMLphp IdP: no keep-alive (new connection per request)",
+        "executor": "http",
+        "target": {
+          "url": "{{ssoUrl}}?SAMLRequest={{samlRequest}}&RelayState=blasta",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 20,
+        "duration": 300000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302,
+          303
+        ],
+        "headers": {
+          "Accept": "text/html",
+          "Connection": "close"
+        },
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 1500000000,
+          "maxP99": 3000000000
+        }
+      }
+    },
+    {
+      "id": "ent-x-bot-traffic",
+      "name": "SimpleSAMLphp IdP: crawler traffic (Googlebot user agent)",
+      "notes": "Same request identified as a search crawler. Tests WAF and bot-management rules and whether crawlers get cached or origin responses. Crawlers can easily be a third of all traffic. Reference request: SP-initiated SSO (HTTP-Redirect binding).",
+      "safety": "read",
+      "job": {
+        "name": "SimpleSAMLphp IdP: crawler traffic (Googlebot user agent)",
+        "executor": "http",
+        "target": {
+          "url": "{{ssoUrl}}?SAMLRequest={{samlRequest}}&RelayState=blasta",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 20,
+        "duration": 300000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302,
+          303
+        ],
+        "headers": {
+          "Accept": "text/html",
+          "User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)"
+        },
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-x-large-headers",
+      "name": "SimpleSAMLphp IdP: large cookies (~4 KB header)",
+      "notes": "Adds a 4 KB Cookie header, like a logged-in user with many tracking cookies. Proxies and servers reject headers around 8 KB, so this shows how close you are to that limit. Reference request: SP-initiated SSO (HTTP-Redirect binding).",
+      "safety": "read",
+      "job": {
+        "name": "SimpleSAMLphp IdP: large cookies (~4 KB header)",
+        "executor": "http",
+        "target": {
+          "url": "{{ssoUrl}}?SAMLRequest={{samlRequest}}&RelayState=blasta",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 10,
+        "duration": 300000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302,
+          303
+        ],
+        "headers": {
+          "Accept": "text/html",
+          "Cookie": "blasta=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+        },
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-x-monitor-storm",
+      "name": "SimpleSAMLphp IdP: uptime monitors (HEAD from many locations)",
+      "notes": "A fleet of synthetic monitors checking the URL with HEAD requests every 30 seconds from 20 locations, plus load balancer probes. Cheap each, constant in total. Reference request: SP-initiated SSO (HTTP-Redirect binding).",
+      "safety": "read",
+      "job": {
+        "name": "SimpleSAMLphp IdP: uptime monitors (HEAD from many locations)",
+        "executor": "http",
+        "target": {
+          "url": "{{ssoUrl}}?SAMLRequest={{samlRequest}}&RelayState=blasta",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "HEAD",
+        "concurrency": 10,
+        "rps": 20,
+        "duration": 600000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          204,
+          301,
+          302,
+          304,
+          405
+        ],
+        "headers": {
+          "Accept": "text/html"
+        },
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-x-login-storm",
+      "name": "SimpleSAMLphp IdP: Monday 9am login storm",
+      "notes": "Every employee opens their SAML-protected apps at the start of the day. Ramps SP-initiated logins to eight times normal over 60 seconds. Reference request: SP-initiated SSO (HTTP-Redirect binding).",
+      "safety": "read",
+      "job": {
+        "name": "SimpleSAMLphp IdP: Monday 9am login storm",
+        "executor": "http",
+        "target": {
+          "url": "{{ssoUrl}}?SAMLRequest={{samlRequest}}&RelayState=blasta",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 80,
+        "rps": 160,
+        "duration": 300000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302,
+          303
+        ],
+        "headers": {
+          "Accept": "text/html"
+        },
+        "ramp": 60000000000,
+        "slo": {
+          "maxErrorRate": 5
+        }
+      }
+    },
+    {
+      "id": "ent-x-post-binding-peak",
+      "name": "SimpleSAMLphp IdP: POST-binding login peak",
+      "notes": "Same login via the POST binding, which some SPs use exclusively. Three times normal for 10 minutes. Reference request: SP-initiated SSO (HTTP-POST binding).",
+      "safety": "read",
+      "job": {
+        "name": "SimpleSAMLphp IdP: POST-binding login peak",
+        "executor": "http",
+        "target": {
+          "url": "{{ssoUrl}}",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "POST",
+        "concurrency": 30,
+        "rps": 60,
+        "duration": 600000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302,
+          303
+        ],
+        "headers": {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "Accept": "text/html"
+        },
+        "body": "SAMLRequest={{samlRequestPost}}&RelayState=blasta",
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-x-metadata-herd",
+      "name": "SimpleSAMLphp IdP: metadata refresh herd",
+      "notes": "After an IdP certificate rollover every SP refreshes metadata at once. Ten times normal for 90 seconds. Reference request: IdP metadata.",
+      "safety": "read",
+      "job": {
+        "name": "SimpleSAMLphp IdP: metadata refresh herd",
+        "executor": "http",
+        "target": {
+          "url": "{{metadataUrl}}"
+        },
+        "method": "GET",
+        "concurrency": 100,
+        "rps": 300,
+        "duration": 90000000000,
+        "timeout": 15000000000,
+        "queueSize": 1500,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Accept": "application/samlmetadata+xml, application/xml"
+        },
+        "ramp": 5000000000,
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-x-logout-wave",
+      "name": "SimpleSAMLphp IdP: end-of-day logout wave",
+      "notes": "Single logout requests arrive in a wave when sessions time out together. Three times normal for 10 minutes. Reference request: single logout request (HTTP-Redirect).",
+      "safety": "read",
+      "job": {
+        "name": "SimpleSAMLphp IdP: end-of-day logout wave",
+        "executor": "http",
+        "target": {
+          "url": "{{sloUrl}}?SAMLRequest={{samlLogout}}&RelayState=blasta",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 30,
+        "rps": 45,
+        "duration": 600000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302,
+          303,
+          400
+        ],
+        "headers": {
+          "Accept": "text/html"
+        },
+        "slo": {
+          "maxErrorRate": 2
+        }
+      }
+    }
+  ]
+}

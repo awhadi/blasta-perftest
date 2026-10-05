@@ -1,0 +1,19 @@
+{
+  "name": "wp-admin authenticated dashboard",
+  "description": "Admin screens run far more PHP per request than the front end and each one needs a database connection. Export WP_ADMIN_COOKIE from a logged-in browser first. Staging only: admin pages trigger writes (post meta, transients, user sessions).",
+  "executor": "http",
+  "target": { "url": "${WP_URL}/wp-admin/" },
+  "method": "GET",
+  "headers": {
+    "Cookie": "${WP_ADMIN_COOKIE}",
+    "Accept": "text/html"
+  },
+  "concurrency": 5,
+  "rps": 5,
+  "duration": 60000000000,
+  "timeout": 30000000000,
+  "queueSize": 500,
+  "onQueueFull": "reject",
+  "maxWorkers": 50,
+  "blockPrivate": false
+}

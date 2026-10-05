@@ -1,0 +1,16 @@
+{
+  "name": "simple get",
+  "executor": "http",
+  "target": { "url": "http://127.0.0.1:9099/" },
+  "method": "GET",
+  "concurrency": 10,
+  "rps": 200,
+  "burst": 200,
+  "duration": 3000000000,
+  "queueSize": 1000,
+  "onQueueFull": "reject",
+  "timeout": 10000000000,
+  "maxWorkers": 200,
+  "blockPrivate": false,
+  "headers": { "Accept": "text/html" }
+}

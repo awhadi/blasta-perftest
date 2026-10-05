@@ -1,0 +1,39 @@
+name: blasta
+
+services:
+  blasta:
+    build:
+      context: .
+    image: blasta:latest
+    container_name: blasta
+    # Published on loopback only. To expose it, put it behind HTTPS (docs/PROXY.md).
+    ports:
+      - "127.0.0.1:${BLASTA_PORT:-8080}:8080"
+    # Lets jobs target services running on this machine as
+    # http://host.docker.internal:PORT (turn off the SSRF guard for those).
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    # Your own settings live in `.env` (git-ignored); see `.env.example` for every option.
+    # Database test jobs read their connection strings from variables defined there too.
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      # Sign-in is on by default. The first account created becomes the administrator.
+      BLASTA_AUTH: ${BLASTA_AUTH:-true}
+      BLASTA_PUBLIC_URL: ${BLASTA_PUBLIC_URL:-http://127.0.0.1:${BLASTA_PORT:-8080}}
+      BLASTA_REGISTRATION: ${BLASTA_REGISTRATION:-open}
+      BLASTA_GUEST: ${BLASTA_GUEST:-true}
+    # The database (blasta.db: accounts, sessions, history, settings) and the key that
+    # encrypts saved secrets live here; they survive `docker compose down` and rebuilds.
+    volumes:
+      - blasta-data:/data
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+volumes:
+  blasta-data:
+    name: blasta-data

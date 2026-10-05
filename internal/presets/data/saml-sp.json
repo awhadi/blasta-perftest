@@ -1,0 +1,937 @@
+{
+  "id": "saml-sp",
+  "title": "SAML service provider (Shibboleth SP / mod_auth_mellon / SimpleSAMLphp SP)",
+  "category": "SAML",
+  "summary": "What the SP does per request: session check, redirect to the IdP, ACS handling, metadata and logout. Includes an enterprise test plan (jobs starting ent-).",
+  "stack": "Shibboleth SP, mod_auth_mellon, SimpleSAMLphp SP, Spring Security SAML",
+  "variables": [
+    {
+      "name": "url",
+      "default": "https://sp.example.com",
+      "description": "SP base URL, no trailing slash",
+      "placeholder": true,
+      "guide": "The address of the system to test, starting with https:// (or http://) and with no trailing slash, for example https://staging.example.com. Use a system you own, ideally a staging copy. BLASTA runs in a container, so for a service on your own machine use host.docker.internal instead of localhost."
+    },
+    {
+      "name": "protectedPath",
+      "default": "/secure/",
+      "description": "A path protected by the SP",
+      "guide": "A path that the SP protects, starting with /, for example /secure/. Open it without a session: it should redirect to the IdP."
+    },
+    {
+      "name": "publicPath",
+      "default": "/",
+      "description": "A public path on the same site",
+      "guide": "A public path on the same site that is not protected, usually /."
+    },
+    {
+      "name": "metadataPath",
+      "default": "/Shibboleth.sso/Metadata",
+      "description": "SP metadata path",
+      "guide": "The path of the service provider metadata. Shibboleth SP: /Shibboleth.sso/Metadata."
+    },
+    {
+      "name": "acsPath",
+      "default": "/Shibboleth.sso/SAML2/POST",
+      "description": "Assertion consumer service path",
+      "guide": "The path of the assertion consumer service. Shibboleth SP: /Shibboleth.sso/SAML2/POST."
+    },
+    {
+      "name": "sessionPath",
+      "default": "/Shibboleth.sso/Session",
+      "description": "SP session status path",
+      "guide": "The path of the session status handler. Shibboleth SP: /Shibboleth.sso/Session."
+    },
+    {
+      "name": "loginPath",
+      "default": "/Shibboleth.sso/Login",
+      "description": "SP login handler path",
+      "guide": "The path of the login endpoint or handler, starting with /."
+    },
+    {
+      "name": "logoutPath",
+      "default": "/Shibboleth.sso/Logout",
+      "description": "SP logout handler path",
+      "guide": "The path of the logout handler, starting with /. Shibboleth SP: /Shibboleth.sso/Logout."
+    }
+  ],
+  "jobs": [
+    {
+      "id": "metadata",
+      "name": "SP metadata",
+      "notes": "Fetched by IdPs, federations and monitoring.",
+      "safety": "read",
+      "job": {
+        "name": "SP metadata",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}{{metadataPath}}"
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 30,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Accept": "application/xml"
+        }
+      }
+    },
+    {
+      "id": "public-page",
+      "name": "public page behind the SP",
+      "notes": "Baseline: the SP module is in the request path but does not require a session.",
+      "safety": "read",
+      "job": {
+        "name": "public page behind the SP",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}{{publicPath}}"
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 100,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "headers": {
+          "Accept": "text/html"
+        }
+      }
+    },
+    {
+      "id": "protected-redirect",
+      "name": "protected page without a session",
+      "notes": "The SP builds an AuthnRequest and redirects to the IdP. This is every new visitor's first request. Redirects are not followed.",
+      "safety": "read",
+      "job": {
+        "name": "protected page without a session",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}{{protectedPath}}",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 50,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          302,
+          303
+        ],
+        "headers": {
+          "Accept": "text/html"
+        }
+      }
+    },
+    {
+      "id": "login-handler",
+      "name": "SP login handler",
+      "notes": "Starts SP-initiated login explicitly.",
+      "safety": "read",
+      "job": {
+        "name": "SP login handler",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}{{loginPath}}?target={{protectedPath}}",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 30,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302,
+          303,
+          400
+        ],
+        "headers": {
+          "Accept": "text/html"
+        }
+      }
+    },
+    {
+      "id": "session-status",
+      "name": "session status",
+      "notes": "Polled by SPAs to see whether the user is logged in.",
+      "safety": "read",
+      "job": {
+        "name": "session status",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}{{sessionPath}}"
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 50,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          401,
+          403,
+          404
+        ],
+        "headers": {
+          "Accept": "text/html"
+        }
+      }
+    },
+    {
+      "id": "acs-garbage",
+      "name": "ACS with a garbage SAMLResponse",
+      "notes": "Anyone can POST to the ACS URL. The SP must reject an invalid response cheaply (no signature check should run) and without crashing. A 4xx or the SP's error page counts as rejected.",
+      "safety": "read",
+      "job": {
+        "name": "ACS with a garbage SAMLResponse",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}{{acsPath}}",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "POST",
+        "concurrency": 10,
+        "rps": 30,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302,
+          400,
+          403,
+          500
+        ],
+        "headers": {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "Accept": "text/html"
+        },
+        "body": "SAMLResponse=bm90LXNhbWw%3D&RelayState=blasta"
+      }
+    },
+    {
+      "id": "acs-empty",
+      "name": "ACS with an empty POST",
+      "notes": "Bots do this constantly.",
+      "safety": "read",
+      "job": {
+        "name": "ACS with an empty POST",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}{{acsPath}}",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "POST",
+        "concurrency": 10,
+        "rps": 30,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302,
+          400,
+          403,
+          405,
+          500
+        ],
+        "headers": {
+          "Content-Type": "application/x-www-form-urlencoded"
+        },
+        "body": ""
+      }
+    },
+    {
+      "id": "logout-handler",
+      "name": "SP logout handler",
+      "notes": "Logout of a session that does not exist.",
+      "safety": "read",
+      "job": {
+        "name": "SP logout handler",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}{{logoutPath}}",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 20,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302,
+          303
+        ],
+        "headers": {
+          "Accept": "text/html"
+        }
+      }
+    },
+    {
+      "id": "sp-ramp",
+      "name": "unauthenticated traffic ramp",
+      "notes": "Ramps requests to a protected page to find where the SP and its session store slow down. Each request creates a session or a redirect record.",
+      "safety": "read",
+      "job": {
+        "name": "unauthenticated traffic ramp",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}{{protectedPath}}",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 100,
+        "rps": 300,
+        "duration": 420000000000,
+        "timeout": 15000000000,
+        "queueSize": 5000,
+        "onQueueFull": "reject",
+        "maxWorkers": 300,
+        "blockPrivate": false,
+        "expectStatus": [
+          302,
+          303
+        ],
+        "headers": {
+          "Accept": "text/html"
+        },
+        "ramp": 300000000000
+      }
+    },
+    {
+      "id": "ent-01-smoke",
+      "name": "SAML service provider (Shibboleth SP / mod_auth_mellon / SimpleSAMLphp SP): 01 smoke",
+      "notes": "Enterprise plan, step 1 of 10. One request a second for 30 seconds. Run this first, every time: it proves the address, credentials and headers are right and that the environment is up before any real load is applied. Gate: zero errors. Reference request: protected page without a session.",
+      "safety": "read",
+      "job": {
+        "name": "SAML service provider (Shibboleth SP / mod_auth_mellon / SimpleSAMLphp SP): 01 smoke",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}{{protectedPath}}",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 1,
+        "rps": 1,
+        "duration": 30000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          302,
+          303
+        ],
+        "headers": {
+          "Accept": "text/html"
+        },
+        "slo": {
+          "maxErrorRate": 0
+        }
+      }
+    },
+    {
+      "id": "ent-02-baseline",
+      "name": "SAML service provider (Shibboleth SP / mod_auth_mellon / SimpleSAMLphp SP): 02 baseline (20% load)",
+      "notes": "Step 2 of 10. About a fifth of normal traffic for 5 minutes: the uncontended latency of this request. Every later result is judged against it, so record p50 and p95. Gate: at most 0.5% errors and the default latency targets. Reference request: protected page without a session.",
+      "safety": "read",
+      "job": {
+        "name": "SAML service provider (Shibboleth SP / mod_auth_mellon / SimpleSAMLphp SP): 02 baseline (20% load)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}{{protectedPath}}",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 4,
+        "rps": 10,
+        "duration": 300000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          302,
+          303
+        ],
+        "headers": {
+          "Accept": "text/html"
+        },
+        "slo": {
+          "maxErrorRate": 0.5,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-03-average-load",
+      "name": "SAML service provider (Shibboleth SP / mod_auth_mellon / SimpleSAMLphp SP): 03 average load (SLO check)",
+      "notes": "Step 3 of 10. Normal busy-hour traffic for 10 minutes. The rate is the reference job's rate: raise it to your measured production peak-hour rate. This is the run that proves (or breaks) your SLO. Gate: at most 1% errors, p95 and p99 inside the targets. Reference request: protected page without a session.",
+      "safety": "read",
+      "job": {
+        "name": "SAML service provider (Shibboleth SP / mod_auth_mellon / SimpleSAMLphp SP): 03 average load (SLO check)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}{{protectedPath}}",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 50,
+        "duration": 600000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          302,
+          303
+        ],
+        "headers": {
+          "Accept": "text/html"
+        },
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-04-peak-load",
+      "name": "SAML service provider (Shibboleth SP / mod_auth_mellon / SimpleSAMLphp SP): 04 peak load (2x average)",
+      "notes": "Step 4 of 10. Twice the average for 10 minutes: the busiest hour of the year plus headroom. Latency may rise, but must stay in SLO; if it does not, you have no headroom. Gate: at most 2% errors, latency targets doubled. Reference request: protected page without a session.",
+      "safety": "read",
+      "job": {
+        "name": "SAML service provider (Shibboleth SP / mod_auth_mellon / SimpleSAMLphp SP): 04 peak load (2x average)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}{{protectedPath}}",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 40,
+        "rps": 100,
+        "duration": 600000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          302,
+          303
+        ],
+        "headers": {
+          "Accept": "text/html"
+        },
+        "slo": {
+          "maxErrorRate": 2,
+          "maxP95": 2000000000,
+          "maxP99": 4000000000
+        }
+      }
+    },
+    {
+      "id": "ent-05-stress",
+      "name": "SAML service provider (Shibboleth SP / mod_auth_mellon / SimpleSAMLphp SP): 05 stress (ramp to 4x)",
+      "notes": "Step 5 of 10. Ramps to four times average over 10 minutes, then holds for 2. Finds where it degrades and HOW: gracefully (latency rises, errors stay low) or badly (errors, timeouts, crashes, restarts). Observation only, no gate. Reference request: protected page without a session.",
+      "safety": "read",
+      "job": {
+        "name": "SAML service provider (Shibboleth SP / mod_auth_mellon / SimpleSAMLphp SP): 05 stress (ramp to 4x)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}{{protectedPath}}",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 80,
+        "rps": 200,
+        "duration": 720000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          302,
+          303
+        ],
+        "headers": {
+          "Accept": "text/html"
+        },
+        "ramp": 600000000000
+      }
+    },
+    {
+      "id": "ent-06-spike",
+      "name": "SAML service provider (Shibboleth SP / mod_auth_mellon / SimpleSAMLphp SP): 06 spike (10x in 10 s)",
+      "notes": "Step 6 of 10. Reaches ten times average within 10 seconds and holds for 2 minutes: a campaign email, a news link, a failover. Checks autoscaling, queue limits and load shedding. Gate: at most 5% errors, because shedding load is acceptable and crashing is not. Reference request: protected page without a session.",
+      "safety": "read",
+      "job": {
+        "name": "SAML service provider (Shibboleth SP / mod_auth_mellon / SimpleSAMLphp SP): 06 spike (10x in 10 s)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}{{protectedPath}}",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 200,
+        "rps": 500,
+        "duration": 130000000000,
+        "timeout": 15000000000,
+        "queueSize": 2500,
+        "onQueueFull": "reject",
+        "maxWorkers": 400,
+        "blockPrivate": false,
+        "expectStatus": [
+          302,
+          303
+        ],
+        "headers": {
+          "Accept": "text/html"
+        },
+        "ramp": 10000000000,
+        "slo": {
+          "maxErrorRate": 5
+        }
+      }
+    },
+    {
+      "id": "ent-07-recovery",
+      "name": "SAML service provider (Shibboleth SP / mod_auth_mellon / SimpleSAMLphp SP): 07 recovery after the spike",
+      "notes": "Step 7 of 10. Run IMMEDIATELY after the spike, at average load for 5 minutes. Latency and errors must return to the baseline from step 2. If they do not, something is stuck: queues, connection pools, GC, an autoscaler cool-down. Gate: same as average load. Reference request: protected page without a session.",
+      "safety": "read",
+      "job": {
+        "name": "SAML service provider (Shibboleth SP / mod_auth_mellon / SimpleSAMLphp SP): 07 recovery after the spike",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}{{protectedPath}}",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 50,
+        "duration": 300000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          302,
+          303
+        ],
+        "headers": {
+          "Accept": "text/html"
+        },
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-08-soak",
+      "name": "SAML service provider (Shibboleth SP / mod_auth_mellon / SimpleSAMLphp SP): 08 soak (1 hour at 60%)",
+      "notes": "Step 8 of 10. One hour of steady load. Finds leaks and slow decay in memory, connections, file descriptors, disk, log volume and cache churn. Watch the resource graphs: any line that climbs and never flattens is a finding. Gate: at most 0.5% errors. Reference request: protected page without a session.",
+      "safety": "read",
+      "job": {
+        "name": "SAML service provider (Shibboleth SP / mod_auth_mellon / SimpleSAMLphp SP): 08 soak (1 hour at 60%)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}{{protectedPath}}",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 12,
+        "rps": 30,
+        "duration": 3600000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          302,
+          303
+        ],
+        "headers": {
+          "Accept": "text/html"
+        },
+        "slo": {
+          "maxErrorRate": 0.5,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-09-breakpoint",
+      "name": "SAML service provider (Shibboleth SP / mod_auth_mellon / SimpleSAMLphp SP): 09 breakpoint (find the ceiling)",
+      "notes": "Step 9 of 10. Ramps to twenty times average over 20 minutes. Stop it when errors pass about 5%: the rate at that moment is your ceiling, and ceiling divided by peak is your capacity margin. Use a production-like environment, never production. Reference request: protected page without a session.",
+      "safety": "read",
+      "job": {
+        "name": "SAML service provider (Shibboleth SP / mod_auth_mellon / SimpleSAMLphp SP): 09 breakpoint (find the ceiling)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}{{protectedPath}}",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 400,
+        "rps": 1000,
+        "duration": 1380000000000,
+        "timeout": 15000000000,
+        "queueSize": 5000,
+        "onQueueFull": "reject",
+        "maxWorkers": 800,
+        "blockPrivate": false,
+        "expectStatus": [
+          302,
+          303
+        ],
+        "headers": {
+          "Accept": "text/html"
+        },
+        "ramp": 1200000000000
+      }
+    },
+    {
+      "id": "ent-10-failover-window",
+      "name": "SAML service provider (Shibboleth SP / mod_auth_mellon / SimpleSAMLphp SP): 10 resilience window (failover / deploy)",
+      "notes": "Step 10 of 10. Average load for 15 minutes. About 5 minutes in, cause the event you are testing: kill a pod or node, fail over the database, roll out a new version, drain a zone. Errors in the window are your real availability loss. Gate: at most 1% errors overall; read the time series for how long the dip lasted. Reference request: protected page without a session.",
+      "safety": "read",
+      "job": {
+        "name": "SAML service provider (Shibboleth SP / mod_auth_mellon / SimpleSAMLphp SP): 10 resilience window (failover / deploy)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}{{protectedPath}}",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 50,
+        "duration": 900000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          302,
+          303
+        ],
+        "headers": {
+          "Accept": "text/html"
+        },
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-x-connection-close",
+      "name": "SAML service provider (Shibboleth SP / mod_auth_mellon / SimpleSAMLphp SP): no keep-alive (new connection per request)",
+      "notes": "Sends Connection: close, so every request pays for a new TCP and TLS handshake: the cost for clients that do not reuse connections (scripts, some mobile SDKs, health checkers). Shows load balancer and TLS termination limits. Reference request: protected page without a session.",
+      "safety": "read",
+      "job": {
+        "name": "SAML service provider (Shibboleth SP / mod_auth_mellon / SimpleSAMLphp SP): no keep-alive (new connection per request)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}{{protectedPath}}",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 50,
+        "duration": 300000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          302,
+          303
+        ],
+        "headers": {
+          "Accept": "text/html",
+          "Connection": "close"
+        },
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 1500000000,
+          "maxP99": 3000000000
+        }
+      }
+    },
+    {
+      "id": "ent-x-bot-traffic",
+      "name": "SAML service provider (Shibboleth SP / mod_auth_mellon / SimpleSAMLphp SP): crawler traffic (Googlebot user agent)",
+      "notes": "Same request identified as a search crawler. Tests WAF and bot-management rules and whether crawlers get cached or origin responses. Crawlers can easily be a third of all traffic. Reference request: protected page without a session.",
+      "safety": "read",
+      "job": {
+        "name": "SAML service provider (Shibboleth SP / mod_auth_mellon / SimpleSAMLphp SP): crawler traffic (Googlebot user agent)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}{{protectedPath}}",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 50,
+        "duration": 300000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          302,
+          303
+        ],
+        "headers": {
+          "Accept": "text/html",
+          "User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)"
+        },
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-x-large-headers",
+      "name": "SAML service provider (Shibboleth SP / mod_auth_mellon / SimpleSAMLphp SP): large cookies (~4 KB header)",
+      "notes": "Adds a 4 KB Cookie header, like a logged-in user with many tracking cookies. Proxies and servers reject headers around 8 KB, so this shows how close you are to that limit. Reference request: protected page without a session.",
+      "safety": "read",
+      "job": {
+        "name": "SAML service provider (Shibboleth SP / mod_auth_mellon / SimpleSAMLphp SP): large cookies (~4 KB header)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}{{protectedPath}}",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 25,
+        "duration": 300000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          302,
+          303
+        ],
+        "headers": {
+          "Accept": "text/html",
+          "Cookie": "blasta=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+        },
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-x-monitor-storm",
+      "name": "SAML service provider (Shibboleth SP / mod_auth_mellon / SimpleSAMLphp SP): uptime monitors (HEAD from many locations)",
+      "notes": "A fleet of synthetic monitors checking the URL with HEAD requests every 30 seconds from 20 locations, plus load balancer probes. Cheap each, constant in total. Reference request: protected page without a session.",
+      "safety": "read",
+      "job": {
+        "name": "SAML service provider (Shibboleth SP / mod_auth_mellon / SimpleSAMLphp SP): uptime monitors (HEAD from many locations)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}{{protectedPath}}",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "HEAD",
+        "concurrency": 20,
+        "rps": 50,
+        "duration": 600000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          204,
+          301,
+          302,
+          304,
+          405
+        ],
+        "headers": {
+          "Accept": "text/html"
+        },
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-x-session-expiry-wave",
+      "name": "SAML service provider (Shibboleth SP / mod_auth_mellon / SimpleSAMLphp SP): session expiry wave",
+      "notes": "All sessions were created in the morning, so they expire together and every user is redirected to the IdP at the same moment. Ramps unauthenticated hits to ten times normal. Reference request: protected page without a session.",
+      "safety": "read",
+      "job": {
+        "name": "SAML service provider (Shibboleth SP / mod_auth_mellon / SimpleSAMLphp SP): session expiry wave",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}{{protectedPath}}",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 200,
+        "rps": 500,
+        "duration": 180000000000,
+        "timeout": 15000000000,
+        "queueSize": 2500,
+        "onQueueFull": "reject",
+        "maxWorkers": 400,
+        "blockPrivate": false,
+        "expectStatus": [
+          302,
+          303
+        ],
+        "headers": {
+          "Accept": "text/html"
+        },
+        "ramp": 10000000000,
+        "slo": {
+          "maxErrorRate": 5
+        }
+      }
+    },
+    {
+      "id": "ent-x-acs-abuse",
+      "name": "SAML service provider (Shibboleth SP / mod_auth_mellon / SimpleSAMLphp SP): ACS endpoint abuse",
+      "notes": "The ACS URL accepts POSTs from anyone. Ten times normal garbage submissions for 2 minutes: the SP must reject them cheaply and keep serving real users. Reference request: ACS with a garbage SAMLResponse.",
+      "safety": "read",
+      "job": {
+        "name": "SAML service provider (Shibboleth SP / mod_auth_mellon / SimpleSAMLphp SP): ACS endpoint abuse",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}{{acsPath}}",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "POST",
+        "concurrency": 50,
+        "rps": 300,
+        "duration": 120000000000,
+        "timeout": 15000000000,
+        "queueSize": 1500,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302,
+          400,
+          403,
+          500
+        ],
+        "headers": {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "Accept": "text/html"
+        },
+        "body": "SAMLResponse=bm90LXNhbWw%3D&RelayState=blasta"
+      }
+    }
+  ]
+}

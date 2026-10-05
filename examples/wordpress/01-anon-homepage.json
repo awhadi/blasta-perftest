@@ -1,0 +1,16 @@
+{
+  "name": "wp anon homepage (often cached)",
+  "description": "Uncached first hit plus repeats. If this is fast but 02 is slow, the cache is doing the work and WordPress itself is untested.",
+  "executor": "http",
+  "target": { "url": "${WP_URL}/" },
+  "method": "GET",
+  "headers": { "Accept": "text/html" },
+  "concurrency": 10,
+  "rps": 20,
+  "duration": 30000000000,
+  "timeout": 15000000000,
+  "queueSize": 500,
+  "onQueueFull": "reject",
+  "maxWorkers": 100,
+  "blockPrivate": false
+}

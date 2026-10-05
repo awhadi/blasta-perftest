@@ -1,0 +1,541 @@
+{
+  "id": "wordpress-db",
+  "title": "WordPress database (MySQL)",
+  "category": "Database",
+  "summary": "The queries WordPress runs most, straight against MySQL/MariaDB. Includes an enterprise test plan (jobs starting ent-).",
+  "stack": "MySQL / MariaDB",
+  "variables": [
+    {
+      "name": "prefix",
+      "default": "wp_",
+      "description": "Table prefix",
+      "guide": "The WordPress table prefix, in wp-config.php as $table_prefix. The default is wp_."
+    }
+  ],
+  "jobs": [
+    {
+      "id": "autoload",
+      "name": "autoloaded options size",
+      "notes": "WordPress loads every autoload=yes option on every request. If this returns more than about 1 MB, every page pays for it.",
+      "safety": "read",
+      "job": {
+        "name": "autoloaded options size",
+        "executor": "sql",
+        "target": {
+          "url": "",
+          "meta": {
+            "query": "SELECT SUM(LENGTH(option_value)) FROM {{prefix}}options WHERE autoload IN ('yes','on','auto')"
+          }
+        },
+        "method": "GET",
+        "concurrency": 8,
+        "rps": 20,
+        "duration": 60000000000,
+        "timeout": 30000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "db": {
+          "driver": "mysql",
+          "dsnEnv": "MYSQL_DSN",
+          "maxOpen": 8
+        }
+      }
+    },
+    {
+      "id": "recent-posts",
+      "name": "recent published posts",
+      "notes": "The main loop query. Fast with the type_status_date index, slow without it.",
+      "safety": "read",
+      "job": {
+        "name": "recent published posts",
+        "executor": "sql",
+        "target": {
+          "url": "",
+          "meta": {
+            "query": "SELECT ID, post_title FROM {{prefix}}posts WHERE post_type='post' AND post_status='publish' ORDER BY post_date DESC LIMIT 10"
+          }
+        },
+        "method": "GET",
+        "concurrency": 8,
+        "rps": 100,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "db": {
+          "driver": "mysql",
+          "dsnEnv": "MYSQL_DSN",
+          "maxOpen": 8
+        }
+      }
+    },
+    {
+      "id": "postmeta-join",
+      "name": "posts joined to postmeta",
+      "notes": "Typical plugin or WooCommerce query. Postmeta has no useful index on meta_value, so this degrades quickly as the table grows.",
+      "safety": "read",
+      "job": {
+        "name": "posts joined to postmeta",
+        "executor": "sql",
+        "target": {
+          "url": "",
+          "meta": {
+            "query": "SELECT p.ID FROM {{prefix}}posts p JOIN {{prefix}}postmeta m ON m.post_id=p.ID WHERE m.meta_key='_thumbnail_id' LIMIT 20"
+          }
+        },
+        "method": "GET",
+        "concurrency": 8,
+        "rps": 30,
+        "duration": 60000000000,
+        "timeout": 30000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "db": {
+          "driver": "mysql",
+          "dsnEnv": "MYSQL_DSN",
+          "maxOpen": 8
+        }
+      }
+    },
+    {
+      "id": "like-search",
+      "name": "LIKE search on content",
+      "notes": "What the default WordPress search does: a full scan of post_content. The worst realistic read; keep the rate very low.",
+      "safety": "read",
+      "job": {
+        "name": "LIKE search on content",
+        "executor": "sql",
+        "target": {
+          "url": "",
+          "meta": {
+            "query": "SELECT ID FROM {{prefix}}posts WHERE post_status='publish' AND (post_title LIKE '%test%' OR post_content LIKE '%test%') LIMIT 10"
+          }
+        },
+        "method": "GET",
+        "concurrency": 4,
+        "rps": 3,
+        "duration": 60000000000,
+        "timeout": 30000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "db": {
+          "driver": "mysql",
+          "dsnEnv": "MYSQL_DSN",
+          "maxOpen": 4
+        }
+      }
+    },
+    {
+      "id": "transients",
+      "name": "expired transients count",
+      "notes": "Large piles of expired transients bloat the options table. A scan like this also shows how much the options table is costing.",
+      "safety": "read",
+      "job": {
+        "name": "expired transients count",
+        "executor": "sql",
+        "target": {
+          "url": "",
+          "meta": {
+            "query": "SELECT COUNT(*) FROM {{prefix}}options WHERE option_name LIKE '\\_transient\\_timeout\\_%'"
+          }
+        },
+        "method": "GET",
+        "concurrency": 4,
+        "rps": 5,
+        "duration": 60000000000,
+        "timeout": 30000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "db": {
+          "driver": "mysql",
+          "dsnEnv": "MYSQL_DSN",
+          "maxOpen": 4
+        }
+      }
+    },
+    {
+      "id": "ent-01-smoke",
+      "name": "WordPress database (MySQL): 01 smoke",
+      "notes": "Enterprise plan, step 1 of 10. One request a second for 30 seconds. Run this first, every time: it proves the address, credentials and headers are right and that the environment is up before any real load is applied. Gate: zero errors. Reference request: recent published posts.",
+      "safety": "read",
+      "job": {
+        "name": "WordPress database (MySQL): 01 smoke",
+        "executor": "sql",
+        "target": {
+          "url": "",
+          "meta": {
+            "query": "SELECT ID, post_title FROM {{prefix}}posts WHERE post_type='post' AND post_status='publish' ORDER BY post_date DESC LIMIT 10"
+          }
+        },
+        "method": "GET",
+        "concurrency": 1,
+        "rps": 1,
+        "duration": 30000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "db": {
+          "driver": "mysql",
+          "dsnEnv": "MYSQL_DSN",
+          "maxOpen": 8
+        },
+        "slo": {
+          "maxErrorRate": 0
+        }
+      }
+    },
+    {
+      "id": "ent-02-baseline",
+      "name": "WordPress database (MySQL): 02 baseline (20% load)",
+      "notes": "Step 2 of 10. About a fifth of normal traffic for 5 minutes: the uncontended latency of this request. Every later result is judged against it, so record p50 and p95. Gate: at most 0.5% errors and the default latency targets. Reference request: recent published posts.",
+      "safety": "read",
+      "job": {
+        "name": "WordPress database (MySQL): 02 baseline (20% load)",
+        "executor": "sql",
+        "target": {
+          "url": "",
+          "meta": {
+            "query": "SELECT ID, post_title FROM {{prefix}}posts WHERE post_type='post' AND post_status='publish' ORDER BY post_date DESC LIMIT 10"
+          }
+        },
+        "method": "GET",
+        "concurrency": 1,
+        "rps": 20,
+        "duration": 300000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "db": {
+          "driver": "mysql",
+          "dsnEnv": "MYSQL_DSN",
+          "maxOpen": 8
+        },
+        "slo": {
+          "maxErrorRate": 0.5,
+          "maxP95": 250000000,
+          "maxP99": 1000000000
+        }
+      }
+    },
+    {
+      "id": "ent-03-average-load",
+      "name": "WordPress database (MySQL): 03 average load (SLO check)",
+      "notes": "Step 3 of 10. Normal busy-hour traffic for 10 minutes. The rate is the reference job's rate: raise it to your measured production peak-hour rate. This is the run that proves (or breaks) your SLO. Gate: at most 1% errors, p95 and p99 inside the targets. Reference request: recent published posts.",
+      "safety": "read",
+      "job": {
+        "name": "WordPress database (MySQL): 03 average load (SLO check)",
+        "executor": "sql",
+        "target": {
+          "url": "",
+          "meta": {
+            "query": "SELECT ID, post_title FROM {{prefix}}posts WHERE post_type='post' AND post_status='publish' ORDER BY post_date DESC LIMIT 10"
+          }
+        },
+        "method": "GET",
+        "concurrency": 8,
+        "rps": 100,
+        "duration": 600000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "db": {
+          "driver": "mysql",
+          "dsnEnv": "MYSQL_DSN",
+          "maxOpen": 8
+        },
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 250000000,
+          "maxP99": 1000000000
+        }
+      }
+    },
+    {
+      "id": "ent-04-peak-load",
+      "name": "WordPress database (MySQL): 04 peak load (2x average)",
+      "notes": "Step 4 of 10. Twice the average for 10 minutes: the busiest hour of the year plus headroom. Latency may rise, but must stay in SLO; if it does not, you have no headroom. Gate: at most 2% errors, latency targets doubled. Reference request: recent published posts.",
+      "safety": "read",
+      "job": {
+        "name": "WordPress database (MySQL): 04 peak load (2x average)",
+        "executor": "sql",
+        "target": {
+          "url": "",
+          "meta": {
+            "query": "SELECT ID, post_title FROM {{prefix}}posts WHERE post_type='post' AND post_status='publish' ORDER BY post_date DESC LIMIT 10"
+          }
+        },
+        "method": "GET",
+        "concurrency": 16,
+        "rps": 200,
+        "duration": 600000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "db": {
+          "driver": "mysql",
+          "dsnEnv": "MYSQL_DSN",
+          "maxOpen": 8
+        },
+        "slo": {
+          "maxErrorRate": 2,
+          "maxP95": 500000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-05-stress",
+      "name": "WordPress database (MySQL): 05 stress (ramp to 4x)",
+      "notes": "Step 5 of 10. Ramps to four times average over 10 minutes, then holds for 2. Finds where it degrades and HOW: gracefully (latency rises, errors stay low) or badly (errors, timeouts, crashes, restarts). Observation only, no gate. Reference request: recent published posts.",
+      "safety": "read",
+      "job": {
+        "name": "WordPress database (MySQL): 05 stress (ramp to 4x)",
+        "executor": "sql",
+        "target": {
+          "url": "",
+          "meta": {
+            "query": "SELECT ID, post_title FROM {{prefix}}posts WHERE post_type='post' AND post_status='publish' ORDER BY post_date DESC LIMIT 10"
+          }
+        },
+        "method": "GET",
+        "concurrency": 32,
+        "rps": 400,
+        "duration": 720000000000,
+        "timeout": 15000000000,
+        "queueSize": 2000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "db": {
+          "driver": "mysql",
+          "dsnEnv": "MYSQL_DSN",
+          "maxOpen": 8
+        },
+        "ramp": 600000000000
+      }
+    },
+    {
+      "id": "ent-06-spike",
+      "name": "WordPress database (MySQL): 06 spike (10x in 10 s)",
+      "notes": "Step 6 of 10. Reaches ten times average within 10 seconds and holds for 2 minutes: a campaign email, a news link, a failover. Checks autoscaling, queue limits and load shedding. Gate: at most 5% errors, because shedding load is acceptable and crashing is not. Reference request: recent published posts.",
+      "safety": "read",
+      "job": {
+        "name": "WordPress database (MySQL): 06 spike (10x in 10 s)",
+        "executor": "sql",
+        "target": {
+          "url": "",
+          "meta": {
+            "query": "SELECT ID, post_title FROM {{prefix}}posts WHERE post_type='post' AND post_status='publish' ORDER BY post_date DESC LIMIT 10"
+          }
+        },
+        "method": "GET",
+        "concurrency": 80,
+        "rps": 1000,
+        "duration": 130000000000,
+        "timeout": 15000000000,
+        "queueSize": 5000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "db": {
+          "driver": "mysql",
+          "dsnEnv": "MYSQL_DSN",
+          "maxOpen": 8
+        },
+        "ramp": 10000000000,
+        "slo": {
+          "maxErrorRate": 5
+        }
+      }
+    },
+    {
+      "id": "ent-07-recovery",
+      "name": "WordPress database (MySQL): 07 recovery after the spike",
+      "notes": "Step 7 of 10. Run IMMEDIATELY after the spike, at average load for 5 minutes. Latency and errors must return to the baseline from step 2. If they do not, something is stuck: queues, connection pools, GC, an autoscaler cool-down. Gate: same as average load. Reference request: recent published posts.",
+      "safety": "read",
+      "job": {
+        "name": "WordPress database (MySQL): 07 recovery after the spike",
+        "executor": "sql",
+        "target": {
+          "url": "",
+          "meta": {
+            "query": "SELECT ID, post_title FROM {{prefix}}posts WHERE post_type='post' AND post_status='publish' ORDER BY post_date DESC LIMIT 10"
+          }
+        },
+        "method": "GET",
+        "concurrency": 8,
+        "rps": 100,
+        "duration": 300000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "db": {
+          "driver": "mysql",
+          "dsnEnv": "MYSQL_DSN",
+          "maxOpen": 8
+        },
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 250000000,
+          "maxP99": 1000000000
+        }
+      }
+    },
+    {
+      "id": "ent-08-soak",
+      "name": "WordPress database (MySQL): 08 soak (1 hour at 60%)",
+      "notes": "Step 8 of 10. One hour of steady load. Finds leaks and slow decay in memory, connections, file descriptors, disk, log volume and cache churn. Watch the resource graphs: any line that climbs and never flattens is a finding. Gate: at most 0.5% errors. Reference request: recent published posts.",
+      "safety": "read",
+      "job": {
+        "name": "WordPress database (MySQL): 08 soak (1 hour at 60%)",
+        "executor": "sql",
+        "target": {
+          "url": "",
+          "meta": {
+            "query": "SELECT ID, post_title FROM {{prefix}}posts WHERE post_type='post' AND post_status='publish' ORDER BY post_date DESC LIMIT 10"
+          }
+        },
+        "method": "GET",
+        "concurrency": 4,
+        "rps": 60,
+        "duration": 3600000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "db": {
+          "driver": "mysql",
+          "dsnEnv": "MYSQL_DSN",
+          "maxOpen": 8
+        },
+        "slo": {
+          "maxErrorRate": 0.5,
+          "maxP95": 250000000,
+          "maxP99": 1000000000
+        }
+      }
+    },
+    {
+      "id": "ent-09-breakpoint",
+      "name": "WordPress database (MySQL): 09 breakpoint (find the ceiling)",
+      "notes": "Step 9 of 10. Ramps to twenty times average over 20 minutes. Stop it when errors pass about 5%: the rate at that moment is your ceiling, and ceiling divided by peak is your capacity margin. Use a production-like environment, never production. Reference request: recent published posts.",
+      "safety": "read",
+      "job": {
+        "name": "WordPress database (MySQL): 09 breakpoint (find the ceiling)",
+        "executor": "sql",
+        "target": {
+          "url": "",
+          "meta": {
+            "query": "SELECT ID, post_title FROM {{prefix}}posts WHERE post_type='post' AND post_status='publish' ORDER BY post_date DESC LIMIT 10"
+          }
+        },
+        "method": "GET",
+        "concurrency": 160,
+        "rps": 2000,
+        "duration": 1380000000000,
+        "timeout": 15000000000,
+        "queueSize": 10000,
+        "onQueueFull": "reject",
+        "maxWorkers": 320,
+        "blockPrivate": false,
+        "db": {
+          "driver": "mysql",
+          "dsnEnv": "MYSQL_DSN",
+          "maxOpen": 8
+        },
+        "ramp": 1200000000000
+      }
+    },
+    {
+      "id": "ent-10-failover-window",
+      "name": "WordPress database (MySQL): 10 resilience window (failover / deploy)",
+      "notes": "Step 10 of 10. Average load for 15 minutes. About 5 minutes in, cause the event you are testing: kill a pod or node, fail over the database, roll out a new version, drain a zone. Errors in the window are your real availability loss. Gate: at most 1% errors overall; read the time series for how long the dip lasted. Reference request: recent published posts.",
+      "safety": "read",
+      "job": {
+        "name": "WordPress database (MySQL): 10 resilience window (failover / deploy)",
+        "executor": "sql",
+        "target": {
+          "url": "",
+          "meta": {
+            "query": "SELECT ID, post_title FROM {{prefix}}posts WHERE post_type='post' AND post_status='publish' ORDER BY post_date DESC LIMIT 10"
+          }
+        },
+        "method": "GET",
+        "concurrency": 8,
+        "rps": 100,
+        "duration": 900000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "db": {
+          "driver": "mysql",
+          "dsnEnv": "MYSQL_DSN",
+          "maxOpen": 8
+        },
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 250000000,
+          "maxP99": 1000000000
+        }
+      }
+    },
+    {
+      "id": "ent-x-pool-exhaustion",
+      "name": "WordPress database (MySQL): connection pool exhaustion",
+      "notes": "Runs four times more workers than the pool has connections, so most requests queue for a connection. Shows how the database and your pool behave when the app is slower than the traffic: latency should rise smoothly, not fall off a cliff. Reference request: recent published posts.",
+      "safety": "read",
+      "job": {
+        "name": "WordPress database (MySQL): connection pool exhaustion",
+        "executor": "sql",
+        "target": {
+          "url": "",
+          "meta": {
+            "query": "SELECT ID, post_title FROM {{prefix}}posts WHERE post_type='post' AND post_status='publish' ORDER BY post_date DESC LIMIT 10"
+          }
+        },
+        "method": "GET",
+        "concurrency": 32,
+        "rps": 200,
+        "duration": 300000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "db": {
+          "driver": "mysql",
+          "dsnEnv": "MYSQL_DSN",
+          "maxOpen": 8
+        },
+        "slo": {
+          "maxErrorRate": 2,
+          "maxP95": 1000000000,
+          "maxP99": 4000000000
+        }
+      }
+    }
+  ]
+}

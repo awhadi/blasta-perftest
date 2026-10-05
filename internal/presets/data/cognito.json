@@ -1,0 +1,415 @@
+{
+  "id": "cognito",
+  "title": "AWS Cognito",
+  "category": "Identity",
+  "summary": "User pool discovery and hosted UI endpoints. Includes an enterprise test plan (jobs starting ent-).",
+  "stack": "Amazon Cognito",
+  "variables": [
+    {
+      "name": "url",
+      "default": "https://idp.example.com",
+      "description": "Issuer / base URL, no trailing slash",
+      "placeholder": true,
+      "guide": "The address of the system to test, starting with https:// (or http://) and with no trailing slash, for example https://staging.example.com. Use a system you own, ideally a staging copy. BLASTA runs in a container, so for a service on your own machine use host.docker.internal instead of localhost."
+    },
+    {
+      "name": "clientId",
+      "default": "blasta-test",
+      "description": "A test client registered for load testing",
+      "placeholder": true,
+      "guide": "The ID of a client registered for this test. Create a dedicated test client in your identity provider (Clients / Applications) and copy its client ID. Do not reuse a production client."
+    },
+    {
+      "name": "clientSecret",
+      "default": "${OIDC_CLIENT_SECRET}",
+      "description": "Client secret. Read from the OIDC_CLIENT_SECRET env var by the CLI.",
+      "sensitive": true
+    },
+    {
+      "name": "redirectUri",
+      "default": "https://app.example.com/callback",
+      "description": "A redirect URI registered on that client",
+      "placeholder": true,
+      "guide": "A redirect URI that is registered on that client. Copy one from the client's settings: an unregistered one is refused."
+    },
+    {
+      "name": "scope",
+      "default": "openid%20profile%20email",
+      "description": "Space-separated scopes, URL-encoded",
+      "guide": "The scopes to request, URL-encoded with %20 between them, for example openid%20profile%20email."
+    },
+    {
+      "name": "token",
+      "default": "${OIDC_ACCESS_TOKEN}",
+      "description": "A valid access token. Read from OIDC_ACCESS_TOKEN by the CLI.",
+      "sensitive": true
+    },
+    {
+      "name": "poolId",
+      "default": "us-east-1_example",
+      "description": "User pool id, such as us-east-1_AbCdEf",
+      "placeholder": true,
+      "guide": "The user pool ID. In AWS: Cognito \u2192 User pools \u2192 your pool \u2192 User pool ID, for example us-east-1_AbCdEf."
+    },
+    {
+      "name": "hostedUi",
+      "default": "https://example.auth.us-east-1.amazoncognito.com",
+      "description": "Hosted UI domain, no trailing slash",
+      "placeholder": true,
+      "guide": "The hosted UI domain. Cognito \u2192 your pool \u2192 App integration \u2192 Domain."
+    }
+  ],
+  "jobs": [
+    {
+      "id": "discovery",
+      "name": "OIDC discovery document",
+      "notes": "This is a hosted identity service: check the vendor's load-testing policy and your tenant's rate limits before running, keep the rate low, and expect 429s. Fetched by every relying party at start-up and on a timer. Cheap, but often served uncached.",
+      "safety": "read",
+      "job": {
+        "name": "OIDC discovery document",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/{{poolId}}/.well-known/openid-configuration"
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 5,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Accept": "application/json"
+        }
+      }
+    },
+    {
+      "id": "discovery-nocache",
+      "name": "discovery document (cache bypass)",
+      "notes": "This is a hosted identity service: check the vendor's load-testing policy and your tenant's rate limits before running, keep the rate low, and expect 429s. Forces the origin to build the document. Shows the cost behind a CDN or cache.",
+      "safety": "read",
+      "job": {
+        "name": "discovery document (cache bypass)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/{{poolId}}/.well-known/openid-configuration"
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 2,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Accept": "application/json",
+          "Cache-Control": "no-cache",
+          "Pragma": "no-cache"
+        }
+      }
+    },
+    {
+      "id": "jwks",
+      "name": "JSON web key set",
+      "notes": "This is a hosted identity service: check the vendor's load-testing policy and your tenant's rate limits before running, keep the rate low, and expect 429s. Every API validating tokens locally refreshes keys from here, and a key rotation causes a thundering herd of fetches.",
+      "safety": "read",
+      "job": {
+        "name": "JSON web key set",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/{{poolId}}/.well-known/jwks.json"
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 5,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Accept": "application/json"
+        }
+      }
+    },
+    {
+      "id": "hosted-login",
+      "name": "hosted UI login page",
+      "notes": "The Cognito-hosted login form.",
+      "safety": "read",
+      "job": {
+        "name": "hosted UI login page",
+        "executor": "http",
+        "target": {
+          "url": "{{hostedUi}}/login?response_type=code&client_id={{clientId}}&redirect_uri={{redirectUri}}",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 5,
+        "rps": 5,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302,
+          303
+        ],
+        "headers": {
+          "Accept": "text/html"
+        }
+      }
+    },
+    {
+      "id": "hosted-token",
+      "name": "hosted UI token: client credentials",
+      "notes": "Counts against Cognito's token request quota.",
+      "safety": "mutating",
+      "job": {
+        "name": "hosted UI token: client credentials",
+        "executor": "http",
+        "target": {
+          "url": "{{hostedUi}}/oauth2/token"
+        },
+        "method": "POST",
+        "concurrency": 5,
+        "rps": 5,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "Accept": "application/json"
+        },
+        "body": "grant_type=client_credentials&client_id={{clientId}}&client_secret={{clientSecret}}&scope={{scope}}"
+      }
+    },
+    {
+      "id": "hosted-userinfo",
+      "name": "hosted UI userinfo",
+      "notes": "Validates a user access token.",
+      "safety": "read",
+      "job": {
+        "name": "hosted UI userinfo",
+        "executor": "http",
+        "target": {
+          "url": "{{hostedUi}}/oauth2/userInfo"
+        },
+        "method": "GET",
+        "concurrency": 5,
+        "rps": 10,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Accept": "application/json",
+          "Authorization": "Bearer {{token}}"
+        }
+      }
+    },
+    {
+      "id": "ent-01-smoke",
+      "name": "AWS Cognito: 01 smoke",
+      "notes": "Enterprise plan, step 1 of 10. One request a second for 30 seconds. Run this first, every time: it proves the address, credentials and headers are right and that the environment is up before any real load is applied. Gate: zero errors. Reference request: OIDC discovery document. Hosted identity service: this stays well below the vendor's rate limits; check their load-testing policy first.",
+      "safety": "read",
+      "job": {
+        "name": "AWS Cognito: 01 smoke",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/{{poolId}}/.well-known/openid-configuration"
+        },
+        "method": "GET",
+        "concurrency": 1,
+        "rps": 1,
+        "duration": 30000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Accept": "application/json"
+        },
+        "slo": {
+          "maxErrorRate": 0
+        }
+      }
+    },
+    {
+      "id": "ent-02-baseline",
+      "name": "AWS Cognito: 02 baseline (20% load)",
+      "notes": "Step 2 of 10. About a fifth of normal traffic for 5 minutes: the uncontended latency of this request. Every later result is judged against it, so record p50 and p95. Gate: at most 0.5% errors and the default latency targets. Reference request: OIDC discovery document. Hosted identity service: this stays well below the vendor's rate limits; check their load-testing policy first.",
+      "safety": "read",
+      "job": {
+        "name": "AWS Cognito: 02 baseline (20% load)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/{{poolId}}/.well-known/openid-configuration"
+        },
+        "method": "GET",
+        "concurrency": 2,
+        "rps": 2,
+        "duration": 300000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Accept": "application/json"
+        },
+        "slo": {
+          "maxErrorRate": 0.5,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-03-average-load",
+      "name": "AWS Cognito: 03 average load (SLO check)",
+      "notes": "Step 3 of 10. Normal busy-hour traffic for 10 minutes. The rate is the reference job's rate: raise it to your measured production peak-hour rate. This is the run that proves (or breaks) your SLO. Gate: at most 1% errors, p95 and p99 inside the targets. Reference request: OIDC discovery document. Hosted identity service: this stays well below the vendor's rate limits; check their load-testing policy first.",
+      "safety": "read",
+      "job": {
+        "name": "AWS Cognito: 03 average load (SLO check)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/{{poolId}}/.well-known/openid-configuration"
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 10,
+        "duration": 600000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Accept": "application/json"
+        },
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-04-peak-load",
+      "name": "AWS Cognito: 04 peak load (2x average)",
+      "notes": "Step 4 of 10. Twice the average for 10 minutes: the busiest hour of the year plus headroom. Latency may rise, but must stay in SLO; if it does not, you have no headroom. Gate: at most 2% errors, latency targets doubled. Reference request: OIDC discovery document. Hosted identity service: this stays well below the vendor's rate limits; check their load-testing policy first.",
+      "safety": "read",
+      "job": {
+        "name": "AWS Cognito: 04 peak load (2x average)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/{{poolId}}/.well-known/openid-configuration"
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 20,
+        "duration": 600000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Accept": "application/json"
+        },
+        "slo": {
+          "maxErrorRate": 2,
+          "maxP95": 2000000000,
+          "maxP99": 4000000000
+        }
+      }
+    },
+    {
+      "id": "ent-08-soak",
+      "name": "AWS Cognito: 08 soak (30 min at 60%)",
+      "notes": "Step 8 of 10, shortened for a hosted service. Steady load for 30 minutes to catch token or session expiry problems and slow decay on your side. Reference request: OIDC discovery document. Hosted identity service: this stays well below the vendor's rate limits; check their load-testing policy first.",
+      "safety": "read",
+      "job": {
+        "name": "AWS Cognito: 08 soak (30 min at 60%)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/{{poolId}}/.well-known/openid-configuration"
+        },
+        "method": "GET",
+        "concurrency": 6,
+        "rps": 6,
+        "duration": 1800000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Accept": "application/json"
+        },
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    }
+  ],
+  "secrets": {
+    "OIDC_ACCESS_TOKEN": {
+      "label": "Access token",
+      "guide": "Request one with the client-credentials grant:\n`curl -s -d grant_type=client_credentials -d client_id=CLIENT -d client_secret=SECRET -d scope=openid https://IDP/token`\nthen copy `access_token` from the answer. Add scope=openid so userinfo calls are allowed.\nIt expires quickly (often 5 minutes): request a fresh one right before the run, or lengthen the token lifespan on the test client."
+    },
+    "OIDC_CLIENT_SECRET": {
+      "label": "Client secret",
+      "guide": "In your identity provider open the test client and go to its Credentials (or Secrets) tab, then copy the client secret. Use a dedicated test client, never a production one."
+    }
+  }
+}

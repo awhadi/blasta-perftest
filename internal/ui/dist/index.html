@@ -1,0 +1,651 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>BLASTA - Performance &amp; Load Testing Platform</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23e8663a'/%3E%3Cpath d='M18 4 8 18h7l-1 10 10-14h-7z' fill='%231a1207'/%3E%3C/svg%3E">
+<link rel="preload" href="fonts/space-grotesk-latin-wght.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/dm-sans-latin-wght.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/jetbrains-mono-latin.woff2" as="font" type="font/woff2" crossorigin>
+<script src="theme.js"></script>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="bar">
+  <div class="bar-inner">
+    <a class="brand" href="#/test" aria-label="BLASTA, Performance and Load Testing Platform by AWHADI: back to the start page">
+      <svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8"/><path d="M18 4 8 18h7l-1 10 10-14h-7z"/></svg>
+      <span class="brand-text"><span class="brand-name">BLASTA</span><span class="byline">Performance &amp; Load Testing Platform by AWHADI</span></span>
+    </a>
+    <nav aria-label="Main">
+      <button class="nav-btn active" data-view="test" type="button">Test</button>
+      <button class="nav-btn" data-view="templates" type="button">Templates</button>
+      <button class="nav-btn" data-view="history" type="button">History</button>
+    </nav>
+    <div class="spacer"></div>
+    <div class="usermenu" id="userMenu" hidden>
+      <button class="user-btn" id="userBtn" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="userDrop">
+        <span class="avatar" id="userAvatar" aria-hidden="true"></span>
+        <span class="user-name" id="userName"></span>
+        <svg class="caret" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 4.5 6 8l3.5-3.5"/></svg>
+      </button>
+      <div class="menu" id="userDrop" role="menu" hidden>
+        <div class="menu-head">
+          <strong id="menuName"></strong>
+          <span id="menuEmail"></span>
+          <span class="tag" id="menuRole"></span>
+        </div>
+        <a href="#/account" role="menuitem">My account</a>
+        <a href="#/admin" id="menuAdmin" role="menuitem" hidden>Settings <span class="count" id="menuPending"></span></a>
+        <button type="button" id="menuSignOut" role="menuitem">Sign out</button>
+      </div>
+    </div>
+    <div class="guest-actions auth-pair" id="guestActions" hidden>
+      <a class="btn btn-in" href="#/login"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 17l5-5-5-5"/><path d="M15 12H4"/></svg>Sign in</a>
+      <a class="btn btn-up" id="guestRegister" href="#/login?register"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-1a5 5 0 0 0-5-5H7a5 5 0 0 0-5 5v1"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M16 11h6"/></svg>Create account</a>
+    </div>
+    <button class="icon-btn" id="themeToggle" type="button" aria-label="Switch colour theme" title="Switch colour theme">
+      <svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+      <svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+    </button>
+  </div>
+</header>
+
+<main id="main">
+  <section id="view-login" class="view" hidden>
+    <div class="auth-card">
+      <h1 id="authTitle" tabindex="-1">Sign in</h1>
+      <p class="auth-sub" id="authSub">Welcome back. Sign in to run and review load tests.</p>
+
+      <div class="auth-tabs" id="authTabs" role="tablist">
+        <button type="button" role="tab" id="tabSignIn" aria-selected="true">Sign in</button>
+        <button type="button" role="tab" id="tabRegister" aria-selected="false">Create account</button>
+      </div>
+
+      <a class="btn sso-btn" id="ssoBtn" href="api/auth/oidc/start?next=%23%2Ftest" hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/><path d="m9 12 2 2 4-4"/></svg>
+        <span>Sign in with <span id="ssoName"></span></span>
+      </a>
+      <div class="auth-or" id="authOr" hidden><span>or use your email</span></div>
+
+      <form id="loginForm" novalidate>
+        <label for="loginEmail">Email
+          <input id="loginEmail" type="email" autocomplete="username" spellcheck="false" required>
+        </label>
+        <label for="loginPassword">Password
+          <input id="loginPassword" type="password" autocomplete="current-password" required>
+        </label>
+        <div class="captcha-box" id="capLogin" hidden></div>
+        <button class="btn primary" type="submit" id="loginBtn">Sign in</button>
+        <p class="auth-links"><a href="#/login?forgot" id="forgotLink" hidden>Forgot your password?</a>
+          <span class="dot" id="linkDot" hidden>&middot;</span>
+          <a href="#/login?code" id="otpLink" hidden>Email me a sign-in code</a></p>
+      </form>
+
+      <form id="otpForm" novalidate hidden>
+        <p class="note" id="otpNote">Enter your email address and we will email you a six-digit code to sign in.</p>
+        <label for="otpEmail">Email
+          <input id="otpEmail" type="email" autocomplete="username" spellcheck="false" required>
+        </label>
+        <div id="otpCodeRow" hidden>
+          <label for="otpCode">Six-digit code
+            <input id="otpCode" class="code-input" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="7" spellcheck="false" placeholder="123 456">
+          </label>
+        </div>
+        <div class="captcha-box" id="capOtp" hidden></div>
+        <button class="btn primary" type="submit" id="otpBtn">Send code</button>
+        <p class="auth-links"><a href="#" id="otpAgain" hidden>Send a new code</a> <a href="#/login">Back to sign in</a></p>
+      </form>
+
+      <form id="forgotForm" novalidate hidden>
+        <p class="note">Enter your email address and we will send you a link to choose a new password.</p>
+        <label for="forgotEmail">Email
+          <input id="forgotEmail" type="email" autocomplete="username" spellcheck="false" required>
+        </label>
+        <div class="captcha-box" id="capForgot" hidden></div>
+        <button class="btn primary" type="submit" id="forgotBtn">Send reset link</button>
+        <p class="auth-links"><a href="#/login">Back to sign in</a></p>
+      </form>
+
+      <form id="resetForm" novalidate hidden>
+        <label for="resetPassword">New password
+          <input id="resetPassword" type="password" autocomplete="new-password" required>
+          <span class="help">At least 10 characters. A short sentence works well.</span>
+        </label>
+        <button class="btn primary" type="submit" id="resetBtn">Save new password</button>
+      </form>
+
+      <form id="registerForm" novalidate hidden>
+        <label for="regName">Name <span class="hint">optional</span>
+          <input id="regName" type="text" autocomplete="name" spellcheck="false">
+        </label>
+        <label for="regEmail">Email
+          <input id="regEmail" type="email" autocomplete="username" spellcheck="false" required>
+          <span class="help" id="regDomains" hidden></span>
+          <span class="help" id="regConfirmHelp" hidden>We will email you a link to confirm this address.</span>
+        </label>
+        <label for="regPassword">Password
+          <input id="regPassword" type="password" autocomplete="new-password" required>
+          <span class="help">At least 10 characters. A short sentence works well.</span>
+        </label>
+        <label for="regToken" id="regTokenRow" hidden>Setup token
+          <input id="regToken" type="password" autocomplete="off" spellcheck="false">
+          <span class="help">Set by whoever deployed BLASTA (BLASTA_SETUP_TOKEN). It stops strangers from claiming a new instance.</span>
+        </label>
+        <div class="captcha-box" id="capRegister" hidden></div>
+        <button class="btn primary" type="submit" id="registerBtn">Create account</button>
+      </form>
+
+      <p class="form-error" id="authErr" role="alert" hidden></p>
+      <p class="auth-ok" id="authOk" role="status" hidden></p>
+      <p class="auth-links" id="resendRow" hidden><a href="#" id="resendLink">Send the confirmation email again</a></p>
+      <p class="auth-links guest-link" id="guestLink" hidden>Just looking? <a href="#/test">Try a quick test without an account</a></p>
+    </div>
+  </section>
+
+  <section id="view-admin" class="view" hidden>
+    <div class="admin-layout">
+      <div class="admin-side" role="navigation" aria-label="Administration">
+        <div class="side-heading">Workspace</div>
+        <div class="side-group">
+          <a href="#/admin/general" data-section="general">General Settings</a>
+          <a href="#/admin/users" data-section="users">User Management <span class="count" id="sidePending"></span></a>
+          <a href="#/admin/trial" data-section="trial">Free Trial</a>
+        </div>
+        <div class="side-heading">Identity &amp; Delivery</div>
+        <div class="side-group">
+          <a href="#/admin/sso" data-section="sso">Single Sign-On</a>
+          <a href="#/admin/smtp" data-section="smtp">Email Delivery</a>
+        </div>
+        <div class="side-heading">Security</div>
+        <div class="side-group">
+          <a href="#/admin/bots" data-section="bots">Bot Protection</a>
+        </div>
+      </div>
+      <div class="admin-main" id="adminSection"></div>
+    </div>
+  </section>
+
+  <section id="view-account" class="view" hidden>
+    <div class="account-wrap" id="accountBody"></div>
+  </section>
+
+  <section id="view-test" class="view">
+    <div class="intro">
+      <h1 tabindex="-1">Run a <span class="grad">load test</span></h1>
+      <p>Point BLASTA at something <strong>you own</strong>, choose how hard to hit it, and press <em>Start test</em>.
+         Results stream in live.</p>
+    </div>
+
+    <div class="trial" id="trialBar" hidden>
+      <div class="trial-main">
+        <div class="trial-title"><span class="tag gate">Free trial</span> <strong id="trialTime"></strong></div>
+        <p class="note" id="trialNote"></p>
+      </div>
+      <div class="trial-actions auth-pair">
+        <a class="btn btn-in" href="#/login"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 17l5-5-5-5"/><path d="M15 12H4"/></svg>Sign in</a>
+        <a class="btn btn-up" href="#/login?register"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-1a5 5 0 0 0-5-5H7a5 5 0 0 0-5 5v1"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M16 11h6"/></svg>Create account</a>
+      </div>
+    </div>
+
+    <div class="tpl-banner" id="tplBanner" hidden>
+      <div class="tpl-banner-main">
+        <div class="tpl-banner-title"><span class="tag">From template</span>
+          <strong id="tplBannerName"></strong> <span id="tplBannerTags"></span></div>
+        <p class="note" id="tplBannerNotes"></p>
+      </div>
+      <div class="tpl-banner-actions">
+        <button class="btn small" id="tplEdit" type="button">Edit details</button>
+        <a class="btn small" id="tplChange" href="#/templates">Change job</a>
+        <button class="btn ghost small" id="tplDismiss" type="button" aria-label="Dismiss">&times;</button>
+      </div>
+    </div>
+
+    <div class="layout">
+      <div class="col-main">
+        <div class="panel" id="targetPanel">
+          <h2><span class="step">1</span> What do you want to test?
+            <a class="btn small tpl-link" id="tplLink" href="#/templates" title="Ready-made jobs for common systems">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>Use a template</a></h2>
+
+          <label for="executor">Type
+            <select id="executor"></select>
+            <span class="help" id="executorHelp"></span>
+          </label>
+          <label id="urlRow" for="url"><span id="urlLabel">Address</span>
+            <input id="url" type="text" inputmode="url" placeholder="https://staging.example.com/" spellcheck="false" autocomplete="off">
+            <span class="help" id="urlHelp"></span>
+          </label>
+          <label id="methodRow" for="method">Method
+            <select id="method">
+              <option>GET</option><option>POST</option><option>PUT</option>
+              <option>PATCH</option><option>DELETE</option><option>HEAD</option><option>OPTIONS</option>
+            </select>
+          </label>
+          <label id="bodyRow" for="body">Request body <span class="hint">optional &middot; for POST / PUT / PATCH</span>
+            <textarea id="body" rows="4" spellcheck="false" placeholder="{}"></textarea>
+          </label>
+
+          <label id="expectRow" for="expect">Count these status codes as success <span class="hint">optional &middot; comma separated</span>
+            <input id="expect" placeholder="default: any 2xx or 3xx" spellcheck="false" autocomplete="off">
+            <span class="help">Example: <code>200,429</code> when you expect a rate limiter to answer 429. Anything else counts as an error.</span>
+          </label>
+
+          <div id="httpOpts" class="opts">
+            <label class="check"><input id="followredir" type="checkbox" checked>
+              <span>Follow redirects <span class="hint">turn off to measure a 302 itself, e.g. an OIDC <code>/authorize</code> or SAML SSO endpoint, instead of the page behind it</span></span></label>
+            <label class="check"><input id="insecuretls" type="checkbox">
+              <span>Skip TLS certificate verification <span class="hint">for staging hosts with self-signed certificates only</span></span></label>
+          </div>
+
+          <div class="proto" data-for="grpc" hidden>
+            <label>gRPC method
+              <input id="grpcmethod" spellcheck="false" placeholder="/helloworld.Greeter/SayHello">
+            </label>
+            <label>gRPC target <span class="hint">overrides the address above</span>
+              <input id="grpctarget" spellcheck="false" placeholder="127.0.0.1:50051">
+            </label>
+            <label>Message payload <span class="hint">raw protobuf bytes as text</span>
+              <textarea id="grpcbody" rows="3" spellcheck="false"></textarea>
+            </label>
+          </div>
+
+          <div class="proto" data-for="sql" hidden>
+            <label>Connection variable <span class="hint">the <em>name</em> of an environment variable holding the DSN &mdash; never the DSN itself</span>
+              <input id="dsnenv" spellcheck="false" placeholder="PG_DSN">
+            </label>
+            <label>Driver
+              <select id="dbdriver"><option value="">postgres (default)</option></select>
+            </label>
+            <label>Query
+              <textarea id="query" rows="5" spellcheck="false" placeholder="SELECT post_title FROM wp_posts LIMIT 20"></textarea>
+            </label>
+            <label>Max database connections <span class="hint">keep this under the server's limit</span>
+              <input id="dbmaxopen" type="number" min="1" value="16">
+            </label>
+            <label class="check danger-check"><input id="allowwrite" type="checkbox">
+              <span>Allow writes <span class="hint">INSERT / UPDATE / DELETE / DDL &mdash; staging databases only</span></span></label>
+            <p class="note">Queries are read-only unless <em>Allow writes</em> is on.
+            Multi-statement input and writable CTEs (<code>WITH d AS (DELETE&hellip;)</code>) are always refused.</p>
+          </div>
+
+          <div class="proto" data-for="tcp" hidden>
+            <label>Data to send <span class="hint">optional &middot; <code>\r\n</code> is sent as a real line break</span>
+              <textarea id="tcpbody" rows="2" spellcheck="false" placeholder="PING"></textarea>
+            </label>
+            <label>Wait for reply bytes <span class="hint">0 = don't wait for a reply</span>
+              <input id="tcpread" type="number" min="0" value="0">
+              <span class="help">Redis <code>PING</code> replies <code>+PONG\r\n</code> (7 bytes). Without this, only the connect and write are timed.</span>
+            </label>
+            <label>Reply must start with <span class="hint">optional &middot; the job fails if the reply differs</span>
+              <input id="tcpexpect" spellcheck="false" placeholder="+PONG">
+              <span class="help">Redis <code>+PONG</code> or <code>+OK</code>, SMTP <code>220</code>, IMAP <code>* OK</code>. <code>\r\n</code> means a line break.</span>
+            </label>
+            <details class="sub" id="binaryBox">
+              <summary>Binary protocol (hex)</summary>
+              <label>Send these bytes <span class="hint">hex, replaces the data above</span>
+                <input id="tcphex" spellcheck="false" placeholder="10 10 00 04 4d 51 54 54 ...">
+              </label>
+              <label>Reply must start with these bytes <span class="hint">hex</span>
+                <input id="tcpexphex" spellcheck="false" placeholder="20 02 00 00">
+              </label>
+              <p class="note">For MQTT, LDAP, AMQP and other binary protocols. The templates fill this in for you.</p>
+            </details>
+            <p class="note">The address accepts <code>host:port</code> or <code>tcp://host:port</code>.</p>
+          </div>
+
+          <div class="proto" data-for="ws" hidden>
+            <label>Message to send <span class="hint">optional</span>
+              <input id="wsbody" spellcheck="false" placeholder="hello">
+            </label>
+            <p class="note">Leave this empty to only test the connection handshake.</p>
+          </div>
+
+          <details id="headersBox" class="sub">
+            <summary>Request headers <span class="count" id="headerCount"></span></summary>
+            <div id="headers"></div>
+            <button class="btn ghost small" id="addHeader" type="button">+ Add header</button>
+          </details>
+        </div>
+
+        <div class="panel">
+          <h2><span class="step">2</span> How hard should it hit?</h2>
+
+          <div class="seg" id="profiles" role="radiogroup" aria-label="Load profile">
+            <button type="button" role="radio" data-profile="gentle" aria-checked="false">
+              <b>Gentle</b><span>10 req/s &middot; 10 s</span></button>
+            <button type="button" role="radio" data-profile="steady" aria-checked="true">
+              <b>Steady</b><span>100 req/s &middot; 30 s</span></button>
+            <button type="button" role="radio" data-profile="heavy" aria-checked="false">
+              <b>Heavy</b><span>500 req/s &middot; 30 s</span></button>
+            <button type="button" role="radio" data-profile="custom" aria-checked="false">
+              <b>Custom</b><span>your numbers</span></button>
+          </div>
+
+          <div class="row2">
+            <label for="rps">Requests per second
+              <input id="rps" type="number" min="0" value="100">
+              <span class="help">How fast new requests start. <b>0</b> = as fast as possible.</span>
+            </label>
+            <label for="duration">Duration <span class="hint">seconds</span>
+              <input id="duration" type="number" min="1" value="30">
+              <span class="help">How long the test runs.</span>
+            </label>
+          </div>
+          <label for="ramp">Ramp up over <span class="hint">seconds &middot; 0 = start at full rate</span>
+            <input id="ramp" type="number" min="0" value="0">
+            <span class="help">Rises from zero to the rate above over this time, then holds. Use it for stress, spike and capacity tests.</span>
+          </label>
+          <div class="row2">
+            <label for="conc">Parallel connections
+              <input id="conc" type="number" min="1" value="20">
+              <span class="help">Simultaneous in-flight requests.</span>
+            </label>
+            <label for="timeout">Request timeout <span class="hint">seconds</span>
+              <input id="timeout" type="number" min="1" value="10">
+              <span class="help">Slower than this counts as an error.</span>
+            </label>
+          </div>
+
+          <details class="sub" id="advanced">
+            <summary>Advanced limits</summary>
+            <div class="row2">
+              <label for="queue">Queue size
+                <input id="queue" type="number" min="1" value="1000">
+              </label>
+              <label for="maxworkers">Max workers
+                <input id="maxworkers" type="number" min="1" value="200">
+              </label>
+            </div>
+            <label for="onfull">When the queue is full
+              <select id="onfull">
+                <option value="reject">Reject new requests (shows backpressure)</option>
+                <option value="drop_oldest">Drop the oldest request</option>
+                <option value="block">Wait (block)</option>
+              </select>
+            </label>
+            <fieldset class="slo">
+              <legend>Pass / fail targets (SLO) <span class="hint">optional</span></legend>
+              <div class="row3">
+                <label for="slo-err">Max errors <span class="hint">%</span>
+                  <input id="slo-err" type="number" min="0" max="100" step="0.1" placeholder="e.g. 1">
+                </label>
+                <label for="slo-p95">Max p95 <span class="hint">ms</span>
+                  <input id="slo-p95" type="number" min="0" placeholder="e.g. 500">
+                </label>
+                <label for="slo-p99">Max p99 <span class="hint">ms</span>
+                  <input id="slo-p99" type="number" min="0" placeholder="e.g. 1000">
+                </label>
+              </div>
+              <span class="help">The result is marked <em>SLO met</em> or <em>SLO missed</em>. The same targets live in a job file, where <code>blasta run</code> exits 2 on a miss so CI or Kubernetes can gate a release.</span>
+            </fieldset>
+            <label class="check"><input id="blockprivate" type="checkbox" checked>
+              <span>Block private &amp; loopback addresses <span class="hint">SSRF guard &mdash; turn off to test <code>localhost</code> or LAN hosts</span></span></label>
+          </details>
+        </div>
+      </div>
+
+      <aside class="col-side">
+        <div class="panel actions" id="runPanel">
+          <h2><span class="step">3</span> Run</h2>
+          <div class="summary" id="summary"></div>
+          <div id="formError" class="form-error" role="alert" hidden></div>
+          <button id="start" class="btn primary" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>Start test</button>
+          <button id="stop" class="btn danger" type="button" disabled>Stop</button>
+          <p class="kbd-hint">or press <kbd>Ctrl</kbd>/<kbd>&#8984;</kbd> + <kbd>Enter</kbd></p>
+          <div id="safety" class="safety"></div>
+        </div>
+      </aside>
+    </div>
+
+    <div class="panel results" id="results" aria-live="polite" hidden>
+      <div class="results-head">
+        <h2>Live results</h2>
+        <span class="muted" id="runmeta"></span>
+        <div class="spacer"></div>
+        <a class="btn ghost small" id="dl-json" href="#" download>Download JSON</a>
+        <a class="btn ghost small" id="dl-csv" href="#" download>Download CSV</a>
+      </div>
+
+      <div class="empty" id="resultsEmpty">
+        <div class="empty-art" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M3 17l5-6 4 4 8-9"/><path d="M3 21h18"/></svg>
+        </div>
+        <p><strong>No results yet</strong></p>
+        <p class="muted-p">Set up a target above and press <em>Start test</em>. Charts and numbers appear here as the test runs.</p>
+      </div>
+
+      <div id="resultsBody" hidden>
+        <div class="verdict" id="verdict"></div>
+        <div class="progress-wrap">
+          <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" id="progress"><div id="bar"></div></div>
+          <span class="muted" id="progressText"></span>
+        </div>
+        <div class="stats" id="stats"></div>
+        <div class="res-block" id="resBlock" hidden>
+          <div class="res-head">
+            <h3>Load generator resources</h3>
+            <span class="hint" id="resScope"></span>
+          </div>
+          <div class="stats" id="resStats"></div>
+          <p class="res-note" id="resNote" hidden></p>
+          <div class="charts">
+            <div class="chart"><span class="chart-label">CPU used by BLASTA <span class="hint">% of capacity</span></span><canvas id="c-cpu" height="110"></canvas></div>
+            <div class="chart"><span class="chart-label">RAM used by BLASTA</span><canvas id="c-mem" height="110"></canvas></div>
+          </div>
+        </div>
+        <div class="charts">
+          <div class="chart"><span class="chart-label">Requests per second</span><canvas id="c-rps" height="120"></canvas></div>
+          <div class="chart"><span class="chart-label">Latency p95 <span class="hint">lower is better</span></span><canvas id="c-lat" height="120"></canvas></div>
+        </div>
+        <div class="dist">
+          <div class="dist-block">
+            <h3>Response time</h3>
+            <div id="pcts" class="pcts"></div>
+          </div>
+          <div class="dist-block">
+            <h3>Status codes</h3>
+            <div id="codes" class="codes"></div>
+          </div>
+          <div class="dist-block">
+            <h3>Errors</h3>
+            <div id="errs" class="codes"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="view-templates" class="view" hidden>
+    <div id="tplListView">
+      <div class="intro">
+        <h1 tabindex="-1">Pick a <span class="grad">template</span></h1>
+        <p>Ready-made jobs for common systems. Search by system, protocol or what you want to test
+           (<em>wordpress</em>, <em>saml</em>, <em>redis</em>, <em>spike</em>, <em>login storm</em>&hellip;), pick a job, and it opens on the Test page ready to run.</p>
+      </div>
+      <div class="tpl-toolbar">
+        <label class="tpl-search" for="tplSearch">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input id="tplSearch" type="search" placeholder="Search templates and jobs&hellip;  (press / to focus)" autocomplete="off" spellcheck="false">
+        </label>
+        <span class="muted" id="tplCount" role="status"></span>
+      </div>
+      <div class="chips" id="tplCats" role="group" aria-label="Filter by category"></div>
+      <div class="tgrid" id="tplGrid"></div>
+      <div class="empty" id="tplEmpty" hidden>
+        <div class="empty-art" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></div>
+        <p><strong>No templates match</strong></p>
+        <p class="muted-p">Try a shorter search, or a system name such as <em>keycloak</em>, <em>postgres</em> or <em>soap</em>.</p>
+        <p><button class="btn small" id="tplClearSearch" type="button">Clear search</button></p>
+      </div>
+    </div>
+
+    <div id="tplDetailView" hidden>
+      <a class="back" href="#/templates">&larr; All templates</a>
+      <div class="intro">
+        <h1 tabindex="-1"><span class="ticon" id="tplIcon" aria-hidden="true"></span><span id="tplTitle"></span> <span class="tag" id="tplCat"></span></h1>
+        <p id="presetSummary"></p>
+        <p class="muted" id="tplStack"></p>
+      </div>
+      <div class="panel" id="tplSettings">
+        <h2>Settings for this template</h2>
+        <p class="note">Fill in your system's address. The jobs below update as you type.</p>
+        <div id="presetVars" class="preset-vars"></div>
+      </div>
+      <div class="panel">
+        <div class="jobs-head">
+          <h2>Jobs</h2>
+          <label class="tpl-search small" for="jobSearch">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+            <input id="jobSearch" type="search" placeholder="Filter jobs&hellip; (spike, login, soak)" autocomplete="off" spellcheck="false">
+          </label>
+        </div>
+        <div class="chips" id="jobFilters" role="group" aria-label="Filter jobs"></div>
+        <div id="presetJobs"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="view-history" class="view" hidden>
+    <div id="histListView">
+      <div class="intro">
+        <h1 tabindex="-1">Run <span class="grad">history</span></h1>
+        <p>Your tests. Open one to see it the way it looked live, with its charts, load settings and server usage.</p>
+      </div>
+      <div class="hist-tools" id="histTools" hidden>
+        <button type="button" class="btn small danger-outline" id="histClear">Clear all history</button>
+      </div>
+      <div class="panel table-wrap">
+        <table id="runs"><thead><tr>
+          <th>When</th><th>Job</th><th class="c-target">Target</th><th class="num c-req">Requests</th>
+          <th class="num c-rps">Avg req/s</th><th class="num c-p95">p95</th><th class="num c-err">Errors</th>
+          <th class="num c-cpu" title="Average CPU the load generator used during the run">CPU avg</th>
+          <th class="num c-ram" title="Average RAM the load generator used during the run">RAM avg</th>
+          <th>Result</th><th class="c-del"></th><th class="chev-col"></th>
+        </tr></thead><tbody></tbody></table>
+      </div>
+    </div>
+
+    <div id="histDetailView" hidden>
+      <a class="back" href="#/history">&larr; All runs</a>
+      <div class="panel results">
+        <div class="results-head">
+          <h2 id="histTitle" tabindex="-1"></h2>
+          <span id="histState"></span>
+          <div class="spacer"></div>
+          <a class="btn small" id="histJson" href="#" download>Download JSON</a>
+          <a class="btn small" id="histCsv" href="#" download>Download CSV</a>
+          <button class="btn small danger-outline can-del" id="histDelete" type="button" hidden>Delete run</button>
+          <button class="btn small primary-sm" id="histReuse" type="button" title="Fill the Test form with this run's target and load settings">Use these settings</button>
+        </div>
+        <dl class="hist-meta" id="histMeta"></dl>
+        <p class="muted" id="histNoSeries" hidden>Charts were not recorded for this run (it was saved by an older version).</p>
+        <div id="histBody"></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<dialog id="askDlg" class="dlg" aria-labelledby="askTitle">
+  <form id="askForm" novalidate>
+    <h2 id="askTitle"></h2>
+    <p class="note" id="askIntro"></p>
+    <div id="askFields"></div>
+    <p class="form-error" id="askErr" role="alert" hidden></p>
+    <p class="note" id="askNote" hidden></p>
+    <div class="dlg-actions">
+      <button type="button" class="btn ghost" id="askCancel">Cancel</button>
+      <button type="submit" class="btn primary-sm" id="askOk">Add to test</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="captchaDlg" class="dlg" aria-labelledby="captchaTitle">
+  <h2 id="captchaTitle">Quick check</h2>
+  <p class="note">Please confirm you are not a robot to start your free test.</p>
+  <div class="captcha-box" id="capGuest"></div>
+  <p class="form-error" id="capGuestErr" role="alert" hidden></p>
+  <div class="dlg-actions"><button type="button" class="btn ghost" id="capGuestCancel">Cancel</button></div>
+</dialog>
+
+<dialog id="clearDlg" class="dlg" aria-labelledby="clearTitle">
+  <form id="clearForm" method="dialog">
+    <h2 id="clearTitle">Clear history</h2>
+    <p class="note">Delete every finished test in <strong>your</strong> history. Tests still running are kept. This cannot be undone.</p>
+    <label class="toggle-row"><input type="checkbox" id="clearAll"><span>Also delete every other user's history <span class="hint">for the whole server</span></span></label>
+    <p class="form-error" id="clearErr" role="alert" hidden></p>
+    <div class="dlg-actions">
+      <button type="button" class="btn ghost" id="clearCancel">Cancel</button>
+      <button type="submit" class="btn primary-sm" id="clearOk">Delete</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="ssoDlg" class="dlg dlg-wide" aria-labelledby="ssoDlgTitle">
+  <form id="ssoForm" novalidate>
+    <h2 id="ssoDlgTitle">Add identity provider</h2>
+    <div id="ssoFields"></div>
+    <p class="set-result" id="r-sso" role="status" hidden></p>
+    <div class="dlg-actions">
+      <button type="button" class="btn ghost" id="ssoCancel">Cancel</button>
+      <button type="button" class="btn" id="s-test">Check connection</button>
+      <button type="submit" class="btn primary-sm" id="ssoSave">Save provider</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="addUserDlg" class="dlg" aria-labelledby="addUserTitle">
+  <form id="addUserForm" novalidate>
+    <h2 id="addUserTitle">Add user</h2>
+    <p class="note">The account is active at once. Share the password with them securely; they can change it from their menu.</p>
+    <label for="auName">Name <span class="hint">optional</span><input id="auName" type="text" autocomplete="off"></label>
+    <label for="auEmail">Email<input id="auEmail" type="email" autocomplete="off" spellcheck="false" required></label>
+    <label for="auPassword">Password<input id="auPassword" type="password" autocomplete="new-password" required>
+      <span class="help">At least 10 characters.</span></label>
+    <label for="auRole">Role<select id="auRole"><option value="user">User</option><option value="admin">Administrator</option></select></label>
+    <p class="form-error" id="auErr" role="alert" hidden></p>
+    <div class="dlg-actions">
+      <button type="button" class="btn ghost" id="auCancel">Cancel</button>
+      <button type="submit" class="btn primary-sm" id="auOk">Add user</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="gateDlg" class="dlg" aria-labelledby="gateTitle">
+  <h2 id="gateTitle">Sign in to use templates</h2>
+  <p class="note" id="gateText">Templates and test history are part of the full app. Sign in, or create a free account, to use them.</p>
+  <div class="dlg-actions">
+    <button type="button" class="btn ghost" id="gateCancel">Not now</button>
+    <span class="auth-pair"><a class="btn btn-in" id="gateSignIn" href="#/login"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 17l5-5-5-5"/><path d="M15 12H4"/></svg>Sign in</a><a class="btn btn-up" id="gateRegister" href="#/login?register"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-1a5 5 0 0 0-5-5H7a5 5 0 0 0-5 5v1"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M16 11h6"/></svg>Create account</a></span>
+  </div>
+</dialog>
+
+<dialog id="pwDlg" class="dlg" aria-labelledby="pwTitle">
+  <form id="pwForm" novalidate>
+    <h2 id="pwTitle">Change password</h2>
+    <p class="note" id="pwNote"></p>
+    <label for="pwCurrent" id="pwCurrentRow">Current password
+      <input id="pwCurrent" type="password" autocomplete="current-password">
+    </label>
+    <label for="pwNew">New password
+      <input id="pwNew" type="password" autocomplete="new-password">
+      <span class="help">At least 10 characters. Signing in elsewhere will end.</span>
+    </label>
+    <p class="form-error" id="pwErr" role="alert" hidden></p>
+    <div class="dlg-actions">
+      <button type="button" class="btn ghost" id="pwCancel">Cancel</button>
+      <button type="submit" class="btn primary-sm" id="pwOk">Save password</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="app-version" id="appVersion" hidden></div>
+<div class="toasts" id="toasts" aria-live="assertive"></div>
+<script src="app.js"></script>
+</body>
+</html>

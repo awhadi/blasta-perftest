@@ -1,0 +1,896 @@
+{
+  "id": "mail-web",
+  "title": "Mail web services (webmail, autodiscover, MTA-STS, spam filter)",
+  "category": "Mail",
+  "summary": "HTTP side of a mail system: Roundcube / SOGo, autodiscover and autoconfig, MTA-STS, rspamd and Mailpit. Includes an enterprise test plan (jobs starting ent-).",
+  "stack": "Roundcube, SOGo, Mailcow, Mailu, rspamd, Mailpit, MailHog, JMAP",
+  "variables": [
+    {
+      "name": "url",
+      "default": "https://mail.example.com",
+      "description": "Webmail base URL, no trailing slash",
+      "placeholder": true,
+      "guide": "The address of the system to test, starting with https:// (or http://) and with no trailing slash, for example https://staging.example.com. Use a system you own, ideally a staging copy. BLASTA runs in a container, so for a service on your own machine use host.docker.internal instead of localhost."
+    },
+    {
+      "name": "domain",
+      "default": "example.com",
+      "description": "Your mail domain",
+      "placeholder": true,
+      "guide": "Your mail domain, the part after @ in your addresses, for example example.com."
+    },
+    {
+      "name": "email",
+      "default": "user@example.com",
+      "description": "A mailbox address for the autoconfig query",
+      "placeholder": true,
+      "guide": "A mailbox on that domain, for example user@example.com."
+    },
+    {
+      "name": "mtaSts",
+      "default": "https://mta-sts.example.com/.well-known/mta-sts.txt",
+      "description": "Full URL of your MTA-STS policy",
+      "placeholder": true,
+      "guide": "The full address of your MTA-STS policy: https://mta-sts.<your domain>/.well-known/mta-sts.txt"
+    }
+  ],
+  "jobs": [
+    {
+      "id": "login-page",
+      "name": "webmail login page",
+      "notes": "First page of every webmail session.",
+      "safety": "read",
+      "job": {
+        "name": "webmail login page",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/"
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 30,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302
+        ],
+        "headers": {
+          "Accept": "text/html"
+        }
+      }
+    },
+    {
+      "id": "session-redirect",
+      "name": "inbox without a session",
+      "notes": "Protected page with no session: should redirect to login quickly. Redirects are not followed.",
+      "safety": "read",
+      "job": {
+        "name": "inbox without a session",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/?_task=mail&_mbox=INBOX",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 50,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          302,
+          303,
+          200,
+          401
+        ],
+        "headers": {
+          "Accept": "text/html"
+        }
+      }
+    },
+    {
+      "id": "roundcube-asset",
+      "name": "Roundcube static asset",
+      "notes": "The main JavaScript file; large and loaded by every visitor.",
+      "safety": "read",
+      "job": {
+        "name": "Roundcube static asset",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/program/js/app.min.js"
+        },
+        "method": "GET",
+        "concurrency": 30,
+        "rps": 100,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          404
+        ]
+      }
+    },
+    {
+      "id": "sogo-login",
+      "name": "SOGo login page",
+      "notes": "SOGo's sign-in page (if you run SOGo).",
+      "safety": "read",
+      "job": {
+        "name": "SOGo login page",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/SOGo/",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 20,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302,
+          404
+        ],
+        "headers": {
+          "Accept": "text/html"
+        }
+      }
+    },
+    {
+      "id": "autoconfig",
+      "name": "Thunderbird autoconfig",
+      "notes": "Queried by every new mail client set-up.",
+      "safety": "read",
+      "job": {
+        "name": "Thunderbird autoconfig",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/.well-known/autoconfig/mail/config-v1.1.xml?emailaddress={{email}}"
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 20,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          404
+        ]
+      }
+    },
+    {
+      "id": "autodiscover",
+      "name": "Outlook autodiscover (POST)",
+      "notes": "Outlook and mobile clients poll this on a timer, so it is a constant background load on Exchange-style systems.",
+      "safety": "read",
+      "job": {
+        "name": "Outlook autodiscover (POST)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/autodiscover/autodiscover.xml"
+        },
+        "method": "POST",
+        "concurrency": 10,
+        "rps": 20,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          401,
+          404
+        ],
+        "headers": {
+          "Content-Type": "text/xml"
+        },
+        "body": "<?xml version=\"1.0\"?><Autodiscover xmlns=\"http://schemas.microsoft.com/exchange/autodiscover/outlook/requestschema/2006\"><Request><EMailAddress>{{email}}</EMailAddress><AcceptableResponseSchema>http://schemas.microsoft.com/exchange/autodiscover/outlook/responseschema/2006a</AcceptableResponseSchema></Request></Autodiscover>"
+      }
+    },
+    {
+      "id": "mta-sts",
+      "name": "MTA-STS policy",
+      "notes": "Fetched by every sending mail server that supports MTA-STS, and cached for the policy's max_age.",
+      "safety": "read",
+      "job": {
+        "name": "MTA-STS policy",
+        "executor": "http",
+        "target": {
+          "url": "{{mtaSts}}"
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 30,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ]
+      }
+    },
+    {
+      "id": "jmap-session",
+      "name": "JMAP session resource",
+      "notes": "Entry point for JMAP clients (Stalwart, Fastmail, Cyrus). Redirects are not followed.",
+      "safety": "read",
+      "job": {
+        "name": "JMAP session resource",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/.well-known/jmap",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 30,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          301,
+          302,
+          401
+        ],
+        "headers": {
+          "Accept": "application/json"
+        }
+      }
+    },
+    {
+      "id": "rspamd-ping",
+      "name": "rspamd controller ping",
+      "notes": "Spam filter controller liveness.",
+      "safety": "read",
+      "job": {
+        "name": "rspamd controller ping",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/rspamd/ping"
+        },
+        "method": "GET",
+        "concurrency": 5,
+        "rps": 20,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          404
+        ]
+      }
+    },
+    {
+      "id": "mailpit-info",
+      "name": "Mailpit info",
+      "notes": "Test mail catcher API.",
+      "safety": "read",
+      "job": {
+        "name": "Mailpit info",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/api/v1/info"
+        },
+        "method": "GET",
+        "concurrency": 5,
+        "rps": 20,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          404
+        ],
+        "headers": {
+          "Accept": "application/json"
+        }
+      }
+    },
+    {
+      "id": "mailpit-messages",
+      "name": "Mailpit message list",
+      "notes": "Lists captured messages: grows with the mailbox.",
+      "safety": "read",
+      "job": {
+        "name": "Mailpit message list",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/api/v1/messages?limit=50"
+        },
+        "method": "GET",
+        "concurrency": 5,
+        "rps": 10,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          404
+        ],
+        "headers": {
+          "Accept": "application/json"
+        }
+      }
+    },
+    {
+      "id": "login-ramp",
+      "name": "login page ramp",
+      "notes": "Ramps requests to the login page to find where the webmail front end (PHP-FPM) saturates.",
+      "safety": "read",
+      "job": {
+        "name": "login page ramp",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/"
+        },
+        "method": "GET",
+        "concurrency": 100,
+        "rps": 200,
+        "duration": 420000000000,
+        "timeout": 15000000000,
+        "queueSize": 5000,
+        "onQueueFull": "reject",
+        "maxWorkers": 300,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302
+        ],
+        "headers": {
+          "Accept": "text/html"
+        },
+        "ramp": 300000000000
+      }
+    },
+    {
+      "id": "ent-01-smoke",
+      "name": "Mail web services (webmail, autodiscover, MTA-STS, spam filter): 01 smoke",
+      "notes": "Enterprise plan, step 1 of 10. One request a second for 30 seconds. Run this first, every time: it proves the address, credentials and headers are right and that the environment is up before any real load is applied. Gate: zero errors. Reference request: webmail login page.",
+      "safety": "read",
+      "job": {
+        "name": "Mail web services (webmail, autodiscover, MTA-STS, spam filter): 01 smoke",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/"
+        },
+        "method": "GET",
+        "concurrency": 1,
+        "rps": 1,
+        "duration": 30000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302
+        ],
+        "headers": {
+          "Accept": "text/html"
+        },
+        "slo": {
+          "maxErrorRate": 0
+        }
+      }
+    },
+    {
+      "id": "ent-02-baseline",
+      "name": "Mail web services (webmail, autodiscover, MTA-STS, spam filter): 02 baseline (20% load)",
+      "notes": "Step 2 of 10. About a fifth of normal traffic for 5 minutes: the uncontended latency of this request. Every later result is judged against it, so record p50 and p95. Gate: at most 0.5% errors and the default latency targets. Reference request: webmail login page.",
+      "safety": "read",
+      "job": {
+        "name": "Mail web services (webmail, autodiscover, MTA-STS, spam filter): 02 baseline (20% load)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/"
+        },
+        "method": "GET",
+        "concurrency": 4,
+        "rps": 6,
+        "duration": 300000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302
+        ],
+        "headers": {
+          "Accept": "text/html"
+        },
+        "slo": {
+          "maxErrorRate": 0.5,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-03-average-load",
+      "name": "Mail web services (webmail, autodiscover, MTA-STS, spam filter): 03 average load (SLO check)",
+      "notes": "Step 3 of 10. Normal busy-hour traffic for 10 minutes. The rate is the reference job's rate: raise it to your measured production peak-hour rate. This is the run that proves (or breaks) your SLO. Gate: at most 1% errors, p95 and p99 inside the targets. Reference request: webmail login page.",
+      "safety": "read",
+      "job": {
+        "name": "Mail web services (webmail, autodiscover, MTA-STS, spam filter): 03 average load (SLO check)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/"
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 30,
+        "duration": 600000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302
+        ],
+        "headers": {
+          "Accept": "text/html"
+        },
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-04-peak-load",
+      "name": "Mail web services (webmail, autodiscover, MTA-STS, spam filter): 04 peak load (2x average)",
+      "notes": "Step 4 of 10. Twice the average for 10 minutes: the busiest hour of the year plus headroom. Latency may rise, but must stay in SLO; if it does not, you have no headroom. Gate: at most 2% errors, latency targets doubled. Reference request: webmail login page.",
+      "safety": "read",
+      "job": {
+        "name": "Mail web services (webmail, autodiscover, MTA-STS, spam filter): 04 peak load (2x average)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/"
+        },
+        "method": "GET",
+        "concurrency": 40,
+        "rps": 60,
+        "duration": 600000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302
+        ],
+        "headers": {
+          "Accept": "text/html"
+        },
+        "slo": {
+          "maxErrorRate": 2,
+          "maxP95": 2000000000,
+          "maxP99": 4000000000
+        }
+      }
+    },
+    {
+      "id": "ent-05-stress",
+      "name": "Mail web services (webmail, autodiscover, MTA-STS, spam filter): 05 stress (ramp to 4x)",
+      "notes": "Step 5 of 10. Ramps to four times average over 10 minutes, then holds for 2. Finds where it degrades and HOW: gracefully (latency rises, errors stay low) or badly (errors, timeouts, crashes, restarts). Observation only, no gate. Reference request: webmail login page.",
+      "safety": "read",
+      "job": {
+        "name": "Mail web services (webmail, autodiscover, MTA-STS, spam filter): 05 stress (ramp to 4x)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/"
+        },
+        "method": "GET",
+        "concurrency": 80,
+        "rps": 120,
+        "duration": 720000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302
+        ],
+        "headers": {
+          "Accept": "text/html"
+        },
+        "ramp": 600000000000
+      }
+    },
+    {
+      "id": "ent-06-spike",
+      "name": "Mail web services (webmail, autodiscover, MTA-STS, spam filter): 06 spike (10x in 10 s)",
+      "notes": "Step 6 of 10. Reaches ten times average within 10 seconds and holds for 2 minutes: a campaign email, a news link, a failover. Checks autoscaling, queue limits and load shedding. Gate: at most 5% errors, because shedding load is acceptable and crashing is not. Reference request: webmail login page.",
+      "safety": "read",
+      "job": {
+        "name": "Mail web services (webmail, autodiscover, MTA-STS, spam filter): 06 spike (10x in 10 s)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/"
+        },
+        "method": "GET",
+        "concurrency": 200,
+        "rps": 300,
+        "duration": 130000000000,
+        "timeout": 15000000000,
+        "queueSize": 1500,
+        "onQueueFull": "reject",
+        "maxWorkers": 400,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302
+        ],
+        "headers": {
+          "Accept": "text/html"
+        },
+        "ramp": 10000000000,
+        "slo": {
+          "maxErrorRate": 5
+        }
+      }
+    },
+    {
+      "id": "ent-07-recovery",
+      "name": "Mail web services (webmail, autodiscover, MTA-STS, spam filter): 07 recovery after the spike",
+      "notes": "Step 7 of 10. Run IMMEDIATELY after the spike, at average load for 5 minutes. Latency and errors must return to the baseline from step 2. If they do not, something is stuck: queues, connection pools, GC, an autoscaler cool-down. Gate: same as average load. Reference request: webmail login page.",
+      "safety": "read",
+      "job": {
+        "name": "Mail web services (webmail, autodiscover, MTA-STS, spam filter): 07 recovery after the spike",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/"
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 30,
+        "duration": 300000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302
+        ],
+        "headers": {
+          "Accept": "text/html"
+        },
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-08-soak",
+      "name": "Mail web services (webmail, autodiscover, MTA-STS, spam filter): 08 soak (1 hour at 60%)",
+      "notes": "Step 8 of 10. One hour of steady load. Finds leaks and slow decay in memory, connections, file descriptors, disk, log volume and cache churn. Watch the resource graphs: any line that climbs and never flattens is a finding. Gate: at most 0.5% errors. Reference request: webmail login page.",
+      "safety": "read",
+      "job": {
+        "name": "Mail web services (webmail, autodiscover, MTA-STS, spam filter): 08 soak (1 hour at 60%)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/"
+        },
+        "method": "GET",
+        "concurrency": 12,
+        "rps": 18,
+        "duration": 3600000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302
+        ],
+        "headers": {
+          "Accept": "text/html"
+        },
+        "slo": {
+          "maxErrorRate": 0.5,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-09-breakpoint",
+      "name": "Mail web services (webmail, autodiscover, MTA-STS, spam filter): 09 breakpoint (find the ceiling)",
+      "notes": "Step 9 of 10. Ramps to twenty times average over 20 minutes. Stop it when errors pass about 5%: the rate at that moment is your ceiling, and ceiling divided by peak is your capacity margin. Use a production-like environment, never production. Reference request: webmail login page.",
+      "safety": "read",
+      "job": {
+        "name": "Mail web services (webmail, autodiscover, MTA-STS, spam filter): 09 breakpoint (find the ceiling)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/"
+        },
+        "method": "GET",
+        "concurrency": 400,
+        "rps": 600,
+        "duration": 1380000000000,
+        "timeout": 15000000000,
+        "queueSize": 3000,
+        "onQueueFull": "reject",
+        "maxWorkers": 800,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302
+        ],
+        "headers": {
+          "Accept": "text/html"
+        },
+        "ramp": 1200000000000
+      }
+    },
+    {
+      "id": "ent-10-failover-window",
+      "name": "Mail web services (webmail, autodiscover, MTA-STS, spam filter): 10 resilience window (failover / deploy)",
+      "notes": "Step 10 of 10. Average load for 15 minutes. About 5 minutes in, cause the event you are testing: kill a pod or node, fail over the database, roll out a new version, drain a zone. Errors in the window are your real availability loss. Gate: at most 1% errors overall; read the time series for how long the dip lasted. Reference request: webmail login page.",
+      "safety": "read",
+      "job": {
+        "name": "Mail web services (webmail, autodiscover, MTA-STS, spam filter): 10 resilience window (failover / deploy)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/"
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 30,
+        "duration": 900000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302
+        ],
+        "headers": {
+          "Accept": "text/html"
+        },
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-x-connection-close",
+      "name": "Mail web services (webmail, autodiscover, MTA-STS, spam filter): no keep-alive (new connection per request)",
+      "notes": "Sends Connection: close, so every request pays for a new TCP and TLS handshake: the cost for clients that do not reuse connections (scripts, some mobile SDKs, health checkers). Shows load balancer and TLS termination limits. Reference request: webmail login page.",
+      "safety": "read",
+      "job": {
+        "name": "Mail web services (webmail, autodiscover, MTA-STS, spam filter): no keep-alive (new connection per request)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/"
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 30,
+        "duration": 300000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302
+        ],
+        "headers": {
+          "Accept": "text/html",
+          "Connection": "close"
+        },
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 1500000000,
+          "maxP99": 3000000000
+        }
+      }
+    },
+    {
+      "id": "ent-x-bot-traffic",
+      "name": "Mail web services (webmail, autodiscover, MTA-STS, spam filter): crawler traffic (Googlebot user agent)",
+      "notes": "Same request identified as a search crawler. Tests WAF and bot-management rules and whether crawlers get cached or origin responses. Crawlers can easily be a third of all traffic. Reference request: webmail login page.",
+      "safety": "read",
+      "job": {
+        "name": "Mail web services (webmail, autodiscover, MTA-STS, spam filter): crawler traffic (Googlebot user agent)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/"
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 30,
+        "duration": 300000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302
+        ],
+        "headers": {
+          "Accept": "text/html",
+          "User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)"
+        },
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-x-large-headers",
+      "name": "Mail web services (webmail, autodiscover, MTA-STS, spam filter): large cookies (~4 KB header)",
+      "notes": "Adds a 4 KB Cookie header, like a logged-in user with many tracking cookies. Proxies and servers reject headers around 8 KB, so this shows how close you are to that limit. Reference request: webmail login page.",
+      "safety": "read",
+      "job": {
+        "name": "Mail web services (webmail, autodiscover, MTA-STS, spam filter): large cookies (~4 KB header)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/"
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 15,
+        "duration": 300000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302
+        ],
+        "headers": {
+          "Accept": "text/html",
+          "Cookie": "blasta=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+        },
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-x-monitor-storm",
+      "name": "Mail web services (webmail, autodiscover, MTA-STS, spam filter): uptime monitors (HEAD from many locations)",
+      "notes": "A fleet of synthetic monitors checking the URL with HEAD requests every 30 seconds from 20 locations, plus load balancer probes. Cheap each, constant in total. Reference request: webmail login page.",
+      "safety": "read",
+      "job": {
+        "name": "Mail web services (webmail, autodiscover, MTA-STS, spam filter): uptime monitors (HEAD from many locations)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/"
+        },
+        "method": "HEAD",
+        "concurrency": 20,
+        "rps": 30,
+        "duration": 600000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          204,
+          301,
+          302,
+          304,
+          405
+        ],
+        "headers": {
+          "Accept": "text/html"
+        },
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-x-morning-login-wave",
+      "name": "Mail web services (webmail, autodiscover, MTA-STS, spam filter): morning webmail wave",
+      "notes": "Everyone opens webmail at the same time. Ramps to eight times normal in 60 seconds. Reference request: webmail login page.",
+      "safety": "read",
+      "job": {
+        "name": "Mail web services (webmail, autodiscover, MTA-STS, spam filter): morning webmail wave",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/"
+        },
+        "method": "GET",
+        "concurrency": 160,
+        "rps": 240,
+        "duration": 300000000000,
+        "timeout": 15000000000,
+        "queueSize": 1200,
+        "onQueueFull": "reject",
+        "maxWorkers": 320,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302
+        ],
+        "headers": {
+          "Accept": "text/html"
+        },
+        "ramp": 60000000000,
+        "slo": {
+          "maxErrorRate": 5
+        }
+      }
+    }
+  ]
+}

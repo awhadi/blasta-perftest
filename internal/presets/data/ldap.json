@@ -1,0 +1,563 @@
+{
+  "id": "ldap",
+  "title": "LDAP / Active Directory",
+  "category": "Directory",
+  "summary": "Connection capacity, anonymous bind and RootDSE search with the replies checked, plus the connect-per-login pattern. Includes an enterprise test plan (jobs starting ent-).",
+  "stack": "OpenLDAP, 389 Directory Server, Active Directory, FreeIPA",
+  "variables": [
+    {
+      "name": "host",
+      "default": "ldap.example.com",
+      "description": "LDAP server host name",
+      "placeholder": true,
+      "guide": "The host name or IP address of the server, without a port or http://, for example redis.staging.example.com. BLASTA runs in a container, so for a service on your own machine use host.docker.internal instead of localhost."
+    },
+    {
+      "name": "port",
+      "default": "389",
+      "description": "LDAP port (389). LDAPS on 636 needs TLS, which only the connect test covers.",
+      "guide": "The port the service listens on. The default is filled in; check the service's configuration if you changed it."
+    },
+    {
+      "name": "ldapsPort",
+      "default": "636",
+      "description": "LDAPS port",
+      "guide": "The LDAPS port, normally 636."
+    }
+  ],
+  "jobs": [
+    {
+      "id": "connect",
+      "name": "connection accept",
+      "notes": "Measures only how fast the directory accepts a TCP connection: a connection-limit and listen-backlog test.",
+      "safety": "read",
+      "job": {
+        "name": "connection accept",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}"
+        },
+        "method": "GET",
+        "concurrency": 50,
+        "rps": 200,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false
+      }
+    },
+    {
+      "id": "ldaps-connect",
+      "name": "LDAPS connection accept",
+      "notes": "TCP accept on the TLS port. The TLS handshake itself is not performed.",
+      "safety": "read",
+      "job": {
+        "name": "LDAPS connection accept",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{ldapsPort}}"
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 50,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false
+      }
+    },
+    {
+      "id": "anonymous-bind",
+      "name": "anonymous bind",
+      "notes": "Sends a real LDAP v3 anonymous bind and checks for resultCode success. Many servers refuse anonymous binds on purpose: unexpected_reply errors then mean the hardening works, not that the server is down.",
+      "safety": "read",
+      "job": {
+        "name": "anonymous bind",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "bodyHex": "300c020101600702010304008000",
+            "expectHex": "300c02010161070a010004000400"
+          }
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 100,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false
+      }
+    },
+    {
+      "id": "rootdse-search",
+      "name": "bind then RootDSE search",
+      "notes": "Bind plus a base-scope search of the RootDSE, the cheapest realistic query (what applications run to discover server capabilities). Checks the bind succeeded and a search entry follows. Every request is a fresh connection, which is also how many apps and Keycloak user federation behave per login.",
+      "safety": "read",
+      "job": {
+        "name": "bind then RootDSE search",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "bodyHex": "300c0201016007020103040080003025020102632004000a01000a0100020100020100010100870b6f626a656374436c6173733000",
+            "expectHex": "300c02010161070a01000400040030"
+          }
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 100,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false
+      }
+    },
+    {
+      "id": "ramp",
+      "name": "connection ramp",
+      "notes": "Ramps bind and search to find where the directory starts refusing or slowing down.",
+      "safety": "read",
+      "job": {
+        "name": "connection ramp",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "bodyHex": "300c0201016007020103040080003025020102632004000a01000a0100020100020100010100870b6f626a656374436c6173733000",
+            "expectHex": "300c02010161070a01000400040030"
+          }
+        },
+        "method": "GET",
+        "concurrency": 100,
+        "rps": 500,
+        "duration": 420000000000,
+        "timeout": 15000000000,
+        "queueSize": 5000,
+        "onQueueFull": "reject",
+        "maxWorkers": 300,
+        "blockPrivate": false,
+        "ramp": 300000000000
+      }
+    },
+    {
+      "id": "soak",
+      "name": "bind and search soak (10 min)",
+      "notes": "Steady load that surfaces connection leaks and replication lag.",
+      "safety": "read",
+      "job": {
+        "name": "bind and search soak (10 min)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "bodyHex": "300c0201016007020103040080003025020102632004000a01000a0100020100020100010100870b6f626a656374436c6173733000",
+            "expectHex": "300c02010161070a01000400040030"
+          }
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 50,
+        "duration": 600000000000,
+        "timeout": 15000000000,
+        "queueSize": 5000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false
+      }
+    },
+    {
+      "id": "ent-01-smoke",
+      "name": "LDAP / Active Directory: 01 smoke",
+      "notes": "Enterprise plan, step 1 of 10. One request a second for 30 seconds. Run this first, every time: it proves the address, credentials and headers are right and that the environment is up before any real load is applied. Gate: zero errors. Reference request: bind then RootDSE search.",
+      "safety": "read",
+      "job": {
+        "name": "LDAP / Active Directory: 01 smoke",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "bodyHex": "300c0201016007020103040080003025020102632004000a01000a0100020100020100010100870b6f626a656374436c6173733000",
+            "expectHex": "300c02010161070a01000400040030"
+          }
+        },
+        "method": "GET",
+        "concurrency": 1,
+        "rps": 1,
+        "duration": 30000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "slo": {
+          "maxErrorRate": 0
+        }
+      }
+    },
+    {
+      "id": "ent-02-baseline",
+      "name": "LDAP / Active Directory: 02 baseline (20% load)",
+      "notes": "Step 2 of 10. About a fifth of normal traffic for 5 minutes: the uncontended latency of this request. Every later result is judged against it, so record p50 and p95. Gate: at most 0.5% errors and the default latency targets. Reference request: bind then RootDSE search.",
+      "safety": "read",
+      "job": {
+        "name": "LDAP / Active Directory: 02 baseline (20% load)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "bodyHex": "300c0201016007020103040080003025020102632004000a01000a0100020100020100010100870b6f626a656374436c6173733000",
+            "expectHex": "300c02010161070a01000400040030"
+          }
+        },
+        "method": "GET",
+        "concurrency": 4,
+        "rps": 20,
+        "duration": 300000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "slo": {
+          "maxErrorRate": 0.5,
+          "maxP95": 50000000,
+          "maxP99": 200000000
+        }
+      }
+    },
+    {
+      "id": "ent-03-average-load",
+      "name": "LDAP / Active Directory: 03 average load (SLO check)",
+      "notes": "Step 3 of 10. Normal busy-hour traffic for 10 minutes. The rate is the reference job's rate: raise it to your measured production peak-hour rate. This is the run that proves (or breaks) your SLO. Gate: at most 1% errors, p95 and p99 inside the targets. Reference request: bind then RootDSE search.",
+      "safety": "read",
+      "job": {
+        "name": "LDAP / Active Directory: 03 average load (SLO check)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "bodyHex": "300c0201016007020103040080003025020102632004000a01000a0100020100020100010100870b6f626a656374436c6173733000",
+            "expectHex": "300c02010161070a01000400040030"
+          }
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 100,
+        "duration": 600000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 50000000,
+          "maxP99": 200000000
+        }
+      }
+    },
+    {
+      "id": "ent-04-peak-load",
+      "name": "LDAP / Active Directory: 04 peak load (2x average)",
+      "notes": "Step 4 of 10. Twice the average for 10 minutes: the busiest hour of the year plus headroom. Latency may rise, but must stay in SLO; if it does not, you have no headroom. Gate: at most 2% errors, latency targets doubled. Reference request: bind then RootDSE search.",
+      "safety": "read",
+      "job": {
+        "name": "LDAP / Active Directory: 04 peak load (2x average)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "bodyHex": "300c0201016007020103040080003025020102632004000a01000a0100020100020100010100870b6f626a656374436c6173733000",
+            "expectHex": "300c02010161070a01000400040030"
+          }
+        },
+        "method": "GET",
+        "concurrency": 40,
+        "rps": 200,
+        "duration": 600000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "slo": {
+          "maxErrorRate": 2,
+          "maxP95": 100000000,
+          "maxP99": 400000000
+        }
+      }
+    },
+    {
+      "id": "ent-05-stress",
+      "name": "LDAP / Active Directory: 05 stress (ramp to 4x)",
+      "notes": "Step 5 of 10. Ramps to four times average over 10 minutes, then holds for 2. Finds where it degrades and HOW: gracefully (latency rises, errors stay low) or badly (errors, timeouts, crashes, restarts). Observation only, no gate. Reference request: bind then RootDSE search.",
+      "safety": "read",
+      "job": {
+        "name": "LDAP / Active Directory: 05 stress (ramp to 4x)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "bodyHex": "300c0201016007020103040080003025020102632004000a01000a0100020100020100010100870b6f626a656374436c6173733000",
+            "expectHex": "300c02010161070a01000400040030"
+          }
+        },
+        "method": "GET",
+        "concurrency": 80,
+        "rps": 400,
+        "duration": 720000000000,
+        "timeout": 15000000000,
+        "queueSize": 2000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "ramp": 600000000000
+      }
+    },
+    {
+      "id": "ent-06-spike",
+      "name": "LDAP / Active Directory: 06 spike (10x in 10 s)",
+      "notes": "Step 6 of 10. Reaches ten times average within 10 seconds and holds for 2 minutes: a campaign email, a news link, a failover. Checks autoscaling, queue limits and load shedding. Gate: at most 5% errors, because shedding load is acceptable and crashing is not. Reference request: bind then RootDSE search.",
+      "safety": "read",
+      "job": {
+        "name": "LDAP / Active Directory: 06 spike (10x in 10 s)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "bodyHex": "300c0201016007020103040080003025020102632004000a01000a0100020100020100010100870b6f626a656374436c6173733000",
+            "expectHex": "300c02010161070a01000400040030"
+          }
+        },
+        "method": "GET",
+        "concurrency": 200,
+        "rps": 1000,
+        "duration": 130000000000,
+        "timeout": 15000000000,
+        "queueSize": 5000,
+        "onQueueFull": "reject",
+        "maxWorkers": 400,
+        "blockPrivate": false,
+        "ramp": 10000000000,
+        "slo": {
+          "maxErrorRate": 5
+        }
+      }
+    },
+    {
+      "id": "ent-07-recovery",
+      "name": "LDAP / Active Directory: 07 recovery after the spike",
+      "notes": "Step 7 of 10. Run IMMEDIATELY after the spike, at average load for 5 minutes. Latency and errors must return to the baseline from step 2. If they do not, something is stuck: queues, connection pools, GC, an autoscaler cool-down. Gate: same as average load. Reference request: bind then RootDSE search.",
+      "safety": "read",
+      "job": {
+        "name": "LDAP / Active Directory: 07 recovery after the spike",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "bodyHex": "300c0201016007020103040080003025020102632004000a01000a0100020100020100010100870b6f626a656374436c6173733000",
+            "expectHex": "300c02010161070a01000400040030"
+          }
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 100,
+        "duration": 300000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 50000000,
+          "maxP99": 200000000
+        }
+      }
+    },
+    {
+      "id": "ent-08-soak",
+      "name": "LDAP / Active Directory: 08 soak (1 hour at 60%)",
+      "notes": "Step 8 of 10. One hour of steady load. Finds leaks and slow decay in memory, connections, file descriptors, disk, log volume and cache churn. Watch the resource graphs: any line that climbs and never flattens is a finding. Gate: at most 0.5% errors. Reference request: bind then RootDSE search.",
+      "safety": "read",
+      "job": {
+        "name": "LDAP / Active Directory: 08 soak (1 hour at 60%)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "bodyHex": "300c0201016007020103040080003025020102632004000a01000a0100020100020100010100870b6f626a656374436c6173733000",
+            "expectHex": "300c02010161070a01000400040030"
+          }
+        },
+        "method": "GET",
+        "concurrency": 12,
+        "rps": 60,
+        "duration": 3600000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "slo": {
+          "maxErrorRate": 0.5,
+          "maxP95": 50000000,
+          "maxP99": 200000000
+        }
+      }
+    },
+    {
+      "id": "ent-09-breakpoint",
+      "name": "LDAP / Active Directory: 09 breakpoint (find the ceiling)",
+      "notes": "Step 9 of 10. Ramps to twenty times average over 20 minutes. Stop it when errors pass about 5%: the rate at that moment is your ceiling, and ceiling divided by peak is your capacity margin. Use a production-like environment, never production. Reference request: bind then RootDSE search.",
+      "safety": "read",
+      "job": {
+        "name": "LDAP / Active Directory: 09 breakpoint (find the ceiling)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "bodyHex": "300c0201016007020103040080003025020102632004000a01000a0100020100020100010100870b6f626a656374436c6173733000",
+            "expectHex": "300c02010161070a01000400040030"
+          }
+        },
+        "method": "GET",
+        "concurrency": 400,
+        "rps": 2000,
+        "duration": 1380000000000,
+        "timeout": 15000000000,
+        "queueSize": 10000,
+        "onQueueFull": "reject",
+        "maxWorkers": 800,
+        "blockPrivate": false,
+        "ramp": 1200000000000
+      }
+    },
+    {
+      "id": "ent-10-failover-window",
+      "name": "LDAP / Active Directory: 10 resilience window (failover / deploy)",
+      "notes": "Step 10 of 10. Average load for 15 minutes. About 5 minutes in, cause the event you are testing: kill a pod or node, fail over the database, roll out a new version, drain a zone. Errors in the window are your real availability loss. Gate: at most 1% errors overall; read the time series for how long the dip lasted. Reference request: bind then RootDSE search.",
+      "safety": "read",
+      "job": {
+        "name": "LDAP / Active Directory: 10 resilience window (failover / deploy)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "bodyHex": "300c0201016007020103040080003025020102632004000a01000a0100020100020100010100870b6f626a656374436c6173733000",
+            "expectHex": "300c02010161070a01000400040030"
+          }
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 100,
+        "duration": 900000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 50000000,
+          "maxP99": 200000000
+        }
+      }
+    },
+    {
+      "id": "ent-x-connection-storm",
+      "name": "LDAP / Active Directory: connection storm (ramp to 10x)",
+      "notes": "Ramps new connections per second to ten times normal: a fleet reconnecting after an outage, a deploy that restarts every pod, a network blip. Shows accept-queue, file descriptor and handshake limits. Reference request: bind then RootDSE search.",
+      "safety": "read",
+      "job": {
+        "name": "LDAP / Active Directory: connection storm (ramp to 10x)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "bodyHex": "300c0201016007020103040080003025020102632004000a01000a0100020100020100010100870b6f626a656374436c6173733000",
+            "expectHex": "300c02010161070a01000400040030"
+          }
+        },
+        "method": "GET",
+        "concurrency": 200,
+        "rps": 1000,
+        "duration": 420000000000,
+        "timeout": 15000000000,
+        "queueSize": 5000,
+        "onQueueFull": "reject",
+        "maxWorkers": 400,
+        "blockPrivate": false,
+        "ramp": 120000000000
+      }
+    },
+    {
+      "id": "ent-x-auth-peak",
+      "name": "LDAP / Active Directory: authentication peak",
+      "notes": "Applications authenticate users against the directory on every login. Three times normal for 10 minutes. Watch connection counts and replication lag. Reference request: bind then RootDSE search.",
+      "safety": "read",
+      "job": {
+        "name": "LDAP / Active Directory: authentication peak",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "bodyHex": "300c0201016007020103040080003025020102632004000a01000a0100020100020100010100870b6f626a656374436c6173733000",
+            "expectHex": "300c02010161070a01000400040030"
+          }
+        },
+        "method": "GET",
+        "concurrency": 60,
+        "rps": 300,
+        "duration": 600000000000,
+        "timeout": 15000000000,
+        "queueSize": 1500,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 50000000,
+          "maxP99": 200000000
+        }
+      }
+    },
+    {
+      "id": "ent-x-bind-storm",
+      "name": "LDAP / Active Directory: bind storm",
+      "notes": "A fleet of applications reconnects after a restart. Ramps binds to ten times normal over 2 minutes. Reference request: anonymous bind.",
+      "safety": "read",
+      "job": {
+        "name": "LDAP / Active Directory: bind storm",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "bodyHex": "300c020101600702010304008000",
+            "expectHex": "300c02010161070a010004000400"
+          }
+        },
+        "method": "GET",
+        "concurrency": 200,
+        "rps": 1000,
+        "duration": 300000000000,
+        "timeout": 15000000000,
+        "queueSize": 5000,
+        "onQueueFull": "reject",
+        "maxWorkers": 400,
+        "blockPrivate": false,
+        "ramp": 120000000000
+      }
+    }
+  ]
+}

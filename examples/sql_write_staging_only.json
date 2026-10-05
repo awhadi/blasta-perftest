@@ -1,0 +1,19 @@
+{
+  "name": "postgres write test - STAGING ONLY",
+  "description": "Inserts rows to measure write throughput. NEVER point this at production: it will create and delete rows.",
+  "executor": "sql",
+  "target": {
+    "url": "",
+    "meta": { "query": "INSERT INTO wp_loadtest (created_at) VALUES (NOW())" }
+  },
+  "db": { "driver": "postgres", "dsnEnv": "PG_DSN", "maxOpen": 8, "allowWrite": true },
+  "concurrency": 4,
+  "rps": 20,
+  "burst": 20,
+  "duration": 10000000000,
+  "queueSize": 200,
+  "onQueueFull": "reject",
+  "timeout": 10000000000,
+  "maxWorkers": 20,
+  "blockPrivate": true
+}

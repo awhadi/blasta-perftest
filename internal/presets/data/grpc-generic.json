@@ -1,0 +1,401 @@
+{
+  "id": "grpc-generic",
+  "title": "gRPC unary",
+  "category": "gRPC",
+  "summary": "Unary calls against a reflection-enabled server. Includes an enterprise test plan (jobs starting ent-).",
+  "stack": "gRPC",
+  "variables": [
+    {
+      "name": "target",
+      "default": "127.0.0.1:50051",
+      "description": "Host:port of the gRPC server",
+      "guide": "host:port of the service, for example staging.example.com:50051. BLASTA runs in a container, so for a service on your own machine use host.docker.internal instead of localhost."
+    },
+    {
+      "name": "method",
+      "default": "/helloworld.Greeter/SayHello",
+      "description": "Full method path",
+      "guide": "The full gRPC method, for example /helloworld.Greeter/SayHello. `grpcurl -plaintext host:port list` lists services if reflection is enabled."
+    }
+  ],
+  "jobs": [
+    {
+      "id": "unary",
+      "name": "gRPC unary call",
+      "notes": "Edit the payload for your message type. The payload is raw protobuf bytes as text, so simple messages are easiest.",
+      "safety": "read",
+      "job": {
+        "name": "gRPC unary call",
+        "executor": "grpc",
+        "target": {
+          "url": "grpc://{{target}}",
+          "meta": {
+            "method": "{{method}}",
+            "target": "{{target}}"
+          }
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 50,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false
+      }
+    },
+    {
+      "id": "small",
+      "name": "gRPC small payload",
+      "notes": "Lower rate to isolate connection overhead from per-call cost.",
+      "safety": "read",
+      "job": {
+        "name": "gRPC small payload",
+        "executor": "grpc",
+        "target": {
+          "url": "grpc://{{target}}",
+          "meta": {
+            "method": "{{method}}",
+            "target": "{{target}}"
+          }
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 100,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false
+      }
+    },
+    {
+      "id": "ent-01-smoke",
+      "name": "gRPC unary: 01 smoke",
+      "notes": "Enterprise plan, step 1 of 10. One request a second for 30 seconds. Run this first, every time: it proves the address, credentials and headers are right and that the environment is up before any real load is applied. Gate: zero errors. Reference request: gRPC unary call.",
+      "safety": "read",
+      "job": {
+        "name": "gRPC unary: 01 smoke",
+        "executor": "grpc",
+        "target": {
+          "url": "grpc://{{target}}",
+          "meta": {
+            "method": "{{method}}",
+            "target": "{{target}}"
+          }
+        },
+        "method": "GET",
+        "concurrency": 1,
+        "rps": 1,
+        "duration": 30000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "slo": {
+          "maxErrorRate": 0
+        }
+      }
+    },
+    {
+      "id": "ent-02-baseline",
+      "name": "gRPC unary: 02 baseline (20% load)",
+      "notes": "Step 2 of 10. About a fifth of normal traffic for 5 minutes: the uncontended latency of this request. Every later result is judged against it, so record p50 and p95. Gate: at most 0.5% errors and the default latency targets. Reference request: gRPC unary call.",
+      "safety": "read",
+      "job": {
+        "name": "gRPC unary: 02 baseline (20% load)",
+        "executor": "grpc",
+        "target": {
+          "url": "grpc://{{target}}",
+          "meta": {
+            "method": "{{method}}",
+            "target": "{{target}}"
+          }
+        },
+        "method": "GET",
+        "concurrency": 2,
+        "rps": 10,
+        "duration": 300000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "slo": {
+          "maxErrorRate": 0.5,
+          "maxP95": 300000000,
+          "maxP99": 1000000000
+        }
+      }
+    },
+    {
+      "id": "ent-03-average-load",
+      "name": "gRPC unary: 03 average load (SLO check)",
+      "notes": "Step 3 of 10. Normal busy-hour traffic for 10 minutes. The rate is the reference job's rate: raise it to your measured production peak-hour rate. This is the run that proves (or breaks) your SLO. Gate: at most 1% errors, p95 and p99 inside the targets. Reference request: gRPC unary call.",
+      "safety": "read",
+      "job": {
+        "name": "gRPC unary: 03 average load (SLO check)",
+        "executor": "grpc",
+        "target": {
+          "url": "grpc://{{target}}",
+          "meta": {
+            "method": "{{method}}",
+            "target": "{{target}}"
+          }
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 50,
+        "duration": 600000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 300000000,
+          "maxP99": 1000000000
+        }
+      }
+    },
+    {
+      "id": "ent-04-peak-load",
+      "name": "gRPC unary: 04 peak load (2x average)",
+      "notes": "Step 4 of 10. Twice the average for 10 minutes: the busiest hour of the year plus headroom. Latency may rise, but must stay in SLO; if it does not, you have no headroom. Gate: at most 2% errors, latency targets doubled. Reference request: gRPC unary call.",
+      "safety": "read",
+      "job": {
+        "name": "gRPC unary: 04 peak load (2x average)",
+        "executor": "grpc",
+        "target": {
+          "url": "grpc://{{target}}",
+          "meta": {
+            "method": "{{method}}",
+            "target": "{{target}}"
+          }
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 100,
+        "duration": 600000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "slo": {
+          "maxErrorRate": 2,
+          "maxP95": 600000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-05-stress",
+      "name": "gRPC unary: 05 stress (ramp to 4x)",
+      "notes": "Step 5 of 10. Ramps to four times average over 10 minutes, then holds for 2. Finds where it degrades and HOW: gracefully (latency rises, errors stay low) or badly (errors, timeouts, crashes, restarts). Observation only, no gate. Reference request: gRPC unary call.",
+      "safety": "read",
+      "job": {
+        "name": "gRPC unary: 05 stress (ramp to 4x)",
+        "executor": "grpc",
+        "target": {
+          "url": "grpc://{{target}}",
+          "meta": {
+            "method": "{{method}}",
+            "target": "{{target}}"
+          }
+        },
+        "method": "GET",
+        "concurrency": 40,
+        "rps": 200,
+        "duration": 720000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "ramp": 600000000000
+      }
+    },
+    {
+      "id": "ent-06-spike",
+      "name": "gRPC unary: 06 spike (10x in 10 s)",
+      "notes": "Step 6 of 10. Reaches ten times average within 10 seconds and holds for 2 minutes: a campaign email, a news link, a failover. Checks autoscaling, queue limits and load shedding. Gate: at most 5% errors, because shedding load is acceptable and crashing is not. Reference request: gRPC unary call.",
+      "safety": "read",
+      "job": {
+        "name": "gRPC unary: 06 spike (10x in 10 s)",
+        "executor": "grpc",
+        "target": {
+          "url": "grpc://{{target}}",
+          "meta": {
+            "method": "{{method}}",
+            "target": "{{target}}"
+          }
+        },
+        "method": "GET",
+        "concurrency": 100,
+        "rps": 500,
+        "duration": 130000000000,
+        "timeout": 15000000000,
+        "queueSize": 2500,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "ramp": 10000000000,
+        "slo": {
+          "maxErrorRate": 5
+        }
+      }
+    },
+    {
+      "id": "ent-07-recovery",
+      "name": "gRPC unary: 07 recovery after the spike",
+      "notes": "Step 7 of 10. Run IMMEDIATELY after the spike, at average load for 5 minutes. Latency and errors must return to the baseline from step 2. If they do not, something is stuck: queues, connection pools, GC, an autoscaler cool-down. Gate: same as average load. Reference request: gRPC unary call.",
+      "safety": "read",
+      "job": {
+        "name": "gRPC unary: 07 recovery after the spike",
+        "executor": "grpc",
+        "target": {
+          "url": "grpc://{{target}}",
+          "meta": {
+            "method": "{{method}}",
+            "target": "{{target}}"
+          }
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 50,
+        "duration": 300000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 300000000,
+          "maxP99": 1000000000
+        }
+      }
+    },
+    {
+      "id": "ent-08-soak",
+      "name": "gRPC unary: 08 soak (1 hour at 60%)",
+      "notes": "Step 8 of 10. One hour of steady load. Finds leaks and slow decay in memory, connections, file descriptors, disk, log volume and cache churn. Watch the resource graphs: any line that climbs and never flattens is a finding. Gate: at most 0.5% errors. Reference request: gRPC unary call.",
+      "safety": "read",
+      "job": {
+        "name": "gRPC unary: 08 soak (1 hour at 60%)",
+        "executor": "grpc",
+        "target": {
+          "url": "grpc://{{target}}",
+          "meta": {
+            "method": "{{method}}",
+            "target": "{{target}}"
+          }
+        },
+        "method": "GET",
+        "concurrency": 6,
+        "rps": 30,
+        "duration": 3600000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "slo": {
+          "maxErrorRate": 0.5,
+          "maxP95": 300000000,
+          "maxP99": 1000000000
+        }
+      }
+    },
+    {
+      "id": "ent-09-breakpoint",
+      "name": "gRPC unary: 09 breakpoint (find the ceiling)",
+      "notes": "Step 9 of 10. Ramps to twenty times average over 20 minutes. Stop it when errors pass about 5%: the rate at that moment is your ceiling, and ceiling divided by peak is your capacity margin. Use a production-like environment, never production. Reference request: gRPC unary call.",
+      "safety": "read",
+      "job": {
+        "name": "gRPC unary: 09 breakpoint (find the ceiling)",
+        "executor": "grpc",
+        "target": {
+          "url": "grpc://{{target}}",
+          "meta": {
+            "method": "{{method}}",
+            "target": "{{target}}"
+          }
+        },
+        "method": "GET",
+        "concurrency": 200,
+        "rps": 1000,
+        "duration": 1380000000000,
+        "timeout": 15000000000,
+        "queueSize": 5000,
+        "onQueueFull": "reject",
+        "maxWorkers": 400,
+        "blockPrivate": false,
+        "ramp": 1200000000000
+      }
+    },
+    {
+      "id": "ent-10-failover-window",
+      "name": "gRPC unary: 10 resilience window (failover / deploy)",
+      "notes": "Step 10 of 10. Average load for 15 minutes. About 5 minutes in, cause the event you are testing: kill a pod or node, fail over the database, roll out a new version, drain a zone. Errors in the window are your real availability loss. Gate: at most 1% errors overall; read the time series for how long the dip lasted. Reference request: gRPC unary call.",
+      "safety": "read",
+      "job": {
+        "name": "gRPC unary: 10 resilience window (failover / deploy)",
+        "executor": "grpc",
+        "target": {
+          "url": "grpc://{{target}}",
+          "meta": {
+            "method": "{{method}}",
+            "target": "{{target}}"
+          }
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 50,
+        "duration": 900000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 300000000,
+          "maxP99": 1000000000
+        }
+      }
+    },
+    {
+      "id": "ent-x-connection-storm",
+      "name": "gRPC unary: connection storm (ramp to 10x)",
+      "notes": "Ramps new connections per second to ten times normal: a fleet reconnecting after an outage, a deploy that restarts every pod, a network blip. Shows accept-queue, file descriptor and handshake limits. Reference request: gRPC unary call.",
+      "safety": "read",
+      "job": {
+        "name": "gRPC unary: connection storm (ramp to 10x)",
+        "executor": "grpc",
+        "target": {
+          "url": "grpc://{{target}}",
+          "meta": {
+            "method": "{{method}}",
+            "target": "{{target}}"
+          }
+        },
+        "method": "GET",
+        "concurrency": 100,
+        "rps": 500,
+        "duration": 420000000000,
+        "timeout": 15000000000,
+        "queueSize": 2500,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "ramp": 120000000000
+      }
+    }
+  ]
+}

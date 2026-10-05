@@ -1,0 +1,20 @@
+{
+  "name": "wordpress authenticated post listing",
+  "description": "Cookie auth for a logged-in reader. Provide the cookie via an env var, never inline.",
+  "executor": "http",
+  "target": { "url": "https://staging.example.com/wp-admin/edit.php" },
+  "method": "GET",
+  "headers": {
+    "Cookie": "${WP_COOKIE}",
+    "User-Agent": "blasta-loadtest/1.0"
+  },
+  "concurrency": 5,
+  "rps": 10,
+  "burst": 10,
+  "duration": 30000000000,
+  "queueSize": 500,
+  "onQueueFull": "reject",
+  "timeout": 15000000000,
+  "maxWorkers": 20,
+  "blockPrivate": true
+}

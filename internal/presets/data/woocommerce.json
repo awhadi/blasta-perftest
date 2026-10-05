@@ -1,0 +1,740 @@
+{
+  "id": "woocommerce",
+  "title": "WooCommerce",
+  "category": "E-commerce",
+  "summary": "Shop, product, Store API, cart fragments and checkout on WordPress. Includes an enterprise test plan (jobs starting ent-).",
+  "stack": "WordPress + WooCommerce + MySQL",
+  "variables": [
+    {
+      "name": "url",
+      "default": "https://example.com",
+      "description": "Site base URL, no trailing slash",
+      "placeholder": true,
+      "guide": "The address of the system to test, starting with https:// (or http://) and with no trailing slash, for example https://staging.example.com. Use a system you own, ideally a staging copy. BLASTA runs in a container, so for a service on your own machine use host.docker.internal instead of localhost."
+    },
+    {
+      "name": "product",
+      "default": "sample-product",
+      "description": "Slug of an existing product",
+      "placeholder": true,
+      "guide": "The slug of an existing product. Open a product on the shop; the slug is the last part of its address."
+    }
+  ],
+  "jobs": [
+    {
+      "id": "shop",
+      "name": "woocommerce shop page",
+      "notes": "Product archive: a heavy query with taxonomy and meta joins.",
+      "safety": "read",
+      "job": {
+        "name": "woocommerce shop page",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/shop/"
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 15,
+        "duration": 60000000000,
+        "timeout": 30000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "headers": {
+          "Accept": "text/html"
+        }
+      }
+    },
+    {
+      "id": "product",
+      "name": "woocommerce product page",
+      "notes": "Single product with price, stock and related products. Uncached to show the real cost.",
+      "safety": "read",
+      "job": {
+        "name": "woocommerce product page",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/product/{{product}}/"
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 25,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "headers": {
+          "Accept": "text/html",
+          "Cache-Control": "no-cache",
+          "Pragma": "no-cache"
+        }
+      }
+    },
+    {
+      "id": "store-api",
+      "name": "Store API products",
+      "notes": "The block-based storefront reads this. Heavier than the classic pages because it serialises price and stock objects.",
+      "safety": "read",
+      "job": {
+        "name": "Store API products",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/wp-json/wc/store/v1/products?per_page=12"
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 15,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Accept": "application/json"
+        }
+      }
+    },
+    {
+      "id": "cart-fragments",
+      "name": "cart fragments (wc-ajax)",
+      "notes": "The classic bottleneck: it runs on every page view for visitors with a cart and bypasses page caching. Often the first thing to fall over on a busy shop.",
+      "safety": "read",
+      "job": {
+        "name": "cart fragments (wc-ajax)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/?wc-ajax=get_refreshed_fragments"
+        },
+        "method": "POST",
+        "concurrency": 20,
+        "rps": 30,
+        "duration": 60000000000,
+        "timeout": 30000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "headers": {
+          "Accept": "application/json"
+        }
+      }
+    },
+    {
+      "id": "cart",
+      "name": "cart page",
+      "notes": "Anonymous cart. A fresh session is created per request because BLASTA sends no cookies.",
+      "safety": "read",
+      "job": {
+        "name": "cart page",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/cart/"
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 15,
+        "duration": 60000000000,
+        "timeout": 30000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "headers": {
+          "Accept": "text/html"
+        }
+      }
+    },
+    {
+      "id": "checkout",
+      "name": "checkout page",
+      "notes": "Loads payment gateways and shipping calculation. Do not submit orders here; this only renders the form.",
+      "safety": "read",
+      "job": {
+        "name": "checkout page",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/checkout/"
+        },
+        "method": "GET",
+        "concurrency": 5,
+        "rps": 5,
+        "duration": 60000000000,
+        "timeout": 30000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "headers": {
+          "Accept": "text/html"
+        }
+      }
+    },
+    {
+      "id": "my-account",
+      "name": "my account login form",
+      "notes": "Login form render, the entry point for credential-stuffing traffic.",
+      "safety": "read",
+      "job": {
+        "name": "my account login form",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/my-account/"
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 15,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "headers": {
+          "Accept": "text/html"
+        }
+      }
+    },
+    {
+      "id": "ent-01-smoke",
+      "name": "WooCommerce: 01 smoke",
+      "notes": "Enterprise plan, step 1 of 10. One request a second for 30 seconds. Run this first, every time: it proves the address, credentials and headers are right and that the environment is up before any real load is applied. Gate: zero errors. Reference request: woocommerce product page.",
+      "safety": "read",
+      "job": {
+        "name": "WooCommerce: 01 smoke",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/product/{{product}}/"
+        },
+        "method": "GET",
+        "concurrency": 1,
+        "rps": 1,
+        "duration": 30000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "headers": {
+          "Accept": "text/html",
+          "Cache-Control": "no-cache",
+          "Pragma": "no-cache"
+        },
+        "slo": {
+          "maxErrorRate": 0
+        }
+      }
+    },
+    {
+      "id": "ent-02-baseline",
+      "name": "WooCommerce: 02 baseline (20% load)",
+      "notes": "Step 2 of 10. About a fifth of normal traffic for 5 minutes: the uncontended latency of this request. Every later result is judged against it, so record p50 and p95. Gate: at most 0.5% errors and the default latency targets. Reference request: woocommerce product page.",
+      "safety": "read",
+      "job": {
+        "name": "WooCommerce: 02 baseline (20% load)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/product/{{product}}/"
+        },
+        "method": "GET",
+        "concurrency": 4,
+        "rps": 5,
+        "duration": 300000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "headers": {
+          "Accept": "text/html",
+          "Cache-Control": "no-cache",
+          "Pragma": "no-cache"
+        },
+        "slo": {
+          "maxErrorRate": 0.5,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-03-average-load",
+      "name": "WooCommerce: 03 average load (SLO check)",
+      "notes": "Step 3 of 10. Normal busy-hour traffic for 10 minutes. The rate is the reference job's rate: raise it to your measured production peak-hour rate. This is the run that proves (or breaks) your SLO. Gate: at most 1% errors, p95 and p99 inside the targets. Reference request: woocommerce product page.",
+      "safety": "read",
+      "job": {
+        "name": "WooCommerce: 03 average load (SLO check)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/product/{{product}}/"
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 25,
+        "duration": 600000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "headers": {
+          "Accept": "text/html",
+          "Cache-Control": "no-cache",
+          "Pragma": "no-cache"
+        },
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-04-peak-load",
+      "name": "WooCommerce: 04 peak load (2x average)",
+      "notes": "Step 4 of 10. Twice the average for 10 minutes: the busiest hour of the year plus headroom. Latency may rise, but must stay in SLO; if it does not, you have no headroom. Gate: at most 2% errors, latency targets doubled. Reference request: woocommerce product page.",
+      "safety": "read",
+      "job": {
+        "name": "WooCommerce: 04 peak load (2x average)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/product/{{product}}/"
+        },
+        "method": "GET",
+        "concurrency": 40,
+        "rps": 50,
+        "duration": 600000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "headers": {
+          "Accept": "text/html",
+          "Cache-Control": "no-cache",
+          "Pragma": "no-cache"
+        },
+        "slo": {
+          "maxErrorRate": 2,
+          "maxP95": 2000000000,
+          "maxP99": 4000000000
+        }
+      }
+    },
+    {
+      "id": "ent-05-stress",
+      "name": "WooCommerce: 05 stress (ramp to 4x)",
+      "notes": "Step 5 of 10. Ramps to four times average over 10 minutes, then holds for 2. Finds where it degrades and HOW: gracefully (latency rises, errors stay low) or badly (errors, timeouts, crashes, restarts). Observation only, no gate. Reference request: woocommerce product page.",
+      "safety": "read",
+      "job": {
+        "name": "WooCommerce: 05 stress (ramp to 4x)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/product/{{product}}/"
+        },
+        "method": "GET",
+        "concurrency": 80,
+        "rps": 100,
+        "duration": 720000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "headers": {
+          "Accept": "text/html",
+          "Cache-Control": "no-cache",
+          "Pragma": "no-cache"
+        },
+        "ramp": 600000000000
+      }
+    },
+    {
+      "id": "ent-06-spike",
+      "name": "WooCommerce: 06 spike (10x in 10 s)",
+      "notes": "Step 6 of 10. Reaches ten times average within 10 seconds and holds for 2 minutes: a campaign email, a news link, a failover. Checks autoscaling, queue limits and load shedding. Gate: at most 5% errors, because shedding load is acceptable and crashing is not. Reference request: woocommerce product page.",
+      "safety": "read",
+      "job": {
+        "name": "WooCommerce: 06 spike (10x in 10 s)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/product/{{product}}/"
+        },
+        "method": "GET",
+        "concurrency": 200,
+        "rps": 250,
+        "duration": 130000000000,
+        "timeout": 15000000000,
+        "queueSize": 1250,
+        "onQueueFull": "reject",
+        "maxWorkers": 400,
+        "blockPrivate": false,
+        "headers": {
+          "Accept": "text/html",
+          "Cache-Control": "no-cache",
+          "Pragma": "no-cache"
+        },
+        "ramp": 10000000000,
+        "slo": {
+          "maxErrorRate": 5
+        }
+      }
+    },
+    {
+      "id": "ent-07-recovery",
+      "name": "WooCommerce: 07 recovery after the spike",
+      "notes": "Step 7 of 10. Run IMMEDIATELY after the spike, at average load for 5 minutes. Latency and errors must return to the baseline from step 2. If they do not, something is stuck: queues, connection pools, GC, an autoscaler cool-down. Gate: same as average load. Reference request: woocommerce product page.",
+      "safety": "read",
+      "job": {
+        "name": "WooCommerce: 07 recovery after the spike",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/product/{{product}}/"
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 25,
+        "duration": 300000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "headers": {
+          "Accept": "text/html",
+          "Cache-Control": "no-cache",
+          "Pragma": "no-cache"
+        },
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-08-soak",
+      "name": "WooCommerce: 08 soak (1 hour at 60%)",
+      "notes": "Step 8 of 10. One hour of steady load. Finds leaks and slow decay in memory, connections, file descriptors, disk, log volume and cache churn. Watch the resource graphs: any line that climbs and never flattens is a finding. Gate: at most 0.5% errors. Reference request: woocommerce product page.",
+      "safety": "read",
+      "job": {
+        "name": "WooCommerce: 08 soak (1 hour at 60%)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/product/{{product}}/"
+        },
+        "method": "GET",
+        "concurrency": 12,
+        "rps": 15,
+        "duration": 3600000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "headers": {
+          "Accept": "text/html",
+          "Cache-Control": "no-cache",
+          "Pragma": "no-cache"
+        },
+        "slo": {
+          "maxErrorRate": 0.5,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-09-breakpoint",
+      "name": "WooCommerce: 09 breakpoint (find the ceiling)",
+      "notes": "Step 9 of 10. Ramps to twenty times average over 20 minutes. Stop it when errors pass about 5%: the rate at that moment is your ceiling, and ceiling divided by peak is your capacity margin. Use a production-like environment, never production. Reference request: woocommerce product page.",
+      "safety": "read",
+      "job": {
+        "name": "WooCommerce: 09 breakpoint (find the ceiling)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/product/{{product}}/"
+        },
+        "method": "GET",
+        "concurrency": 400,
+        "rps": 500,
+        "duration": 1380000000000,
+        "timeout": 15000000000,
+        "queueSize": 2500,
+        "onQueueFull": "reject",
+        "maxWorkers": 800,
+        "blockPrivate": false,
+        "headers": {
+          "Accept": "text/html",
+          "Cache-Control": "no-cache",
+          "Pragma": "no-cache"
+        },
+        "ramp": 1200000000000
+      }
+    },
+    {
+      "id": "ent-10-failover-window",
+      "name": "WooCommerce: 10 resilience window (failover / deploy)",
+      "notes": "Step 10 of 10. Average load for 15 minutes. About 5 minutes in, cause the event you are testing: kill a pod or node, fail over the database, roll out a new version, drain a zone. Errors in the window are your real availability loss. Gate: at most 1% errors overall; read the time series for how long the dip lasted. Reference request: woocommerce product page.",
+      "safety": "read",
+      "job": {
+        "name": "WooCommerce: 10 resilience window (failover / deploy)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/product/{{product}}/"
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 25,
+        "duration": 900000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "headers": {
+          "Accept": "text/html",
+          "Cache-Control": "no-cache",
+          "Pragma": "no-cache"
+        },
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-x-connection-close",
+      "name": "WooCommerce: no keep-alive (new connection per request)",
+      "notes": "Sends Connection: close, so every request pays for a new TCP and TLS handshake: the cost for clients that do not reuse connections (scripts, some mobile SDKs, health checkers). Shows load balancer and TLS termination limits. Reference request: woocommerce product page.",
+      "safety": "read",
+      "job": {
+        "name": "WooCommerce: no keep-alive (new connection per request)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/product/{{product}}/"
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 25,
+        "duration": 300000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "headers": {
+          "Accept": "text/html",
+          "Cache-Control": "no-cache",
+          "Pragma": "no-cache",
+          "Connection": "close"
+        },
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 1500000000,
+          "maxP99": 3000000000
+        }
+      }
+    },
+    {
+      "id": "ent-x-bot-traffic",
+      "name": "WooCommerce: crawler traffic (Googlebot user agent)",
+      "notes": "Same request identified as a search crawler. Tests WAF and bot-management rules and whether crawlers get cached or origin responses. Crawlers can easily be a third of all traffic. Reference request: woocommerce product page.",
+      "safety": "read",
+      "job": {
+        "name": "WooCommerce: crawler traffic (Googlebot user agent)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/product/{{product}}/"
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 25,
+        "duration": 300000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "headers": {
+          "Accept": "text/html",
+          "Cache-Control": "no-cache",
+          "Pragma": "no-cache",
+          "User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)"
+        },
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-x-large-headers",
+      "name": "WooCommerce: large cookies (~4 KB header)",
+      "notes": "Adds a 4 KB Cookie header, like a logged-in user with many tracking cookies. Proxies and servers reject headers around 8 KB, so this shows how close you are to that limit. Reference request: woocommerce product page.",
+      "safety": "read",
+      "job": {
+        "name": "WooCommerce: large cookies (~4 KB header)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/product/{{product}}/"
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 12,
+        "duration": 300000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "headers": {
+          "Accept": "text/html",
+          "Cache-Control": "no-cache",
+          "Pragma": "no-cache",
+          "Cookie": "blasta=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+        },
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-x-monitor-storm",
+      "name": "WooCommerce: uptime monitors (HEAD from many locations)",
+      "notes": "A fleet of synthetic monitors checking the URL with HEAD requests every 30 seconds from 20 locations, plus load balancer probes. Cheap each, constant in total. Reference request: woocommerce product page.",
+      "safety": "read",
+      "job": {
+        "name": "WooCommerce: uptime monitors (HEAD from many locations)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/product/{{product}}/"
+        },
+        "method": "HEAD",
+        "concurrency": 20,
+        "rps": 25,
+        "duration": 600000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "headers": {
+          "Accept": "text/html",
+          "Cache-Control": "no-cache",
+          "Pragma": "no-cache"
+        },
+        "expectStatus": [
+          200,
+          204,
+          301,
+          302,
+          304,
+          405
+        ],
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-x-flash-sale",
+      "name": "WooCommerce: flash sale (10x in 10 s)",
+      "notes": "A sale starts at a published time and everyone opens the same product page. Ramps to ten times normal in 10 seconds and holds for 3 minutes. Watch for the page cache being bypassed by cookies or query strings. Reference request: woocommerce product page.",
+      "safety": "read",
+      "job": {
+        "name": "WooCommerce: flash sale (10x in 10 s)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/product/{{product}}/"
+        },
+        "method": "GET",
+        "concurrency": 200,
+        "rps": 250,
+        "duration": 190000000000,
+        "timeout": 15000000000,
+        "queueSize": 1250,
+        "onQueueFull": "reject",
+        "maxWorkers": 400,
+        "blockPrivate": false,
+        "headers": {
+          "Accept": "text/html",
+          "Cache-Control": "no-cache",
+          "Pragma": "no-cache"
+        },
+        "ramp": 10000000000,
+        "slo": {
+          "maxErrorRate": 5
+        }
+      }
+    },
+    {
+      "id": "ent-x-cart-peak",
+      "name": "WooCommerce: cart fragments peak",
+      "notes": "The cart fragments AJAX call runs on every page for visitors with a cart and bypasses page caching. Three times normal for 10 minutes. Reference request: cart fragments (wc-ajax).",
+      "safety": "read",
+      "job": {
+        "name": "WooCommerce: cart fragments peak",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/?wc-ajax=get_refreshed_fragments"
+        },
+        "method": "POST",
+        "concurrency": 60,
+        "rps": 90,
+        "duration": 600000000000,
+        "timeout": 30000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "headers": {
+          "Accept": "application/json"
+        },
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 2000000000,
+          "maxP99": 4000000000
+        }
+      }
+    },
+    {
+      "id": "ent-x-checkout-stress",
+      "name": "WooCommerce: checkout page stress",
+      "notes": "Ramps the checkout page to three times normal over 5 minutes. The page loads payment gateways and shipping rates, so it is far heavier than a product page. Reference request: checkout page.",
+      "safety": "read",
+      "job": {
+        "name": "WooCommerce: checkout page stress",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/checkout/"
+        },
+        "method": "GET",
+        "concurrency": 15,
+        "rps": 30,
+        "duration": 420000000000,
+        "timeout": 30000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "headers": {
+          "Accept": "text/html"
+        },
+        "ramp": 300000000000
+      }
+    }
+  ]
+}

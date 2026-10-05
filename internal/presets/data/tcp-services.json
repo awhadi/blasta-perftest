@@ -1,0 +1,470 @@
+{
+  "id": "tcp-services",
+  "title": "Common TCP services",
+  "category": "TCP",
+  "summary": "Redis, Memcached, SMTP and SSH probes that wait for a real reply. Includes an enterprise test plan (jobs starting ent-).",
+  "stack": "Redis, Memcached, SMTP, SSH",
+  "variables": [
+    {
+      "name": "host",
+      "default": "127.0.0.1",
+      "description": "Host name or IP",
+      "placeholder": true,
+      "guide": "The host name or IP address of the server, without a port or http://, for example redis.staging.example.com. BLASTA runs in a container, so for a service on your own machine use host.docker.internal instead of localhost."
+    },
+    {
+      "name": "redisPort",
+      "default": "6379",
+      "description": "Redis port",
+      "guide": "The Redis port, normally 6379."
+    },
+    {
+      "name": "memcachedPort",
+      "default": "11211",
+      "description": "Memcached port",
+      "guide": "The Memcached port, normally 11211."
+    },
+    {
+      "name": "smtpPort",
+      "default": "25",
+      "description": "SMTP port",
+      "guide": "The SMTP port, normally 25."
+    },
+    {
+      "name": "sshPort",
+      "default": "22",
+      "description": "SSH port",
+      "guide": "The SSH port, normally 22."
+    }
+  ],
+  "jobs": [
+    {
+      "id": "redis-ping",
+      "name": "redis PING",
+      "notes": "Sends an inline PING and waits for +PONG (7 bytes). Needs no password only if Redis has none; an auth error still proves the round trip.",
+      "safety": "read",
+      "job": {
+        "name": "redis PING",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{redisPort}}",
+          "meta": {
+            "expectPrefix": "+PONG"
+          }
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 200,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "body": "PING\r\n"
+      }
+    },
+    {
+      "id": "memcached-version",
+      "name": "memcached version",
+      "notes": "Waits for the VERSION reply. A pure network and event-loop test with no storage involved.",
+      "safety": "read",
+      "job": {
+        "name": "memcached version",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{memcachedPort}}",
+          "meta": {
+            "expectPrefix": "VERSION"
+          }
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 200,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "body": "version\r\n"
+      }
+    },
+    {
+      "id": "smtp-banner",
+      "name": "SMTP banner",
+      "notes": "Reads the 220 greeting. Measures how fast the mail server accepts connections, without sending any mail. Some servers delay the banner on purpose (greet pause).",
+      "safety": "read",
+      "job": {
+        "name": "SMTP banner",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{smtpPort}}",
+          "meta": {
+            "expectPrefix": "220"
+          }
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 20,
+        "duration": 60000000000,
+        "timeout": 30000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false
+      }
+    },
+    {
+      "id": "ssh-banner",
+      "name": "SSH banner",
+      "notes": "Reads the version line. Tests connection limits (MaxStartups) without authenticating. Will trigger fail2ban if it sees many rapid connections, so run it from a whitelisted host.",
+      "safety": "read",
+      "job": {
+        "name": "SSH banner",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{sshPort}}",
+          "meta": {
+            "expectPrefix": "SSH-"
+          }
+        },
+        "method": "GET",
+        "concurrency": 5,
+        "rps": 10,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false
+      }
+    },
+    {
+      "id": "ent-01-smoke",
+      "name": "Common TCP services: 01 smoke",
+      "notes": "Enterprise plan, step 1 of 10. One request a second for 30 seconds. Run this first, every time: it proves the address, credentials and headers are right and that the environment is up before any real load is applied. Gate: zero errors. Reference request: redis PING.",
+      "safety": "read",
+      "job": {
+        "name": "Common TCP services: 01 smoke",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{redisPort}}",
+          "meta": {
+            "expectPrefix": "+PONG"
+          }
+        },
+        "method": "GET",
+        "concurrency": 1,
+        "rps": 1,
+        "duration": 30000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "body": "PING\r\n",
+        "slo": {
+          "maxErrorRate": 0
+        }
+      }
+    },
+    {
+      "id": "ent-02-baseline",
+      "name": "Common TCP services: 02 baseline (20% load)",
+      "notes": "Step 2 of 10. About a fifth of normal traffic for 5 minutes: the uncontended latency of this request. Every later result is judged against it, so record p50 and p95. Gate: at most 0.5% errors and the default latency targets. Reference request: redis PING.",
+      "safety": "read",
+      "job": {
+        "name": "Common TCP services: 02 baseline (20% load)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{redisPort}}",
+          "meta": {
+            "expectPrefix": "+PONG"
+          }
+        },
+        "method": "GET",
+        "concurrency": 4,
+        "rps": 40,
+        "duration": 300000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "body": "PING\r\n",
+        "slo": {
+          "maxErrorRate": 0.5,
+          "maxP95": 50000000,
+          "maxP99": 200000000
+        }
+      }
+    },
+    {
+      "id": "ent-03-average-load",
+      "name": "Common TCP services: 03 average load (SLO check)",
+      "notes": "Step 3 of 10. Normal busy-hour traffic for 10 minutes. The rate is the reference job's rate: raise it to your measured production peak-hour rate. This is the run that proves (or breaks) your SLO. Gate: at most 1% errors, p95 and p99 inside the targets. Reference request: redis PING.",
+      "safety": "read",
+      "job": {
+        "name": "Common TCP services: 03 average load (SLO check)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{redisPort}}",
+          "meta": {
+            "expectPrefix": "+PONG"
+          }
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 200,
+        "duration": 600000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "body": "PING\r\n",
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 50000000,
+          "maxP99": 200000000
+        }
+      }
+    },
+    {
+      "id": "ent-04-peak-load",
+      "name": "Common TCP services: 04 peak load (2x average)",
+      "notes": "Step 4 of 10. Twice the average for 10 minutes: the busiest hour of the year plus headroom. Latency may rise, but must stay in SLO; if it does not, you have no headroom. Gate: at most 2% errors, latency targets doubled. Reference request: redis PING.",
+      "safety": "read",
+      "job": {
+        "name": "Common TCP services: 04 peak load (2x average)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{redisPort}}",
+          "meta": {
+            "expectPrefix": "+PONG"
+          }
+        },
+        "method": "GET",
+        "concurrency": 40,
+        "rps": 400,
+        "duration": 600000000000,
+        "timeout": 15000000000,
+        "queueSize": 2000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "body": "PING\r\n",
+        "slo": {
+          "maxErrorRate": 2,
+          "maxP95": 100000000,
+          "maxP99": 400000000
+        }
+      }
+    },
+    {
+      "id": "ent-05-stress",
+      "name": "Common TCP services: 05 stress (ramp to 4x)",
+      "notes": "Step 5 of 10. Ramps to four times average over 10 minutes, then holds for 2. Finds where it degrades and HOW: gracefully (latency rises, errors stay low) or badly (errors, timeouts, crashes, restarts). Observation only, no gate. Reference request: redis PING.",
+      "safety": "read",
+      "job": {
+        "name": "Common TCP services: 05 stress (ramp to 4x)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{redisPort}}",
+          "meta": {
+            "expectPrefix": "+PONG"
+          }
+        },
+        "method": "GET",
+        "concurrency": 80,
+        "rps": 800,
+        "duration": 720000000000,
+        "timeout": 15000000000,
+        "queueSize": 4000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "body": "PING\r\n",
+        "ramp": 600000000000
+      }
+    },
+    {
+      "id": "ent-06-spike",
+      "name": "Common TCP services: 06 spike (10x in 10 s)",
+      "notes": "Step 6 of 10. Reaches ten times average within 10 seconds and holds for 2 minutes: a campaign email, a news link, a failover. Checks autoscaling, queue limits and load shedding. Gate: at most 5% errors, because shedding load is acceptable and crashing is not. Reference request: redis PING.",
+      "safety": "read",
+      "job": {
+        "name": "Common TCP services: 06 spike (10x in 10 s)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{redisPort}}",
+          "meta": {
+            "expectPrefix": "+PONG"
+          }
+        },
+        "method": "GET",
+        "concurrency": 200,
+        "rps": 2000,
+        "duration": 130000000000,
+        "timeout": 15000000000,
+        "queueSize": 10000,
+        "onQueueFull": "reject",
+        "maxWorkers": 400,
+        "blockPrivate": false,
+        "body": "PING\r\n",
+        "ramp": 10000000000,
+        "slo": {
+          "maxErrorRate": 5
+        }
+      }
+    },
+    {
+      "id": "ent-07-recovery",
+      "name": "Common TCP services: 07 recovery after the spike",
+      "notes": "Step 7 of 10. Run IMMEDIATELY after the spike, at average load for 5 minutes. Latency and errors must return to the baseline from step 2. If they do not, something is stuck: queues, connection pools, GC, an autoscaler cool-down. Gate: same as average load. Reference request: redis PING.",
+      "safety": "read",
+      "job": {
+        "name": "Common TCP services: 07 recovery after the spike",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{redisPort}}",
+          "meta": {
+            "expectPrefix": "+PONG"
+          }
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 200,
+        "duration": 300000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "body": "PING\r\n",
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 50000000,
+          "maxP99": 200000000
+        }
+      }
+    },
+    {
+      "id": "ent-08-soak",
+      "name": "Common TCP services: 08 soak (1 hour at 60%)",
+      "notes": "Step 8 of 10. One hour of steady load. Finds leaks and slow decay in memory, connections, file descriptors, disk, log volume and cache churn. Watch the resource graphs: any line that climbs and never flattens is a finding. Gate: at most 0.5% errors. Reference request: redis PING.",
+      "safety": "read",
+      "job": {
+        "name": "Common TCP services: 08 soak (1 hour at 60%)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{redisPort}}",
+          "meta": {
+            "expectPrefix": "+PONG"
+          }
+        },
+        "method": "GET",
+        "concurrency": 12,
+        "rps": 120,
+        "duration": 3600000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "body": "PING\r\n",
+        "slo": {
+          "maxErrorRate": 0.5,
+          "maxP95": 50000000,
+          "maxP99": 200000000
+        }
+      }
+    },
+    {
+      "id": "ent-09-breakpoint",
+      "name": "Common TCP services: 09 breakpoint (find the ceiling)",
+      "notes": "Step 9 of 10. Ramps to twenty times average over 20 minutes. Stop it when errors pass about 5%: the rate at that moment is your ceiling, and ceiling divided by peak is your capacity margin. Use a production-like environment, never production. Reference request: redis PING.",
+      "safety": "read",
+      "job": {
+        "name": "Common TCP services: 09 breakpoint (find the ceiling)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{redisPort}}",
+          "meta": {
+            "expectPrefix": "+PONG"
+          }
+        },
+        "method": "GET",
+        "concurrency": 400,
+        "rps": 4000,
+        "duration": 1380000000000,
+        "timeout": 15000000000,
+        "queueSize": 20000,
+        "onQueueFull": "reject",
+        "maxWorkers": 800,
+        "blockPrivate": false,
+        "body": "PING\r\n",
+        "ramp": 1200000000000
+      }
+    },
+    {
+      "id": "ent-10-failover-window",
+      "name": "Common TCP services: 10 resilience window (failover / deploy)",
+      "notes": "Step 10 of 10. Average load for 15 minutes. About 5 minutes in, cause the event you are testing: kill a pod or node, fail over the database, roll out a new version, drain a zone. Errors in the window are your real availability loss. Gate: at most 1% errors overall; read the time series for how long the dip lasted. Reference request: redis PING.",
+      "safety": "read",
+      "job": {
+        "name": "Common TCP services: 10 resilience window (failover / deploy)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{redisPort}}",
+          "meta": {
+            "expectPrefix": "+PONG"
+          }
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 200,
+        "duration": 900000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "body": "PING\r\n",
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 50000000,
+          "maxP99": 200000000
+        }
+      }
+    },
+    {
+      "id": "ent-x-connection-storm",
+      "name": "Common TCP services: connection storm (ramp to 10x)",
+      "notes": "Ramps new connections per second to ten times normal: a fleet reconnecting after an outage, a deploy that restarts every pod, a network blip. Shows accept-queue, file descriptor and handshake limits. Reference request: redis PING.",
+      "safety": "read",
+      "job": {
+        "name": "Common TCP services: connection storm (ramp to 10x)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{redisPort}}",
+          "meta": {
+            "expectPrefix": "+PONG"
+          }
+        },
+        "method": "GET",
+        "concurrency": 200,
+        "rps": 2000,
+        "duration": 420000000000,
+        "timeout": 15000000000,
+        "queueSize": 10000,
+        "onQueueFull": "reject",
+        "maxWorkers": 400,
+        "blockPrivate": false,
+        "body": "PING\r\n",
+        "ramp": 120000000000
+      }
+    }
+  ]
+}

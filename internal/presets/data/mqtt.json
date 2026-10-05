@@ -1,0 +1,478 @@
+{
+  "id": "mqtt",
+  "title": "MQTT broker (Mosquitto / EMQX / HiveMQ / VerneMQ)",
+  "category": "Messaging",
+  "summary": "MQTT v3.1.1 and v5 connect handshakes with the CONNACK checked, plus reconnect-storm ramps. Includes an enterprise test plan (jobs starting ent-).",
+  "stack": "Any MQTT broker",
+  "variables": [
+    {
+      "name": "host",
+      "default": "mqtt.example.com",
+      "description": "Broker host name",
+      "placeholder": true,
+      "guide": "The host name or IP address of the server, without a port or http://, for example redis.staging.example.com. BLASTA runs in a container, so for a service on your own machine use host.docker.internal instead of localhost."
+    },
+    {
+      "name": "port",
+      "default": "1883",
+      "description": "MQTT port (1883; 8883 is TLS and is not supported here)",
+      "guide": "The port the service listens on. The default is filled in; check the service's configuration if you changed it."
+    }
+  ],
+  "jobs": [
+    {
+      "id": "connect-311",
+      "name": "CONNECT v3.1.1",
+      "notes": "A real MQTT CONNECT (clean session) with the 'connection accepted' CONNACK checked: the cost of every device reconnect. Every request uses the same client id, so a broker that enforces unique ids will drop the previous connection: that is the session-takeover path, and it is expected.",
+      "safety": "read",
+      "job": {
+        "name": "CONNECT v3.1.1",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "bodyHex": "101000044d5154540402003c0004626c7374",
+            "expectHex": "20020000"
+          }
+        },
+        "method": "GET",
+        "concurrency": 50,
+        "rps": 200,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false
+      }
+    },
+    {
+      "id": "connect-v5",
+      "name": "CONNECT v5",
+      "notes": "MQTT 5 CONNECT with empty properties. Only the CONNACK packet type is checked: a v5 CONNACK carries a variable-length property list, so its reason code cannot be matched byte for byte. A broker without v5 support closes the connection or answers with another packet, counted as a failure.",
+      "safety": "read",
+      "job": {
+        "name": "CONNECT v5",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "bodyHex": "101100044d5154540502003c000004626c7374",
+            "expectHex": "20"
+          }
+        },
+        "method": "GET",
+        "concurrency": 50,
+        "rps": 200,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false
+      }
+    },
+    {
+      "id": "connect-ramp",
+      "name": "reconnect storm ramp",
+      "notes": "Ramps connections per second to find the accept ceiling: the fleet-reconnect after a broker restart or network blip.",
+      "safety": "read",
+      "job": {
+        "name": "reconnect storm ramp",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "bodyHex": "101000044d5154540402003c0004626c7374",
+            "expectHex": "20020000"
+          }
+        },
+        "method": "GET",
+        "concurrency": 200,
+        "rps": 2000,
+        "duration": 420000000000,
+        "timeout": 15000000000,
+        "queueSize": 10000,
+        "onQueueFull": "reject",
+        "maxWorkers": 500,
+        "blockPrivate": false,
+        "ramp": 300000000000
+      }
+    },
+    {
+      "id": "tcp-accept",
+      "name": "TCP accept only",
+      "notes": "Connection accept with no MQTT traffic: kernel and listener backlog.",
+      "safety": "read",
+      "job": {
+        "name": "TCP accept only",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}"
+        },
+        "method": "GET",
+        "concurrency": 100,
+        "rps": 500,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false
+      }
+    },
+    {
+      "id": "ent-01-smoke",
+      "name": "MQTT broker (Mosquitto / EMQX / HiveMQ / VerneMQ): 01 smoke",
+      "notes": "Enterprise plan, step 1 of 10. One request a second for 30 seconds. Run this first, every time: it proves the address, credentials and headers are right and that the environment is up before any real load is applied. Gate: zero errors. Reference request: CONNECT v3.1.1.",
+      "safety": "read",
+      "job": {
+        "name": "MQTT broker (Mosquitto / EMQX / HiveMQ / VerneMQ): 01 smoke",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "bodyHex": "101000044d5154540402003c0004626c7374",
+            "expectHex": "20020000"
+          }
+        },
+        "method": "GET",
+        "concurrency": 1,
+        "rps": 1,
+        "duration": 30000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "slo": {
+          "maxErrorRate": 0
+        }
+      }
+    },
+    {
+      "id": "ent-02-baseline",
+      "name": "MQTT broker (Mosquitto / EMQX / HiveMQ / VerneMQ): 02 baseline (20% load)",
+      "notes": "Step 2 of 10. About a fifth of normal traffic for 5 minutes: the uncontended latency of this request. Every later result is judged against it, so record p50 and p95. Gate: at most 0.5% errors and the default latency targets. Reference request: CONNECT v3.1.1.",
+      "safety": "read",
+      "job": {
+        "name": "MQTT broker (Mosquitto / EMQX / HiveMQ / VerneMQ): 02 baseline (20% load)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "bodyHex": "101000044d5154540402003c0004626c7374",
+            "expectHex": "20020000"
+          }
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 40,
+        "duration": 300000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "slo": {
+          "maxErrorRate": 0.5,
+          "maxP95": 50000000,
+          "maxP99": 200000000
+        }
+      }
+    },
+    {
+      "id": "ent-03-average-load",
+      "name": "MQTT broker (Mosquitto / EMQX / HiveMQ / VerneMQ): 03 average load (SLO check)",
+      "notes": "Step 3 of 10. Normal busy-hour traffic for 10 minutes. The rate is the reference job's rate: raise it to your measured production peak-hour rate. This is the run that proves (or breaks) your SLO. Gate: at most 1% errors, p95 and p99 inside the targets. Reference request: CONNECT v3.1.1.",
+      "safety": "read",
+      "job": {
+        "name": "MQTT broker (Mosquitto / EMQX / HiveMQ / VerneMQ): 03 average load (SLO check)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "bodyHex": "101000044d5154540402003c0004626c7374",
+            "expectHex": "20020000"
+          }
+        },
+        "method": "GET",
+        "concurrency": 50,
+        "rps": 200,
+        "duration": 600000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 50000000,
+          "maxP99": 200000000
+        }
+      }
+    },
+    {
+      "id": "ent-04-peak-load",
+      "name": "MQTT broker (Mosquitto / EMQX / HiveMQ / VerneMQ): 04 peak load (2x average)",
+      "notes": "Step 4 of 10. Twice the average for 10 minutes: the busiest hour of the year plus headroom. Latency may rise, but must stay in SLO; if it does not, you have no headroom. Gate: at most 2% errors, latency targets doubled. Reference request: CONNECT v3.1.1.",
+      "safety": "read",
+      "job": {
+        "name": "MQTT broker (Mosquitto / EMQX / HiveMQ / VerneMQ): 04 peak load (2x average)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "bodyHex": "101000044d5154540402003c0004626c7374",
+            "expectHex": "20020000"
+          }
+        },
+        "method": "GET",
+        "concurrency": 100,
+        "rps": 400,
+        "duration": 600000000000,
+        "timeout": 15000000000,
+        "queueSize": 2000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "slo": {
+          "maxErrorRate": 2,
+          "maxP95": 100000000,
+          "maxP99": 400000000
+        }
+      }
+    },
+    {
+      "id": "ent-05-stress",
+      "name": "MQTT broker (Mosquitto / EMQX / HiveMQ / VerneMQ): 05 stress (ramp to 4x)",
+      "notes": "Step 5 of 10. Ramps to four times average over 10 minutes, then holds for 2. Finds where it degrades and HOW: gracefully (latency rises, errors stay low) or badly (errors, timeouts, crashes, restarts). Observation only, no gate. Reference request: CONNECT v3.1.1.",
+      "safety": "read",
+      "job": {
+        "name": "MQTT broker (Mosquitto / EMQX / HiveMQ / VerneMQ): 05 stress (ramp to 4x)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "bodyHex": "101000044d5154540402003c0004626c7374",
+            "expectHex": "20020000"
+          }
+        },
+        "method": "GET",
+        "concurrency": 200,
+        "rps": 800,
+        "duration": 720000000000,
+        "timeout": 15000000000,
+        "queueSize": 4000,
+        "onQueueFull": "reject",
+        "maxWorkers": 400,
+        "blockPrivate": false,
+        "ramp": 600000000000
+      }
+    },
+    {
+      "id": "ent-06-spike",
+      "name": "MQTT broker (Mosquitto / EMQX / HiveMQ / VerneMQ): 06 spike (10x in 10 s)",
+      "notes": "Step 6 of 10. Reaches ten times average within 10 seconds and holds for 2 minutes: a campaign email, a news link, a failover. Checks autoscaling, queue limits and load shedding. Gate: at most 5% errors, because shedding load is acceptable and crashing is not. Reference request: CONNECT v3.1.1.",
+      "safety": "read",
+      "job": {
+        "name": "MQTT broker (Mosquitto / EMQX / HiveMQ / VerneMQ): 06 spike (10x in 10 s)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "bodyHex": "101000044d5154540402003c0004626c7374",
+            "expectHex": "20020000"
+          }
+        },
+        "method": "GET",
+        "concurrency": 500,
+        "rps": 2000,
+        "duration": 130000000000,
+        "timeout": 15000000000,
+        "queueSize": 10000,
+        "onQueueFull": "reject",
+        "maxWorkers": 1000,
+        "blockPrivate": false,
+        "ramp": 10000000000,
+        "slo": {
+          "maxErrorRate": 5
+        }
+      }
+    },
+    {
+      "id": "ent-07-recovery",
+      "name": "MQTT broker (Mosquitto / EMQX / HiveMQ / VerneMQ): 07 recovery after the spike",
+      "notes": "Step 7 of 10. Run IMMEDIATELY after the spike, at average load for 5 minutes. Latency and errors must return to the baseline from step 2. If they do not, something is stuck: queues, connection pools, GC, an autoscaler cool-down. Gate: same as average load. Reference request: CONNECT v3.1.1.",
+      "safety": "read",
+      "job": {
+        "name": "MQTT broker (Mosquitto / EMQX / HiveMQ / VerneMQ): 07 recovery after the spike",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "bodyHex": "101000044d5154540402003c0004626c7374",
+            "expectHex": "20020000"
+          }
+        },
+        "method": "GET",
+        "concurrency": 50,
+        "rps": 200,
+        "duration": 300000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 50000000,
+          "maxP99": 200000000
+        }
+      }
+    },
+    {
+      "id": "ent-08-soak",
+      "name": "MQTT broker (Mosquitto / EMQX / HiveMQ / VerneMQ): 08 soak (1 hour at 60%)",
+      "notes": "Step 8 of 10. One hour of steady load. Finds leaks and slow decay in memory, connections, file descriptors, disk, log volume and cache churn. Watch the resource graphs: any line that climbs and never flattens is a finding. Gate: at most 0.5% errors. Reference request: CONNECT v3.1.1.",
+      "safety": "read",
+      "job": {
+        "name": "MQTT broker (Mosquitto / EMQX / HiveMQ / VerneMQ): 08 soak (1 hour at 60%)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "bodyHex": "101000044d5154540402003c0004626c7374",
+            "expectHex": "20020000"
+          }
+        },
+        "method": "GET",
+        "concurrency": 30,
+        "rps": 120,
+        "duration": 3600000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "slo": {
+          "maxErrorRate": 0.5,
+          "maxP95": 50000000,
+          "maxP99": 200000000
+        }
+      }
+    },
+    {
+      "id": "ent-09-breakpoint",
+      "name": "MQTT broker (Mosquitto / EMQX / HiveMQ / VerneMQ): 09 breakpoint (find the ceiling)",
+      "notes": "Step 9 of 10. Ramps to twenty times average over 20 minutes. Stop it when errors pass about 5%: the rate at that moment is your ceiling, and ceiling divided by peak is your capacity margin. Use a production-like environment, never production. Reference request: CONNECT v3.1.1.",
+      "safety": "read",
+      "job": {
+        "name": "MQTT broker (Mosquitto / EMQX / HiveMQ / VerneMQ): 09 breakpoint (find the ceiling)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "bodyHex": "101000044d5154540402003c0004626c7374",
+            "expectHex": "20020000"
+          }
+        },
+        "method": "GET",
+        "concurrency": 1000,
+        "rps": 4000,
+        "duration": 1380000000000,
+        "timeout": 15000000000,
+        "queueSize": 20000,
+        "onQueueFull": "reject",
+        "maxWorkers": 2000,
+        "blockPrivate": false,
+        "ramp": 1200000000000
+      }
+    },
+    {
+      "id": "ent-10-failover-window",
+      "name": "MQTT broker (Mosquitto / EMQX / HiveMQ / VerneMQ): 10 resilience window (failover / deploy)",
+      "notes": "Step 10 of 10. Average load for 15 minutes. About 5 minutes in, cause the event you are testing: kill a pod or node, fail over the database, roll out a new version, drain a zone. Errors in the window are your real availability loss. Gate: at most 1% errors overall; read the time series for how long the dip lasted. Reference request: CONNECT v3.1.1.",
+      "safety": "read",
+      "job": {
+        "name": "MQTT broker (Mosquitto / EMQX / HiveMQ / VerneMQ): 10 resilience window (failover / deploy)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "bodyHex": "101000044d5154540402003c0004626c7374",
+            "expectHex": "20020000"
+          }
+        },
+        "method": "GET",
+        "concurrency": 50,
+        "rps": 200,
+        "duration": 900000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 50000000,
+          "maxP99": 200000000
+        }
+      }
+    },
+    {
+      "id": "ent-x-connection-storm",
+      "name": "MQTT broker (Mosquitto / EMQX / HiveMQ / VerneMQ): connection storm (ramp to 10x)",
+      "notes": "Ramps new connections per second to ten times normal: a fleet reconnecting after an outage, a deploy that restarts every pod, a network blip. Shows accept-queue, file descriptor and handshake limits. Reference request: CONNECT v3.1.1.",
+      "safety": "read",
+      "job": {
+        "name": "MQTT broker (Mosquitto / EMQX / HiveMQ / VerneMQ): connection storm (ramp to 10x)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "bodyHex": "101000044d5154540402003c0004626c7374",
+            "expectHex": "20020000"
+          }
+        },
+        "method": "GET",
+        "concurrency": 500,
+        "rps": 2000,
+        "duration": 420000000000,
+        "timeout": 15000000000,
+        "queueSize": 10000,
+        "onQueueFull": "reject",
+        "maxWorkers": 1000,
+        "blockPrivate": false,
+        "ramp": 120000000000
+      }
+    },
+    {
+      "id": "ent-x-fleet-reconnect-storm",
+      "name": "MQTT broker (Mosquitto / EMQX / HiveMQ / VerneMQ): device fleet reconnect storm",
+      "notes": "Thousands of devices reconnect after an outage, all at once. Ramps to twenty times normal over 3 minutes. Reference request: CONNECT v3.1.1.",
+      "safety": "read",
+      "job": {
+        "name": "MQTT broker (Mosquitto / EMQX / HiveMQ / VerneMQ): device fleet reconnect storm",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "bodyHex": "101000044d5154540402003c0004626c7374",
+            "expectHex": "20020000"
+          }
+        },
+        "method": "GET",
+        "concurrency": 500,
+        "rps": 4000,
+        "duration": 360000000000,
+        "timeout": 15000000000,
+        "queueSize": 20000,
+        "onQueueFull": "reject",
+        "maxWorkers": 1000,
+        "blockPrivate": false,
+        "ramp": 180000000000
+      }
+    }
+  ]
+}

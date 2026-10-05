@@ -1,0 +1,667 @@
+{
+  "id": "cache-cdn",
+  "title": "Caching and CDN",
+  "category": "Web performance",
+  "summary": "Cache hit versus bypass, conditional requests, compression, large files and redirects. Includes an enterprise test plan (jobs starting ent-).",
+  "stack": "CDN, reverse proxy or browser caching",
+  "variables": [
+    {
+      "name": "url",
+      "default": "https://example.com",
+      "description": "Base URL, no trailing slash",
+      "placeholder": true,
+      "guide": "The address of the system to test, starting with https:// (or http://) and with no trailing slash, for example https://staging.example.com. Use a system you own, ideally a staging copy. BLASTA runs in a container, so for a service on your own machine use host.docker.internal instead of localhost."
+    },
+    {
+      "name": "path",
+      "default": "/",
+      "description": "Path to test, starting with /. Pick a representative page or endpoint.",
+      "guide": "The part of the address after the domain, starting with /, for example /pricing or /api/health.\nPick a page that is typical of real traffic: the home page is often cached and flatters the result."
+    },
+    {
+      "name": "asset",
+      "default": "/static/app.js",
+      "description": "Path of a static asset (JS, CSS or image)",
+      "guide": "The path of a static file such as a JS, CSS or image file, for example /static/app.js. DevTools \u2192 Network lists them."
+    },
+    {
+      "name": "bigfile",
+      "default": "/downloads/large.zip",
+      "description": "Path of a large file, ideally 5-50 MB",
+      "guide": "The path of a large file, ideally 5-50 MB. The test downloads it repeatedly."
+    },
+    {
+      "name": "etag",
+      "default": "\"replace-me\"",
+      "description": "Current ETag of the page, from the ETag response header (include quotes)",
+      "placeholder": true,
+      "guide": "The current ETag of the page. Run `curl -sI https://yoursite/page` and copy the ETag header, including the quotes."
+    }
+  ],
+  "jobs": [
+    {
+      "id": "hit",
+      "name": "cache hit (normal request)",
+      "notes": "What a visitor gets. Compare with 'bypass': the gap is how much your cache is saving the origin.",
+      "safety": "read",
+      "job": {
+        "name": "cache hit (normal request)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}{{path}}"
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 100,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "headers": {
+          "Accept": "text/html"
+        }
+      }
+    },
+    {
+      "id": "bypass",
+      "name": "cache bypass (origin)",
+      "notes": "Sends no-cache so most CDNs and proxies go to the origin. This is the load your origin sees on a cold cache or a purge. Keep the rate modest.",
+      "safety": "read",
+      "job": {
+        "name": "cache bypass (origin)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}{{path}}"
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 20,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "headers": {
+          "Accept": "text/html",
+          "Cache-Control": "no-cache",
+          "Pragma": "no-cache"
+        }
+      }
+    },
+    {
+      "id": "conditional-304",
+      "name": "conditional request (expect 304)",
+      "notes": "Sends If-None-Match. A 304 is cheap, a 200 means validation is not working. Anything else is counted as an error.",
+      "safety": "read",
+      "job": {
+        "name": "conditional request (expect 304)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}{{path}}"
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 100,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          304
+        ],
+        "headers": {
+          "Accept": "text/html",
+          "If-None-Match": "{{etag}}"
+        }
+      }
+    },
+    {
+      "id": "compression",
+      "name": "gzip / brotli responses",
+      "notes": "Asks for compressed content. Measures CPU cost of compression on the server or edge, and transfer size.",
+      "safety": "read",
+      "job": {
+        "name": "gzip / brotli responses",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}{{path}}"
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 50,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "headers": {
+          "Accept": "text/html",
+          "Accept-Encoding": "gzip, br"
+        }
+      }
+    },
+    {
+      "id": "static-asset",
+      "name": "static asset",
+      "notes": "Should be the fastest request you have. If it is not, assets are being served by the application instead of the web server or CDN.",
+      "safety": "read",
+      "job": {
+        "name": "static asset",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}{{asset}}"
+        },
+        "method": "GET",
+        "concurrency": 40,
+        "rps": 300,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false
+      }
+    },
+    {
+      "id": "large-download",
+      "name": "large file download",
+      "notes": "Few, long requests. Watch transfer and the 'timeout' errors: they reveal bandwidth limits, proxy buffering and idle timeouts.",
+      "safety": "read",
+      "job": {
+        "name": "large file download",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}{{bigfile}}"
+        },
+        "method": "GET",
+        "concurrency": 5,
+        "rps": 2,
+        "duration": 60000000000,
+        "timeout": 120000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false
+      }
+    },
+    {
+      "id": "http-to-https",
+      "name": "HTTP to HTTPS redirect",
+      "notes": "Plain-HTTP request that should answer with a redirect. Point url at the http:// address.",
+      "safety": "read",
+      "job": {
+        "name": "HTTP to HTTPS redirect",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}{{path}}"
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 50,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          301,
+          302,
+          307,
+          308
+        ]
+      }
+    },
+    {
+      "id": "not-found",
+      "name": "404 page",
+      "notes": "Error pages are often rendered by the application and skip the cache, so bots hitting dead URLs can cost more than real pages.",
+      "safety": "read",
+      "job": {
+        "name": "404 page",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/this-page-does-not-exist-blasta"
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 50,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          404
+        ]
+      }
+    },
+    {
+      "id": "ent-01-smoke",
+      "name": "Caching and CDN: 01 smoke",
+      "notes": "Enterprise plan, step 1 of 10. One request a second for 30 seconds. Run this first, every time: it proves the address, credentials and headers are right and that the environment is up before any real load is applied. Gate: zero errors. Reference request: cache hit (normal request).",
+      "safety": "read",
+      "job": {
+        "name": "Caching and CDN: 01 smoke",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}{{path}}"
+        },
+        "method": "GET",
+        "concurrency": 1,
+        "rps": 1,
+        "duration": 30000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "headers": {
+          "Accept": "text/html"
+        },
+        "slo": {
+          "maxErrorRate": 0
+        }
+      }
+    },
+    {
+      "id": "ent-02-baseline",
+      "name": "Caching and CDN: 02 baseline (20% load)",
+      "notes": "Step 2 of 10. About a fifth of normal traffic for 5 minutes: the uncontended latency of this request. Every later result is judged against it, so record p50 and p95. Gate: at most 0.5% errors and the default latency targets. Reference request: cache hit (normal request).",
+      "safety": "read",
+      "job": {
+        "name": "Caching and CDN: 02 baseline (20% load)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}{{path}}"
+        },
+        "method": "GET",
+        "concurrency": 4,
+        "rps": 20,
+        "duration": 300000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "headers": {
+          "Accept": "text/html"
+        },
+        "slo": {
+          "maxErrorRate": 0.5,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-03-average-load",
+      "name": "Caching and CDN: 03 average load (SLO check)",
+      "notes": "Step 3 of 10. Normal busy-hour traffic for 10 minutes. The rate is the reference job's rate: raise it to your measured production peak-hour rate. This is the run that proves (or breaks) your SLO. Gate: at most 1% errors, p95 and p99 inside the targets. Reference request: cache hit (normal request).",
+      "safety": "read",
+      "job": {
+        "name": "Caching and CDN: 03 average load (SLO check)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}{{path}}"
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 100,
+        "duration": 600000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "headers": {
+          "Accept": "text/html"
+        },
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-04-peak-load",
+      "name": "Caching and CDN: 04 peak load (2x average)",
+      "notes": "Step 4 of 10. Twice the average for 10 minutes: the busiest hour of the year plus headroom. Latency may rise, but must stay in SLO; if it does not, you have no headroom. Gate: at most 2% errors, latency targets doubled. Reference request: cache hit (normal request).",
+      "safety": "read",
+      "job": {
+        "name": "Caching and CDN: 04 peak load (2x average)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}{{path}}"
+        },
+        "method": "GET",
+        "concurrency": 40,
+        "rps": 200,
+        "duration": 600000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "headers": {
+          "Accept": "text/html"
+        },
+        "slo": {
+          "maxErrorRate": 2,
+          "maxP95": 2000000000,
+          "maxP99": 4000000000
+        }
+      }
+    },
+    {
+      "id": "ent-05-stress",
+      "name": "Caching and CDN: 05 stress (ramp to 4x)",
+      "notes": "Step 5 of 10. Ramps to four times average over 10 minutes, then holds for 2. Finds where it degrades and HOW: gracefully (latency rises, errors stay low) or badly (errors, timeouts, crashes, restarts). Observation only, no gate. Reference request: cache hit (normal request).",
+      "safety": "read",
+      "job": {
+        "name": "Caching and CDN: 05 stress (ramp to 4x)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}{{path}}"
+        },
+        "method": "GET",
+        "concurrency": 80,
+        "rps": 400,
+        "duration": 720000000000,
+        "timeout": 15000000000,
+        "queueSize": 2000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "headers": {
+          "Accept": "text/html"
+        },
+        "ramp": 600000000000
+      }
+    },
+    {
+      "id": "ent-06-spike",
+      "name": "Caching and CDN: 06 spike (10x in 10 s)",
+      "notes": "Step 6 of 10. Reaches ten times average within 10 seconds and holds for 2 minutes: a campaign email, a news link, a failover. Checks autoscaling, queue limits and load shedding. Gate: at most 5% errors, because shedding load is acceptable and crashing is not. Reference request: cache hit (normal request).",
+      "safety": "read",
+      "job": {
+        "name": "Caching and CDN: 06 spike (10x in 10 s)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}{{path}}"
+        },
+        "method": "GET",
+        "concurrency": 200,
+        "rps": 1000,
+        "duration": 130000000000,
+        "timeout": 15000000000,
+        "queueSize": 5000,
+        "onQueueFull": "reject",
+        "maxWorkers": 400,
+        "blockPrivate": false,
+        "headers": {
+          "Accept": "text/html"
+        },
+        "ramp": 10000000000,
+        "slo": {
+          "maxErrorRate": 5
+        }
+      }
+    },
+    {
+      "id": "ent-07-recovery",
+      "name": "Caching and CDN: 07 recovery after the spike",
+      "notes": "Step 7 of 10. Run IMMEDIATELY after the spike, at average load for 5 minutes. Latency and errors must return to the baseline from step 2. If they do not, something is stuck: queues, connection pools, GC, an autoscaler cool-down. Gate: same as average load. Reference request: cache hit (normal request).",
+      "safety": "read",
+      "job": {
+        "name": "Caching and CDN: 07 recovery after the spike",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}{{path}}"
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 100,
+        "duration": 300000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "headers": {
+          "Accept": "text/html"
+        },
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-08-soak",
+      "name": "Caching and CDN: 08 soak (1 hour at 60%)",
+      "notes": "Step 8 of 10. One hour of steady load. Finds leaks and slow decay in memory, connections, file descriptors, disk, log volume and cache churn. Watch the resource graphs: any line that climbs and never flattens is a finding. Gate: at most 0.5% errors. Reference request: cache hit (normal request).",
+      "safety": "read",
+      "job": {
+        "name": "Caching and CDN: 08 soak (1 hour at 60%)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}{{path}}"
+        },
+        "method": "GET",
+        "concurrency": 12,
+        "rps": 60,
+        "duration": 3600000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "headers": {
+          "Accept": "text/html"
+        },
+        "slo": {
+          "maxErrorRate": 0.5,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-09-breakpoint",
+      "name": "Caching and CDN: 09 breakpoint (find the ceiling)",
+      "notes": "Step 9 of 10. Ramps to twenty times average over 20 minutes. Stop it when errors pass about 5%: the rate at that moment is your ceiling, and ceiling divided by peak is your capacity margin. Use a production-like environment, never production. Reference request: cache hit (normal request).",
+      "safety": "read",
+      "job": {
+        "name": "Caching and CDN: 09 breakpoint (find the ceiling)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}{{path}}"
+        },
+        "method": "GET",
+        "concurrency": 400,
+        "rps": 2000,
+        "duration": 1380000000000,
+        "timeout": 15000000000,
+        "queueSize": 10000,
+        "onQueueFull": "reject",
+        "maxWorkers": 800,
+        "blockPrivate": false,
+        "headers": {
+          "Accept": "text/html"
+        },
+        "ramp": 1200000000000
+      }
+    },
+    {
+      "id": "ent-10-failover-window",
+      "name": "Caching and CDN: 10 resilience window (failover / deploy)",
+      "notes": "Step 10 of 10. Average load for 15 minutes. About 5 minutes in, cause the event you are testing: kill a pod or node, fail over the database, roll out a new version, drain a zone. Errors in the window are your real availability loss. Gate: at most 1% errors overall; read the time series for how long the dip lasted. Reference request: cache hit (normal request).",
+      "safety": "read",
+      "job": {
+        "name": "Caching and CDN: 10 resilience window (failover / deploy)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}{{path}}"
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 100,
+        "duration": 900000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "headers": {
+          "Accept": "text/html"
+        },
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-x-connection-close",
+      "name": "Caching and CDN: no keep-alive (new connection per request)",
+      "notes": "Sends Connection: close, so every request pays for a new TCP and TLS handshake: the cost for clients that do not reuse connections (scripts, some mobile SDKs, health checkers). Shows load balancer and TLS termination limits. Reference request: cache hit (normal request).",
+      "safety": "read",
+      "job": {
+        "name": "Caching and CDN: no keep-alive (new connection per request)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}{{path}}"
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 100,
+        "duration": 300000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "headers": {
+          "Accept": "text/html",
+          "Connection": "close"
+        },
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 1500000000,
+          "maxP99": 3000000000
+        }
+      }
+    },
+    {
+      "id": "ent-x-bot-traffic",
+      "name": "Caching and CDN: crawler traffic (Googlebot user agent)",
+      "notes": "Same request identified as a search crawler. Tests WAF and bot-management rules and whether crawlers get cached or origin responses. Crawlers can easily be a third of all traffic. Reference request: cache hit (normal request).",
+      "safety": "read",
+      "job": {
+        "name": "Caching and CDN: crawler traffic (Googlebot user agent)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}{{path}}"
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 100,
+        "duration": 300000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "headers": {
+          "Accept": "text/html",
+          "User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)"
+        },
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-x-large-headers",
+      "name": "Caching and CDN: large cookies (~4 KB header)",
+      "notes": "Adds a 4 KB Cookie header, like a logged-in user with many tracking cookies. Proxies and servers reject headers around 8 KB, so this shows how close you are to that limit. Reference request: cache hit (normal request).",
+      "safety": "read",
+      "job": {
+        "name": "Caching and CDN: large cookies (~4 KB header)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}{{path}}"
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 50,
+        "duration": 300000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "headers": {
+          "Accept": "text/html",
+          "Cookie": "blasta=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+        },
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-x-monitor-storm",
+      "name": "Caching and CDN: uptime monitors (HEAD from many locations)",
+      "notes": "A fleet of synthetic monitors checking the URL with HEAD requests every 30 seconds from 20 locations, plus load balancer probes. Cheap each, constant in total. Reference request: cache hit (normal request).",
+      "safety": "read",
+      "job": {
+        "name": "Caching and CDN: uptime monitors (HEAD from many locations)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}{{path}}"
+        },
+        "method": "HEAD",
+        "concurrency": 20,
+        "rps": 100,
+        "duration": 600000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "headers": {
+          "Accept": "text/html"
+        },
+        "expectStatus": [
+          200,
+          204,
+          301,
+          302,
+          304,
+          405
+        ],
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    }
+  ]
+}

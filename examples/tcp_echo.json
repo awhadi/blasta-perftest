@@ -1,0 +1,16 @@
+{
+  "name": "tcp echo rtt",
+  "description": "Target accepts host:port or tcp://host:port. Measures connection plus round-trip time.",
+  "executor": "tcp",
+  "target": { "url": "tcp://127.0.0.1:9096" },
+  "body": "PING",
+  "concurrency": 10,
+  "rps": 100,
+  "burst": 100,
+  "duration": 20000000000,
+  "queueSize": 1000,
+  "onQueueFull": "reject",
+  "timeout": 5000000000,
+  "maxWorkers": 100,
+  "blockPrivate": false
+}

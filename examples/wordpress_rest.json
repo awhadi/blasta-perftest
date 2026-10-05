@@ -1,0 +1,17 @@
+{
+  "name": "wordpress rest api",
+  "description": "Anonymous reader traffic against the WP REST API. Point at a staging copy.",
+  "executor": "http",
+  "target": { "url": "https://staging.example.com/wp-json/wp/v2/posts" },
+  "method": "GET",
+  "headers": { "Accept": "application/json" },
+  "concurrency": 20,
+  "rps": 50,
+  "burst": 50,
+  "duration": 60000000000,
+  "queueSize": 1000,
+  "onQueueFull": "reject",
+  "timeout": 15000000000,
+  "maxWorkers": 100,
+  "blockPrivate": true
+}

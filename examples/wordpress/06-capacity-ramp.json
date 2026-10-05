@@ -1,0 +1,17 @@
+{
+  "name": "wp capacity ramp",
+  "description": "Linear ramp to 200 rps over 2 minutes, then holds. Watch p99, not the average: this is how you find the knee. Raise 200 to whatever your expected peak is.",
+  "executor": "http",
+  "target": { "url": "${WP_URL}/${WP_POST_SLUG}/" },
+  "method": "GET",
+  "headers": { "Cache-Control": "no-cache" },
+  "concurrency": 100,
+  "rps": 200,
+  "ramp": 120000000000,
+  "duration": 180000000000,
+  "timeout": 20000000000,
+  "queueSize": 5000,
+  "onQueueFull": "reject",
+  "maxWorkers": 400,
+  "blockPrivate": false
+}

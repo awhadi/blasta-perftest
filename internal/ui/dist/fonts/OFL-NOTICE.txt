@@ -1,0 +1,9 @@
+Fonts bundled with blasta (self-hosted; nothing is loaded from a third party):
+
+  Space Grotesk  (c) The Space Grotesk Project Authors      SIL Open Font License 1.1
+  DM Sans        (c) The DM Sans Project Authors            SIL Open Font License 1.1
+  JetBrains Mono (c) JetBrains s.r.o.                       SIL Open Font License 1.1
+
+Variable-font builds (latin subset) from the Fontsource packages on npm
+(@fontsource-variable/space-grotesk, @fontsource-variable/dm-sans). The SIL OFL
+permits bundling, embedding and redistribution with software: https://openfontlicense.org

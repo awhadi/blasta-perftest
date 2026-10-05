@@ -1,0 +1,16 @@
+{
+  "name": "wp REST API posts",
+  "description": "The REST collection is heavier than the front page: it serialises many posts through PHP. A good proxy for API-driven themes.",
+  "executor": "http",
+  "target": { "url": "${WP_URL}/wp-json/wp/v2/posts?per_page=10" },
+  "method": "GET",
+  "headers": { "Accept": "application/json" },
+  "concurrency": 20,
+  "rps": 25,
+  "duration": 60000000000,
+  "timeout": 20000000000,
+  "queueSize": 1000,
+  "onQueueFull": "reject",
+  "maxWorkers": 200,
+  "blockPrivate": false
+}

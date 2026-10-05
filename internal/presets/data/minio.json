@@ -1,0 +1,689 @@
+{
+  "id": "minio",
+  "title": "MinIO / S3-compatible storage",
+  "category": "Data services",
+  "summary": "Health probes, public object reads and bucket listing. Includes an enterprise test plan (jobs starting ent-).",
+  "stack": "MinIO, Ceph RGW, S3",
+  "variables": [
+    {
+      "name": "url",
+      "default": "https://minio.example.com",
+      "description": "Endpoint URL, no trailing slash",
+      "placeholder": true,
+      "guide": "The address of the system to test, starting with https:// (or http://) and with no trailing slash, for example https://staging.example.com. Use a system you own, ideally a staging copy. BLASTA runs in a container, so for a service on your own machine use host.docker.internal instead of localhost."
+    },
+    {
+      "name": "bucket",
+      "default": "public",
+      "description": "A bucket with anonymous read access",
+      "placeholder": true,
+      "guide": "A bucket that allows anonymous reads. In MinIO: Buckets \u2192 your bucket \u2192 Access Policy \u2192 public."
+    },
+    {
+      "name": "object",
+      "default": "sample.txt",
+      "description": "An object in that bucket",
+      "placeholder": true,
+      "guide": "The name of an object in that bucket, for example sample.txt."
+    }
+  ],
+  "jobs": [
+    {
+      "id": "live",
+      "name": "health: live",
+      "notes": "MinIO liveness.",
+      "safety": "read",
+      "job": {
+        "name": "health: live",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/minio/health/live"
+        },
+        "method": "GET",
+        "concurrency": 5,
+        "rps": 30,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ]
+      }
+    },
+    {
+      "id": "ready",
+      "name": "health: ready",
+      "notes": "Readiness.",
+      "safety": "read",
+      "job": {
+        "name": "health: ready",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/minio/health/ready"
+        },
+        "method": "GET",
+        "concurrency": 5,
+        "rps": 30,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ]
+      }
+    },
+    {
+      "id": "cluster",
+      "name": "health: cluster",
+      "notes": "Fails when write quorum is lost.",
+      "safety": "read",
+      "job": {
+        "name": "health: cluster",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/minio/health/cluster"
+        },
+        "method": "GET",
+        "concurrency": 2,
+        "rps": 5,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ]
+      }
+    },
+    {
+      "id": "get-object",
+      "name": "GET object",
+      "notes": "Small object reads: metadata lookup plus disk read.",
+      "safety": "read",
+      "job": {
+        "name": "GET object",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/{{bucket}}/{{object}}"
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 200,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ]
+      }
+    },
+    {
+      "id": "head-object",
+      "name": "HEAD object",
+      "notes": "Metadata only, what clients do before downloads.",
+      "safety": "read",
+      "job": {
+        "name": "HEAD object",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/{{bucket}}/{{object}}"
+        },
+        "method": "HEAD",
+        "concurrency": 20,
+        "rps": 200,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ]
+      }
+    },
+    {
+      "id": "list-bucket",
+      "name": "list bucket (v2)",
+      "notes": "Listing walks metadata and is far costlier than a read on big buckets.",
+      "safety": "read",
+      "job": {
+        "name": "list bucket (v2)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/{{bucket}}?list-type=2&max-keys=100"
+        },
+        "method": "GET",
+        "concurrency": 5,
+        "rps": 20,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ]
+      }
+    },
+    {
+      "id": "get-missing",
+      "name": "GET missing object",
+      "notes": "404 path: should be as cheap as a hit.",
+      "safety": "read",
+      "job": {
+        "name": "GET missing object",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/{{bucket}}/blasta-no-such-object"
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 100,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          404
+        ]
+      }
+    },
+    {
+      "id": "range-read",
+      "name": "ranged GET (first 1 KB)",
+      "notes": "What video players and download managers do.",
+      "safety": "read",
+      "job": {
+        "name": "ranged GET (first 1 KB)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/{{bucket}}/{{object}}"
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 100,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          206
+        ],
+        "headers": {
+          "Range": "bytes=0-1023"
+        }
+      }
+    },
+    {
+      "id": "ent-01-smoke",
+      "name": "MinIO / S3-compatible storage: 01 smoke",
+      "notes": "Enterprise plan, step 1 of 10. One request a second for 30 seconds. Run this first, every time: it proves the address, credentials and headers are right and that the environment is up before any real load is applied. Gate: zero errors. Reference request: GET object.",
+      "safety": "read",
+      "job": {
+        "name": "MinIO / S3-compatible storage: 01 smoke",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/{{bucket}}/{{object}}"
+        },
+        "method": "GET",
+        "concurrency": 1,
+        "rps": 1,
+        "duration": 30000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "slo": {
+          "maxErrorRate": 0
+        }
+      }
+    },
+    {
+      "id": "ent-02-baseline",
+      "name": "MinIO / S3-compatible storage: 02 baseline (20% load)",
+      "notes": "Step 2 of 10. About a fifth of normal traffic for 5 minutes: the uncontended latency of this request. Every later result is judged against it, so record p50 and p95. Gate: at most 0.5% errors and the default latency targets. Reference request: GET object.",
+      "safety": "read",
+      "job": {
+        "name": "MinIO / S3-compatible storage: 02 baseline (20% load)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/{{bucket}}/{{object}}"
+        },
+        "method": "GET",
+        "concurrency": 4,
+        "rps": 40,
+        "duration": 300000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "slo": {
+          "maxErrorRate": 0.5,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-03-average-load",
+      "name": "MinIO / S3-compatible storage: 03 average load (SLO check)",
+      "notes": "Step 3 of 10. Normal busy-hour traffic for 10 minutes. The rate is the reference job's rate: raise it to your measured production peak-hour rate. This is the run that proves (or breaks) your SLO. Gate: at most 1% errors, p95 and p99 inside the targets. Reference request: GET object.",
+      "safety": "read",
+      "job": {
+        "name": "MinIO / S3-compatible storage: 03 average load (SLO check)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/{{bucket}}/{{object}}"
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 200,
+        "duration": 600000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-04-peak-load",
+      "name": "MinIO / S3-compatible storage: 04 peak load (2x average)",
+      "notes": "Step 4 of 10. Twice the average for 10 minutes: the busiest hour of the year plus headroom. Latency may rise, but must stay in SLO; if it does not, you have no headroom. Gate: at most 2% errors, latency targets doubled. Reference request: GET object.",
+      "safety": "read",
+      "job": {
+        "name": "MinIO / S3-compatible storage: 04 peak load (2x average)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/{{bucket}}/{{object}}"
+        },
+        "method": "GET",
+        "concurrency": 40,
+        "rps": 400,
+        "duration": 600000000000,
+        "timeout": 15000000000,
+        "queueSize": 2000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "slo": {
+          "maxErrorRate": 2,
+          "maxP95": 2000000000,
+          "maxP99": 4000000000
+        }
+      }
+    },
+    {
+      "id": "ent-05-stress",
+      "name": "MinIO / S3-compatible storage: 05 stress (ramp to 4x)",
+      "notes": "Step 5 of 10. Ramps to four times average over 10 minutes, then holds for 2. Finds where it degrades and HOW: gracefully (latency rises, errors stay low) or badly (errors, timeouts, crashes, restarts). Observation only, no gate. Reference request: GET object.",
+      "safety": "read",
+      "job": {
+        "name": "MinIO / S3-compatible storage: 05 stress (ramp to 4x)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/{{bucket}}/{{object}}"
+        },
+        "method": "GET",
+        "concurrency": 80,
+        "rps": 800,
+        "duration": 720000000000,
+        "timeout": 15000000000,
+        "queueSize": 4000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "ramp": 600000000000
+      }
+    },
+    {
+      "id": "ent-06-spike",
+      "name": "MinIO / S3-compatible storage: 06 spike (10x in 10 s)",
+      "notes": "Step 6 of 10. Reaches ten times average within 10 seconds and holds for 2 minutes: a campaign email, a news link, a failover. Checks autoscaling, queue limits and load shedding. Gate: at most 5% errors, because shedding load is acceptable and crashing is not. Reference request: GET object.",
+      "safety": "read",
+      "job": {
+        "name": "MinIO / S3-compatible storage: 06 spike (10x in 10 s)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/{{bucket}}/{{object}}"
+        },
+        "method": "GET",
+        "concurrency": 200,
+        "rps": 2000,
+        "duration": 130000000000,
+        "timeout": 15000000000,
+        "queueSize": 10000,
+        "onQueueFull": "reject",
+        "maxWorkers": 400,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "ramp": 10000000000,
+        "slo": {
+          "maxErrorRate": 5
+        }
+      }
+    },
+    {
+      "id": "ent-07-recovery",
+      "name": "MinIO / S3-compatible storage: 07 recovery after the spike",
+      "notes": "Step 7 of 10. Run IMMEDIATELY after the spike, at average load for 5 minutes. Latency and errors must return to the baseline from step 2. If they do not, something is stuck: queues, connection pools, GC, an autoscaler cool-down. Gate: same as average load. Reference request: GET object.",
+      "safety": "read",
+      "job": {
+        "name": "MinIO / S3-compatible storage: 07 recovery after the spike",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/{{bucket}}/{{object}}"
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 200,
+        "duration": 300000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-08-soak",
+      "name": "MinIO / S3-compatible storage: 08 soak (1 hour at 60%)",
+      "notes": "Step 8 of 10. One hour of steady load. Finds leaks and slow decay in memory, connections, file descriptors, disk, log volume and cache churn. Watch the resource graphs: any line that climbs and never flattens is a finding. Gate: at most 0.5% errors. Reference request: GET object.",
+      "safety": "read",
+      "job": {
+        "name": "MinIO / S3-compatible storage: 08 soak (1 hour at 60%)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/{{bucket}}/{{object}}"
+        },
+        "method": "GET",
+        "concurrency": 12,
+        "rps": 120,
+        "duration": 3600000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "slo": {
+          "maxErrorRate": 0.5,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-09-breakpoint",
+      "name": "MinIO / S3-compatible storage: 09 breakpoint (find the ceiling)",
+      "notes": "Step 9 of 10. Ramps to twenty times average over 20 minutes. Stop it when errors pass about 5%: the rate at that moment is your ceiling, and ceiling divided by peak is your capacity margin. Use a production-like environment, never production. Reference request: GET object.",
+      "safety": "read",
+      "job": {
+        "name": "MinIO / S3-compatible storage: 09 breakpoint (find the ceiling)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/{{bucket}}/{{object}}"
+        },
+        "method": "GET",
+        "concurrency": 400,
+        "rps": 4000,
+        "duration": 1380000000000,
+        "timeout": 15000000000,
+        "queueSize": 20000,
+        "onQueueFull": "reject",
+        "maxWorkers": 800,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "ramp": 1200000000000
+      }
+    },
+    {
+      "id": "ent-10-failover-window",
+      "name": "MinIO / S3-compatible storage: 10 resilience window (failover / deploy)",
+      "notes": "Step 10 of 10. Average load for 15 minutes. About 5 minutes in, cause the event you are testing: kill a pod or node, fail over the database, roll out a new version, drain a zone. Errors in the window are your real availability loss. Gate: at most 1% errors overall; read the time series for how long the dip lasted. Reference request: GET object.",
+      "safety": "read",
+      "job": {
+        "name": "MinIO / S3-compatible storage: 10 resilience window (failover / deploy)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/{{bucket}}/{{object}}"
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 200,
+        "duration": 900000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-x-connection-close",
+      "name": "MinIO / S3-compatible storage: no keep-alive (new connection per request)",
+      "notes": "Sends Connection: close, so every request pays for a new TCP and TLS handshake: the cost for clients that do not reuse connections (scripts, some mobile SDKs, health checkers). Shows load balancer and TLS termination limits. Reference request: GET object.",
+      "safety": "read",
+      "job": {
+        "name": "MinIO / S3-compatible storage: no keep-alive (new connection per request)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/{{bucket}}/{{object}}"
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 200,
+        "duration": 300000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Connection": "close"
+        },
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 1500000000,
+          "maxP99": 3000000000
+        }
+      }
+    },
+    {
+      "id": "ent-x-bot-traffic",
+      "name": "MinIO / S3-compatible storage: crawler traffic (Googlebot user agent)",
+      "notes": "Same request identified as a search crawler. Tests WAF and bot-management rules and whether crawlers get cached or origin responses. Crawlers can easily be a third of all traffic. Reference request: GET object.",
+      "safety": "read",
+      "job": {
+        "name": "MinIO / S3-compatible storage: crawler traffic (Googlebot user agent)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/{{bucket}}/{{object}}"
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 200,
+        "duration": 300000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)"
+        },
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-x-large-headers",
+      "name": "MinIO / S3-compatible storage: large cookies (~4 KB header)",
+      "notes": "Adds a 4 KB Cookie header, like a logged-in user with many tracking cookies. Proxies and servers reject headers around 8 KB, so this shows how close you are to that limit. Reference request: GET object.",
+      "safety": "read",
+      "job": {
+        "name": "MinIO / S3-compatible storage: large cookies (~4 KB header)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/{{bucket}}/{{object}}"
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 100,
+        "duration": 300000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Cookie": "blasta=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+        },
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-x-monitor-storm",
+      "name": "MinIO / S3-compatible storage: uptime monitors (HEAD from many locations)",
+      "notes": "A fleet of synthetic monitors checking the URL with HEAD requests every 30 seconds from 20 locations, plus load balancer probes. Cheap each, constant in total. Reference request: GET object.",
+      "safety": "read",
+      "job": {
+        "name": "MinIO / S3-compatible storage: uptime monitors (HEAD from many locations)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/{{bucket}}/{{object}}"
+        },
+        "method": "HEAD",
+        "concurrency": 20,
+        "rps": 200,
+        "duration": 600000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          204,
+          301,
+          302,
+          304,
+          405
+        ],
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-x-download-peak",
+      "name": "MinIO / S3-compatible storage: download peak",
+      "notes": "Three times normal object reads for 10 minutes. Watch disk throughput and network saturation. Reference request: GET object.",
+      "safety": "read",
+      "job": {
+        "name": "MinIO / S3-compatible storage: download peak",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/{{bucket}}/{{object}}"
+        },
+        "method": "GET",
+        "concurrency": 60,
+        "rps": 600,
+        "duration": 600000000000,
+        "timeout": 15000000000,
+        "queueSize": 3000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 2000000000,
+          "maxP99": 4000000000
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "name": "wp soak at expected production load",
+  "description": "Ten minutes at a steady rate. Catches leaks, connection-pool exhaustion, and cache decay that a 60s test never reaches.",
+  "executor": "http",
+  "target": { "url": "${WP_URL}/${WP_POST_SLUG}/" },
+  "method": "GET",
+  "headers": { "Cache-Control": "no-cache" },
+  "concurrency": 40,
+  "rps": 30,
+  "duration": 600000000000,
+  "timeout": 20000000000,
+  "queueSize": 5000,
+  "onQueueFull": "reject",
+  "maxWorkers": 200,
+  "blockPrivate": false
+}

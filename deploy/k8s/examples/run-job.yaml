@@ -1,0 +1,54 @@
+# One-off headless test as a Kubernetes Job: no UI, the pod runs a job file and
+# exits 0 when the thresholds are met, 2 when they are missed (the Job then shows
+# Failed) and 1 when the job itself is broken. Edit the ConfigMap, then:
+#   kubectl apply -f run-job.yaml && kubectl logs -f job/blasta-run
+# Delete it before re-applying:  kubectl delete -f run-job.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: blasta-job
+data:
+  job.json: |
+    {
+      "name": "smoke",
+      "executor": "http",
+      "target": {"url": "https://staging.example.com/"},
+      "method": "GET",
+      "concurrency": 5,
+      "rps": 10,
+      "duration": 30000000000,
+      "timeout": 10000000000,
+      "blockPrivate": true
+    }
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: blasta-run
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: blasta
+          image: blasta:latest
+          args: ["run", "--max-error-rate", "1", "--max-p95", "500ms", "/job/job.json"]
+          resources:
+            requests: {cpu: 250m, memory: 128Mi}
+            limits: {cpu: "2", memory: 512Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: job, mountPath: /job, readOnly: true}
+      volumes:
+        - name: job
+          configMap: {name: blasta-job}

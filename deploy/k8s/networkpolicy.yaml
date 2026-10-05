@@ -1,0 +1,17 @@
+# Only pods in this namespace can reach the UI/API. Egress is left open because
+# blasta's whole job is to connect to the systems you point it at; tighten it to
+# your test targets if your cluster policy allows.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: blasta
+  labels: {app.kubernetes.io/name: blasta}
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: blasta}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector: {}
+      ports:
+        - {port: 8080, protocol: TCP}

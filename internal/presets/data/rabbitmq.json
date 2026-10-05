@@ -1,0 +1,559 @@
+{
+  "id": "rabbitmq",
+  "title": "RabbitMQ",
+  "category": "Messaging",
+  "summary": "AMQP connection handshake, management API and health checks. Includes an enterprise test plan (jobs starting ent-).",
+  "stack": "RabbitMQ",
+  "variables": [
+    {
+      "name": "host",
+      "default": "rabbit.example.com",
+      "description": "Broker host name",
+      "placeholder": true,
+      "guide": "The host name or IP address of the server, without a port or http://, for example redis.staging.example.com. BLASTA runs in a container, so for a service on your own machine use host.docker.internal instead of localhost."
+    },
+    {
+      "name": "amqpPort",
+      "default": "5672",
+      "description": "AMQP port",
+      "guide": "The AMQP port, normally 5672."
+    },
+    {
+      "name": "mgmt",
+      "default": "http://rabbit.example.com:15672",
+      "description": "Management API URL, no trailing slash",
+      "placeholder": true,
+      "guide": "The address of the management interface. Keycloak 25+: port 9000 (https://host:9000). RabbitMQ: http://host:15672. BLASTA runs in a container, so for a service on your own machine use host.docker.internal instead of localhost."
+    },
+    {
+      "name": "basic",
+      "default": "${RABBITMQ_BASIC}",
+      "description": "base64(user:password) for the management API. Read from RABBITMQ_BASIC by the CLI.",
+      "sensitive": true
+    }
+  ],
+  "jobs": [
+    {
+      "id": "amqp-handshake",
+      "name": "AMQP protocol handshake",
+      "notes": "Sends the AMQP 0-9-1 protocol header and checks that the broker answers with a Connection.Start frame. Every connection costs an Erlang process, so this is the connection-churn test.",
+      "safety": "read",
+      "job": {
+        "name": "AMQP protocol handshake",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{amqpPort}}",
+          "meta": {
+            "bodyHex": "414d515000000901",
+            "expectHex": "010000"
+          }
+        },
+        "method": "GET",
+        "concurrency": 50,
+        "rps": 200,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false
+      }
+    },
+    {
+      "id": "health-alarms",
+      "name": "health check: alarms",
+      "notes": "Fails when a memory or disk alarm is active, i.e. when producers are being blocked.",
+      "safety": "read",
+      "job": {
+        "name": "health check: alarms",
+        "executor": "http",
+        "target": {
+          "url": "{{mgmt}}/api/health/checks/alarms"
+        },
+        "method": "GET",
+        "concurrency": 2,
+        "rps": 5,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Authorization": "Basic {{basic}}"
+        }
+      }
+    },
+    {
+      "id": "overview",
+      "name": "overview",
+      "notes": "The management dashboard's main call: global message rates and totals.",
+      "safety": "read",
+      "job": {
+        "name": "overview",
+        "executor": "http",
+        "target": {
+          "url": "{{mgmt}}/api/overview"
+        },
+        "method": "GET",
+        "concurrency": 2,
+        "rps": 5,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Authorization": "Basic {{basic}}"
+        }
+      }
+    },
+    {
+      "id": "queues",
+      "name": "queue list",
+      "notes": "Heavy with thousands of queues; dashboards poll it every few seconds. Add ?page=1&page_size=100 in real use.",
+      "safety": "read",
+      "job": {
+        "name": "queue list",
+        "executor": "http",
+        "target": {
+          "url": "{{mgmt}}/api/queues?page=1&page_size=100"
+        },
+        "method": "GET",
+        "concurrency": 2,
+        "rps": 2,
+        "duration": 60000000000,
+        "timeout": 30000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Authorization": "Basic {{basic}}"
+        }
+      }
+    },
+    {
+      "id": "connections",
+      "name": "connection list",
+      "notes": "Every client connection with statistics. Expensive at thousands of connections.",
+      "safety": "read",
+      "job": {
+        "name": "connection list",
+        "executor": "http",
+        "target": {
+          "url": "{{mgmt}}/api/connections?page=1&page_size=100"
+        },
+        "method": "GET",
+        "concurrency": 2,
+        "rps": 2,
+        "duration": 60000000000,
+        "timeout": 30000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Authorization": "Basic {{basic}}"
+        }
+      }
+    },
+    {
+      "id": "unauthenticated",
+      "name": "management API without credentials",
+      "notes": "Must be a fast 401.",
+      "safety": "read",
+      "job": {
+        "name": "management API without credentials",
+        "executor": "http",
+        "target": {
+          "url": "{{mgmt}}/api/overview"
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 50,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          401
+        ]
+      }
+    },
+    {
+      "id": "ent-01-smoke",
+      "name": "RabbitMQ: 01 smoke",
+      "notes": "Enterprise plan, step 1 of 10. One request a second for 30 seconds. Run this first, every time: it proves the address, credentials and headers are right and that the environment is up before any real load is applied. Gate: zero errors. Reference request: AMQP protocol handshake.",
+      "safety": "read",
+      "job": {
+        "name": "RabbitMQ: 01 smoke",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{amqpPort}}",
+          "meta": {
+            "bodyHex": "414d515000000901",
+            "expectHex": "010000"
+          }
+        },
+        "method": "GET",
+        "concurrency": 1,
+        "rps": 1,
+        "duration": 30000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "slo": {
+          "maxErrorRate": 0
+        }
+      }
+    },
+    {
+      "id": "ent-02-baseline",
+      "name": "RabbitMQ: 02 baseline (20% load)",
+      "notes": "Step 2 of 10. About a fifth of normal traffic for 5 minutes: the uncontended latency of this request. Every later result is judged against it, so record p50 and p95. Gate: at most 0.5% errors and the default latency targets. Reference request: AMQP protocol handshake.",
+      "safety": "read",
+      "job": {
+        "name": "RabbitMQ: 02 baseline (20% load)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{amqpPort}}",
+          "meta": {
+            "bodyHex": "414d515000000901",
+            "expectHex": "010000"
+          }
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 40,
+        "duration": 300000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "slo": {
+          "maxErrorRate": 0.5,
+          "maxP95": 50000000,
+          "maxP99": 200000000
+        }
+      }
+    },
+    {
+      "id": "ent-03-average-load",
+      "name": "RabbitMQ: 03 average load (SLO check)",
+      "notes": "Step 3 of 10. Normal busy-hour traffic for 10 minutes. The rate is the reference job's rate: raise it to your measured production peak-hour rate. This is the run that proves (or breaks) your SLO. Gate: at most 1% errors, p95 and p99 inside the targets. Reference request: AMQP protocol handshake.",
+      "safety": "read",
+      "job": {
+        "name": "RabbitMQ: 03 average load (SLO check)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{amqpPort}}",
+          "meta": {
+            "bodyHex": "414d515000000901",
+            "expectHex": "010000"
+          }
+        },
+        "method": "GET",
+        "concurrency": 50,
+        "rps": 200,
+        "duration": 600000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 50000000,
+          "maxP99": 200000000
+        }
+      }
+    },
+    {
+      "id": "ent-04-peak-load",
+      "name": "RabbitMQ: 04 peak load (2x average)",
+      "notes": "Step 4 of 10. Twice the average for 10 minutes: the busiest hour of the year plus headroom. Latency may rise, but must stay in SLO; if it does not, you have no headroom. Gate: at most 2% errors, latency targets doubled. Reference request: AMQP protocol handshake.",
+      "safety": "read",
+      "job": {
+        "name": "RabbitMQ: 04 peak load (2x average)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{amqpPort}}",
+          "meta": {
+            "bodyHex": "414d515000000901",
+            "expectHex": "010000"
+          }
+        },
+        "method": "GET",
+        "concurrency": 100,
+        "rps": 400,
+        "duration": 600000000000,
+        "timeout": 15000000000,
+        "queueSize": 2000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "slo": {
+          "maxErrorRate": 2,
+          "maxP95": 100000000,
+          "maxP99": 400000000
+        }
+      }
+    },
+    {
+      "id": "ent-05-stress",
+      "name": "RabbitMQ: 05 stress (ramp to 4x)",
+      "notes": "Step 5 of 10. Ramps to four times average over 10 minutes, then holds for 2. Finds where it degrades and HOW: gracefully (latency rises, errors stay low) or badly (errors, timeouts, crashes, restarts). Observation only, no gate. Reference request: AMQP protocol handshake.",
+      "safety": "read",
+      "job": {
+        "name": "RabbitMQ: 05 stress (ramp to 4x)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{amqpPort}}",
+          "meta": {
+            "bodyHex": "414d515000000901",
+            "expectHex": "010000"
+          }
+        },
+        "method": "GET",
+        "concurrency": 200,
+        "rps": 800,
+        "duration": 720000000000,
+        "timeout": 15000000000,
+        "queueSize": 4000,
+        "onQueueFull": "reject",
+        "maxWorkers": 400,
+        "blockPrivate": false,
+        "ramp": 600000000000
+      }
+    },
+    {
+      "id": "ent-06-spike",
+      "name": "RabbitMQ: 06 spike (10x in 10 s)",
+      "notes": "Step 6 of 10. Reaches ten times average within 10 seconds and holds for 2 minutes: a campaign email, a news link, a failover. Checks autoscaling, queue limits and load shedding. Gate: at most 5% errors, because shedding load is acceptable and crashing is not. Reference request: AMQP protocol handshake.",
+      "safety": "read",
+      "job": {
+        "name": "RabbitMQ: 06 spike (10x in 10 s)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{amqpPort}}",
+          "meta": {
+            "bodyHex": "414d515000000901",
+            "expectHex": "010000"
+          }
+        },
+        "method": "GET",
+        "concurrency": 500,
+        "rps": 2000,
+        "duration": 130000000000,
+        "timeout": 15000000000,
+        "queueSize": 10000,
+        "onQueueFull": "reject",
+        "maxWorkers": 1000,
+        "blockPrivate": false,
+        "ramp": 10000000000,
+        "slo": {
+          "maxErrorRate": 5
+        }
+      }
+    },
+    {
+      "id": "ent-07-recovery",
+      "name": "RabbitMQ: 07 recovery after the spike",
+      "notes": "Step 7 of 10. Run IMMEDIATELY after the spike, at average load for 5 minutes. Latency and errors must return to the baseline from step 2. If they do not, something is stuck: queues, connection pools, GC, an autoscaler cool-down. Gate: same as average load. Reference request: AMQP protocol handshake.",
+      "safety": "read",
+      "job": {
+        "name": "RabbitMQ: 07 recovery after the spike",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{amqpPort}}",
+          "meta": {
+            "bodyHex": "414d515000000901",
+            "expectHex": "010000"
+          }
+        },
+        "method": "GET",
+        "concurrency": 50,
+        "rps": 200,
+        "duration": 300000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 50000000,
+          "maxP99": 200000000
+        }
+      }
+    },
+    {
+      "id": "ent-08-soak",
+      "name": "RabbitMQ: 08 soak (1 hour at 60%)",
+      "notes": "Step 8 of 10. One hour of steady load. Finds leaks and slow decay in memory, connections, file descriptors, disk, log volume and cache churn. Watch the resource graphs: any line that climbs and never flattens is a finding. Gate: at most 0.5% errors. Reference request: AMQP protocol handshake.",
+      "safety": "read",
+      "job": {
+        "name": "RabbitMQ: 08 soak (1 hour at 60%)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{amqpPort}}",
+          "meta": {
+            "bodyHex": "414d515000000901",
+            "expectHex": "010000"
+          }
+        },
+        "method": "GET",
+        "concurrency": 30,
+        "rps": 120,
+        "duration": 3600000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "slo": {
+          "maxErrorRate": 0.5,
+          "maxP95": 50000000,
+          "maxP99": 200000000
+        }
+      }
+    },
+    {
+      "id": "ent-09-breakpoint",
+      "name": "RabbitMQ: 09 breakpoint (find the ceiling)",
+      "notes": "Step 9 of 10. Ramps to twenty times average over 20 minutes. Stop it when errors pass about 5%: the rate at that moment is your ceiling, and ceiling divided by peak is your capacity margin. Use a production-like environment, never production. Reference request: AMQP protocol handshake.",
+      "safety": "read",
+      "job": {
+        "name": "RabbitMQ: 09 breakpoint (find the ceiling)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{amqpPort}}",
+          "meta": {
+            "bodyHex": "414d515000000901",
+            "expectHex": "010000"
+          }
+        },
+        "method": "GET",
+        "concurrency": 1000,
+        "rps": 4000,
+        "duration": 1380000000000,
+        "timeout": 15000000000,
+        "queueSize": 20000,
+        "onQueueFull": "reject",
+        "maxWorkers": 2000,
+        "blockPrivate": false,
+        "ramp": 1200000000000
+      }
+    },
+    {
+      "id": "ent-10-failover-window",
+      "name": "RabbitMQ: 10 resilience window (failover / deploy)",
+      "notes": "Step 10 of 10. Average load for 15 minutes. About 5 minutes in, cause the event you are testing: kill a pod or node, fail over the database, roll out a new version, drain a zone. Errors in the window are your real availability loss. Gate: at most 1% errors overall; read the time series for how long the dip lasted. Reference request: AMQP protocol handshake.",
+      "safety": "read",
+      "job": {
+        "name": "RabbitMQ: 10 resilience window (failover / deploy)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{amqpPort}}",
+          "meta": {
+            "bodyHex": "414d515000000901",
+            "expectHex": "010000"
+          }
+        },
+        "method": "GET",
+        "concurrency": 50,
+        "rps": 200,
+        "duration": 900000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 50000000,
+          "maxP99": 200000000
+        }
+      }
+    },
+    {
+      "id": "ent-x-connection-storm",
+      "name": "RabbitMQ: connection storm (ramp to 10x)",
+      "notes": "Ramps new connections per second to ten times normal: a fleet reconnecting after an outage, a deploy that restarts every pod, a network blip. Shows accept-queue, file descriptor and handshake limits. Reference request: AMQP protocol handshake.",
+      "safety": "read",
+      "job": {
+        "name": "RabbitMQ: connection storm (ramp to 10x)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{amqpPort}}",
+          "meta": {
+            "bodyHex": "414d515000000901",
+            "expectHex": "010000"
+          }
+        },
+        "method": "GET",
+        "concurrency": 500,
+        "rps": 2000,
+        "duration": 420000000000,
+        "timeout": 15000000000,
+        "queueSize": 10000,
+        "onQueueFull": "reject",
+        "maxWorkers": 1000,
+        "blockPrivate": false,
+        "ramp": 120000000000
+      }
+    },
+    {
+      "id": "ent-x-connection-storm",
+      "name": "RabbitMQ: client reconnect storm",
+      "notes": "Every producer and consumer reconnects after a broker restart. Ramps to ten times normal. Reference request: AMQP protocol handshake.",
+      "safety": "read",
+      "job": {
+        "name": "RabbitMQ: client reconnect storm",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{amqpPort}}",
+          "meta": {
+            "bodyHex": "414d515000000901",
+            "expectHex": "010000"
+          }
+        },
+        "method": "GET",
+        "concurrency": 500,
+        "rps": 2000,
+        "duration": 300000000000,
+        "timeout": 15000000000,
+        "queueSize": 10000,
+        "onQueueFull": "reject",
+        "maxWorkers": 1000,
+        "blockPrivate": false,
+        "ramp": 120000000000
+      }
+    }
+  ],
+  "secrets": {
+    "RABBITMQ_BASIC": {
+      "label": "RabbitMQ login (base64)",
+      "guide": "A management user with the monitoring tag. Encode it like this (macOS or Linux): `printf 'USER:PASSWORD' | base64` and paste the result."
+    }
+  }
+}

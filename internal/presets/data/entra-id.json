@@ -1,0 +1,794 @@
+{
+  "id": "entra-id",
+  "title": "Microsoft Entra ID (Azure AD)",
+  "category": "Identity",
+  "summary": "v2.0 endpoints for one tenant: discovery, keys, authorize, token, device code. Includes an enterprise test plan (jobs starting ent-).",
+  "stack": "Microsoft identity platform",
+  "variables": [
+    {
+      "name": "url",
+      "default": "https://idp.example.com",
+      "description": "Issuer / base URL, no trailing slash",
+      "placeholder": true,
+      "guide": "The address of the system to test, starting with https:// (or http://) and with no trailing slash, for example https://staging.example.com. Use a system you own, ideally a staging copy. BLASTA runs in a container, so for a service on your own machine use host.docker.internal instead of localhost."
+    },
+    {
+      "name": "clientId",
+      "default": "blasta-test",
+      "description": "A test client registered for load testing",
+      "placeholder": true,
+      "guide": "The ID of a client registered for this test. Create a dedicated test client in your identity provider (Clients / Applications) and copy its client ID. Do not reuse a production client."
+    },
+    {
+      "name": "clientSecret",
+      "default": "${OIDC_CLIENT_SECRET}",
+      "description": "Client secret. Read from the OIDC_CLIENT_SECRET env var by the CLI.",
+      "sensitive": true
+    },
+    {
+      "name": "redirectUri",
+      "default": "https://app.example.com/callback",
+      "description": "A redirect URI registered on that client",
+      "placeholder": true,
+      "guide": "A redirect URI that is registered on that client. Copy one from the client's settings: an unregistered one is refused."
+    },
+    {
+      "name": "scope",
+      "default": "openid%20profile%20email",
+      "description": "Space-separated scopes, URL-encoded",
+      "guide": "The scopes to request, URL-encoded with %20 between them, for example openid%20profile%20email."
+    },
+    {
+      "name": "token",
+      "default": "${OIDC_ACCESS_TOKEN}",
+      "description": "A valid access token. Read from OIDC_ACCESS_TOKEN by the CLI.",
+      "sensitive": true
+    },
+    {
+      "name": "tenant",
+      "default": "contoso.onmicrosoft.com",
+      "description": "Tenant id or domain",
+      "placeholder": true,
+      "guide": "Your tenant ID or domain. Azure portal \u2192 Microsoft Entra ID \u2192 Overview \u2192 Tenant ID (or the verified domain, such as contoso.onmicrosoft.com)."
+    }
+  ],
+  "jobs": [
+    {
+      "id": "discovery",
+      "name": "OIDC discovery document",
+      "notes": "This is a hosted identity service: check the vendor's load-testing policy and your tenant's rate limits before running, keep the rate low, and expect 429s. Fetched by every relying party at start-up and on a timer. Cheap, but often served uncached.",
+      "safety": "read",
+      "job": {
+        "name": "OIDC discovery document",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/{{tenant}}/v2.0/.well-known/openid-configuration"
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 5,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Accept": "application/json"
+        }
+      }
+    },
+    {
+      "id": "discovery-nocache",
+      "name": "discovery document (cache bypass)",
+      "notes": "This is a hosted identity service: check the vendor's load-testing policy and your tenant's rate limits before running, keep the rate low, and expect 429s. Forces the origin to build the document. Shows the cost behind a CDN or cache.",
+      "safety": "read",
+      "job": {
+        "name": "discovery document (cache bypass)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/{{tenant}}/v2.0/.well-known/openid-configuration"
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 2,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Accept": "application/json",
+          "Cache-Control": "no-cache",
+          "Pragma": "no-cache"
+        }
+      }
+    },
+    {
+      "id": "jwks",
+      "name": "JSON web key set",
+      "notes": "This is a hosted identity service: check the vendor's load-testing policy and your tenant's rate limits before running, keep the rate low, and expect 429s. Every API validating tokens locally refreshes keys from here, and a key rotation causes a thundering herd of fetches.",
+      "safety": "read",
+      "job": {
+        "name": "JSON web key set",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/{{tenant}}/discovery/v2.0/keys"
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 5,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Accept": "application/json"
+        }
+      }
+    },
+    {
+      "id": "authorize-redirect",
+      "name": "authorization endpoint (login page or redirect)",
+      "notes": "This is a hosted identity service: check the vendor's load-testing policy and your tenant's rate limits before running, keep the rate low, and expect 429s. Start of every browser login. Redirects are NOT followed, so this measures the provider itself, not the login page it forwards to.",
+      "safety": "read",
+      "job": {
+        "name": "authorization endpoint (login page or redirect)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/{{tenant}}/oauth2/v2.0/authorize?response_type=code&client_id={{clientId}}&redirect_uri={{redirectUri}}&scope={{scope}}&state=blasta&nonce=blasta&code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM&code_challenge_method=S256",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 2,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302,
+          303
+        ],
+        "headers": {
+          "Accept": "text/html"
+        }
+      }
+    },
+    {
+      "id": "authorize-silent",
+      "name": "silent authentication (prompt=none)",
+      "notes": "This is a hosted identity service: check the vendor's load-testing policy and your tenant's rate limits before running, keep the rate low, and expect 429s. What SPAs do in a hidden iframe to renew a session. With no session it must answer with a login_required redirect, quickly, and without rendering a page.",
+      "safety": "read",
+      "job": {
+        "name": "silent authentication (prompt=none)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/{{tenant}}/oauth2/v2.0/authorize?response_type=code&client_id={{clientId}}&redirect_uri={{redirectUri}}&scope={{scope}}&state=blasta&nonce=blasta&code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM&code_challenge_method=S256&prompt=none",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 2,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302,
+          303
+        ],
+        "headers": {
+          "Accept": "text/html"
+        }
+      }
+    },
+    {
+      "id": "authorize-bad-client",
+      "name": "authorization with an unknown client",
+      "notes": "This is a hosted identity service: check the vendor's load-testing policy and your tenant's rate limits before running, keep the rate low, and expect 429s. Error path: an unregistered client_id must be refused cheaply. If it costs as much as a real login, attackers can load you for free.",
+      "safety": "read",
+      "job": {
+        "name": "authorization with an unknown client",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/{{tenant}}/oauth2/v2.0/authorize?response_type=code&client_id=blasta-no-such-client&redirect_uri=https://example.invalid/cb&scope=openid&state=x",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 2,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302,
+          303,
+          400,
+          401,
+          403,
+          404
+        ],
+        "headers": {
+          "Accept": "text/html"
+        }
+      }
+    },
+    {
+      "id": "authorize-bad-redirect",
+      "name": "authorization with a wrong redirect_uri",
+      "notes": "This is a hosted identity service: check the vendor's load-testing policy and your tenant's rate limits before running, keep the rate low, and expect 429s. Must be rejected with an error page, never redirected (open-redirect check): a 302 to the bad URI would be a vulnerability, so only 4xx and the error page count as success.",
+      "safety": "read",
+      "job": {
+        "name": "authorization with a wrong redirect_uri",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/{{tenant}}/oauth2/v2.0/authorize?response_type=code&client_id={{clientId}}&redirect_uri=https://evil.example.invalid/cb&scope=openid&state=x",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 5,
+        "rps": 1,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          400,
+          401,
+          403
+        ],
+        "headers": {
+          "Accept": "text/html"
+        }
+      }
+    },
+    {
+      "id": "token-client-credentials",
+      "name": "token: client credentials",
+      "notes": "This is a hosted identity service: check the vendor's load-testing policy and your tenant's rate limits before running, keep the rate low, and expect 429s. Machine-to-machine tokens. Signing a JWT is CPU bound, so this is where most providers saturate first. Creates tokens and sessions: staging only.",
+      "safety": "mutating",
+      "job": {
+        "name": "token: client credentials",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/{{tenant}}/oauth2/v2.0/token"
+        },
+        "method": "POST",
+        "concurrency": 10,
+        "rps": 2,
+        "duration": 60000000000,
+        "timeout": 30000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "Accept": "application/json"
+        },
+        "body": "grant_type=client_credentials&client_id={{clientId}}&client_secret={{clientSecret}}&scope={{scope}}"
+      }
+    },
+    {
+      "id": "token-basic-auth",
+      "name": "token: client credentials with HTTP Basic auth",
+      "notes": "This is a hosted identity service: check the vendor's load-testing policy and your tenant's rate limits before running, keep the rate low, and expect 429s. Same grant, client authenticated with an Authorization: Basic header. Replace the header value with base64(clientId:secret) when running from the UI.",
+      "safety": "mutating",
+      "job": {
+        "name": "token: client credentials with HTTP Basic auth",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/{{tenant}}/oauth2/v2.0/token"
+        },
+        "method": "POST",
+        "concurrency": 10,
+        "rps": 2,
+        "duration": 60000000000,
+        "timeout": 30000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "Accept": "application/json",
+          "Authorization": "Basic ${OIDC_CLIENT_BASIC}"
+        },
+        "body": "grant_type=client_credentials&scope={{scope}}"
+      }
+    },
+    {
+      "id": "token-wrong-secret",
+      "name": "token: wrong client secret",
+      "notes": "This is a hosted identity service: check the vendor's load-testing policy and your tenant's rate limits before running, keep the rate low, and expect 429s. Failed client authentication. Should be fast, rate limited and logged. Keep the rate low: some providers lock the client after repeated failures.",
+      "safety": "read",
+      "job": {
+        "name": "token: wrong client secret",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/{{tenant}}/oauth2/v2.0/token"
+        },
+        "method": "POST",
+        "concurrency": 5,
+        "rps": 1,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          400,
+          401
+        ],
+        "headers": {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "Accept": "application/json"
+        },
+        "body": "grant_type=client_credentials&client_id={{clientId}}&client_secret=blasta-wrong-secret"
+      }
+    },
+    {
+      "id": "token-invalid-code",
+      "name": "token: invalid authorization code",
+      "notes": "This is a hosted identity service: check the vendor's load-testing policy and your tenant's rate limits before running, keep the rate low, and expect 429s. A bogus code at the token endpoint (invalid_grant). Replayed or guessed codes land here, so it must stay cheap.",
+      "safety": "read",
+      "job": {
+        "name": "token: invalid authorization code",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/{{tenant}}/oauth2/v2.0/token"
+        },
+        "method": "POST",
+        "concurrency": 10,
+        "rps": 2,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          400,
+          401
+        ],
+        "headers": {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "Accept": "application/json"
+        },
+        "body": "grant_type=authorization_code&code=blasta-invalid-code&redirect_uri={{redirectUri}}&client_id={{clientId}}&client_secret={{clientSecret}}&code_verifier=blasta"
+      }
+    },
+    {
+      "id": "token-refresh",
+      "name": "token: refresh token grant",
+      "notes": "This is a hosted identity service: check the vendor's load-testing policy and your tenant's rate limits before running, keep the rate low, and expect 429s. Token renewal, the most frequent token call in a long-lived app. If refresh tokens ROTATE, only the first request succeeds and the rest fail with invalid_grant: use a client without rotation.",
+      "safety": "mutating",
+      "job": {
+        "name": "token: refresh token grant",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/{{tenant}}/oauth2/v2.0/token"
+        },
+        "method": "POST",
+        "concurrency": 10,
+        "rps": 2,
+        "duration": 60000000000,
+        "timeout": 30000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "Accept": "application/json"
+        },
+        "body": "grant_type=refresh_token&refresh_token=${OIDC_REFRESH_TOKEN}&client_id={{clientId}}&client_secret={{clientSecret}}"
+      }
+    },
+    {
+      "id": "token-exchange",
+      "name": "token: exchange (RFC 8693)",
+      "notes": "This is a hosted identity service: check the vendor's load-testing policy and your tenant's rate limits before running, keep the rate low, and expect 429s. Swaps a token for another (service-to-service delegation). Not every provider supports it; a 400 unsupported_grant_type is counted as an error.",
+      "safety": "mutating",
+      "job": {
+        "name": "token: exchange (RFC 8693)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/{{tenant}}/oauth2/v2.0/token"
+        },
+        "method": "POST",
+        "concurrency": 5,
+        "rps": 1,
+        "duration": 60000000000,
+        "timeout": 30000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "Accept": "application/json"
+        },
+        "body": "grant_type=urn:ietf:params:oauth:grant-type:token-exchange&subject_token={{token}}&subject_token_type=urn:ietf:params:oauth:token-type:access_token&client_id={{clientId}}&client_secret={{clientSecret}}"
+      }
+    },
+    {
+      "id": "cors-preflight",
+      "name": "CORS preflight on the token endpoint",
+      "notes": "This is a hosted identity service: check the vendor's load-testing policy and your tenant's rate limits before running, keep the rate low, and expect 429s. Browser apps send an OPTIONS before calling the token endpoint. It must be answered at the edge, not by the identity code.",
+      "safety": "read",
+      "job": {
+        "name": "CORS preflight on the token endpoint",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/{{tenant}}/oauth2/v2.0/token"
+        },
+        "method": "OPTIONS",
+        "concurrency": 10,
+        "rps": 5,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          204
+        ],
+        "headers": {
+          "Origin": "{{redirectUri}}",
+          "Access-Control-Request-Method": "POST",
+          "Access-Control-Request-Headers": "content-type"
+        }
+      }
+    },
+    {
+      "id": "token-ramp",
+      "name": "token endpoint capacity ramp",
+      "notes": "This is a hosted identity service: check the vendor's load-testing policy and your tenant's rate limits before running, keep the rate low, and expect 429s. Ramps client-credentials requests up to find the rate where latency or errors climb: your token-issuing capacity. Staging only.",
+      "safety": "mutating",
+      "job": {
+        "name": "token endpoint capacity ramp",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/{{tenant}}/oauth2/v2.0/token"
+        },
+        "method": "POST",
+        "concurrency": 100,
+        "rps": 15,
+        "duration": 420000000000,
+        "timeout": 30000000000,
+        "queueSize": 5000,
+        "onQueueFull": "reject",
+        "maxWorkers": 300,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "Accept": "application/json"
+        },
+        "ramp": 300000000000,
+        "body": "grant_type=client_credentials&client_id={{clientId}}&client_secret={{clientSecret}}&scope={{scope}}"
+      }
+    },
+    {
+      "id": "device-authorization",
+      "name": "device authorization (device flow)",
+      "notes": "This is a hosted identity service: check the vendor's load-testing policy and your tenant's rate limits before running, keep the rate low, and expect 429s. Starts a TV or CLI login. Creates a pending device code per request, so it also tests the cleanup of abandoned ones. Staging only.",
+      "safety": "mutating",
+      "job": {
+        "name": "device authorization (device flow)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/{{tenant}}/oauth2/v2.0/devicecode"
+        },
+        "method": "POST",
+        "concurrency": 5,
+        "rps": 1,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "Accept": "application/json"
+        },
+        "body": "scope={{scope}}&client_id={{clientId}}&client_secret={{clientSecret}}"
+      }
+    },
+    {
+      "id": "end-session",
+      "name": "logout (end session)",
+      "notes": "This is a hosted identity service: check the vendor's load-testing policy and your tenant's rate limits before running, keep the rate low, and expect 429s. RP-initiated logout without a session: shows a confirmation page or redirects. Redirects are not followed.",
+      "safety": "read",
+      "job": {
+        "name": "logout (end session)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/{{tenant}}/oauth2/v2.0/logout",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 2,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302,
+          303
+        ],
+        "headers": {
+          "Accept": "text/html"
+        }
+      }
+    },
+    {
+      "id": "ent-01-smoke",
+      "name": "Microsoft Entra ID (Azure AD): 01 smoke",
+      "notes": "Enterprise plan, step 1 of 10. One request a second for 30 seconds. Run this first, every time: it proves the address, credentials and headers are right and that the environment is up before any real load is applied. Gate: zero errors. Reference request: authorization endpoint (login page or redirect). Hosted identity service: this stays well below the vendor's rate limits; check their load-testing policy first.",
+      "safety": "read",
+      "job": {
+        "name": "Microsoft Entra ID (Azure AD): 01 smoke",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/{{tenant}}/oauth2/v2.0/authorize?response_type=code&client_id={{clientId}}&redirect_uri={{redirectUri}}&scope={{scope}}&state=blasta&nonce=blasta&code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM&code_challenge_method=S256",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 1,
+        "rps": 1,
+        "duration": 30000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302,
+          303
+        ],
+        "headers": {
+          "Accept": "text/html"
+        },
+        "slo": {
+          "maxErrorRate": 0
+        }
+      }
+    },
+    {
+      "id": "ent-02-baseline",
+      "name": "Microsoft Entra ID (Azure AD): 02 baseline (20% load)",
+      "notes": "Step 2 of 10. About a fifth of normal traffic for 5 minutes: the uncontended latency of this request. Every later result is judged against it, so record p50 and p95. Gate: at most 0.5% errors and the default latency targets. Reference request: authorization endpoint (login page or redirect). Hosted identity service: this stays well below the vendor's rate limits; check their load-testing policy first.",
+      "safety": "read",
+      "job": {
+        "name": "Microsoft Entra ID (Azure AD): 02 baseline (20% load)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/{{tenant}}/oauth2/v2.0/authorize?response_type=code&client_id={{clientId}}&redirect_uri={{redirectUri}}&scope={{scope}}&state=blasta&nonce=blasta&code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM&code_challenge_method=S256",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 2,
+        "rps": 2,
+        "duration": 300000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302,
+          303
+        ],
+        "headers": {
+          "Accept": "text/html"
+        },
+        "slo": {
+          "maxErrorRate": 0.5,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-03-average-load",
+      "name": "Microsoft Entra ID (Azure AD): 03 average load (SLO check)",
+      "notes": "Step 3 of 10. Normal busy-hour traffic for 10 minutes. The rate is the reference job's rate: raise it to your measured production peak-hour rate. This is the run that proves (or breaks) your SLO. Gate: at most 1% errors, p95 and p99 inside the targets. Reference request: authorization endpoint (login page or redirect). Hosted identity service: this stays well below the vendor's rate limits; check their load-testing policy first.",
+      "safety": "read",
+      "job": {
+        "name": "Microsoft Entra ID (Azure AD): 03 average load (SLO check)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/{{tenant}}/oauth2/v2.0/authorize?response_type=code&client_id={{clientId}}&redirect_uri={{redirectUri}}&scope={{scope}}&state=blasta&nonce=blasta&code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM&code_challenge_method=S256",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 10,
+        "duration": 600000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302,
+          303
+        ],
+        "headers": {
+          "Accept": "text/html"
+        },
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-04-peak-load",
+      "name": "Microsoft Entra ID (Azure AD): 04 peak load (2x average)",
+      "notes": "Step 4 of 10. Twice the average for 10 minutes: the busiest hour of the year plus headroom. Latency may rise, but must stay in SLO; if it does not, you have no headroom. Gate: at most 2% errors, latency targets doubled. Reference request: authorization endpoint (login page or redirect). Hosted identity service: this stays well below the vendor's rate limits; check their load-testing policy first.",
+      "safety": "read",
+      "job": {
+        "name": "Microsoft Entra ID (Azure AD): 04 peak load (2x average)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/{{tenant}}/oauth2/v2.0/authorize?response_type=code&client_id={{clientId}}&redirect_uri={{redirectUri}}&scope={{scope}}&state=blasta&nonce=blasta&code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM&code_challenge_method=S256",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 20,
+        "duration": 600000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302,
+          303
+        ],
+        "headers": {
+          "Accept": "text/html"
+        },
+        "slo": {
+          "maxErrorRate": 2,
+          "maxP95": 2000000000,
+          "maxP99": 4000000000
+        }
+      }
+    },
+    {
+      "id": "ent-08-soak",
+      "name": "Microsoft Entra ID (Azure AD): 08 soak (30 min at 60%)",
+      "notes": "Step 8 of 10, shortened for a hosted service. Steady load for 30 minutes to catch token or session expiry problems and slow decay on your side. Reference request: authorization endpoint (login page or redirect). Hosted identity service: this stays well below the vendor's rate limits; check their load-testing policy first.",
+      "safety": "read",
+      "job": {
+        "name": "Microsoft Entra ID (Azure AD): 08 soak (30 min at 60%)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/{{tenant}}/oauth2/v2.0/authorize?response_type=code&client_id={{clientId}}&redirect_uri={{redirectUri}}&scope={{scope}}&state=blasta&nonce=blasta&code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM&code_challenge_method=S256",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 6,
+        "rps": 6,
+        "duration": 1800000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302,
+          303
+        ],
+        "headers": {
+          "Accept": "text/html"
+        },
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    }
+  ],
+  "secrets": {
+    "OIDC_ACCESS_TOKEN": {
+      "label": "Access token",
+      "guide": "Request one with the client-credentials grant:\n`curl -s -d grant_type=client_credentials -d client_id=CLIENT -d client_secret=SECRET -d scope=openid https://IDP/token`\nthen copy `access_token` from the answer. Add scope=openid so userinfo calls are allowed.\nIt expires quickly (often 5 minutes): request a fresh one right before the run, or lengthen the token lifespan on the test client."
+    },
+    "OIDC_CLIENT_BASIC": {
+      "label": "Client credentials, base64",
+      "guide": "The client ID and secret joined by a colon and base64-encoded, used for HTTP Basic client authentication.\n`printf 'CLIENT_ID:CLIENT_SECRET' | base64` (macOS or Linux), then paste the result."
+    },
+    "OIDC_CLIENT_SECRET": {
+      "label": "Client secret",
+      "guide": "In your identity provider open the test client and go to its Credentials (or Secrets) tab, then copy the client secret. Use a dedicated test client, never a production one."
+    },
+    "OIDC_REFRESH_TOKEN": {
+      "label": "Refresh token",
+      "guide": "Sign in once as a test user and copy `refresh_token` from the token response (authorization code flow, or the password grant with scope `openid offline_access`).\nUse a client that does NOT rotate refresh tokens: with rotation only the first request works and the rest fail with invalid_grant."
+    }
+  }
+}

@@ -1,0 +1,1107 @@
+{
+  "id": "redis",
+  "title": "Redis / Valkey / KeyDB / Dragonfly",
+  "category": "Cache",
+  "summary": "Common Redis workload patterns: data types, transactions, scripting, pub/sub, streams, big values, replication wait, connection churn and ramps. Includes an enterprise test plan (jobs starting ent-).",
+  "stack": "Redis, Valkey, KeyDB, Dragonfly (RESP protocol)",
+  "variables": [
+    {
+      "name": "host",
+      "default": "redis.example.com",
+      "description": "Redis host name",
+      "placeholder": true,
+      "guide": "The host name or IP address of the server, without a port or http://, for example redis.staging.example.com. BLASTA runs in a container, so for a service on your own machine use host.docker.internal instead of localhost."
+    },
+    {
+      "name": "port",
+      "default": "6379",
+      "description": "Redis port",
+      "guide": "The port the service listens on. The default is filled in; check the service's configuration if you changed it."
+    },
+    {
+      "name": "authPassword",
+      "default": "${REDIS_PASSWORD}",
+      "description": "Password for the AUTH jobs. Read from REDIS_PASSWORD by the CLI.",
+      "sensitive": true
+    }
+  ],
+  "jobs": [
+    {
+      "id": "ping",
+      "name": "PING",
+      "notes": "Round trip with no data access: network plus event loop. A reply other than +PONG (for example -NOAUTH) counts as an error.",
+      "safety": "read",
+      "job": {
+        "name": "PING",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "expectPrefix": "+PONG"
+          }
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 200,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "body": "PING\r\n"
+      }
+    },
+    {
+      "id": "connect-ping-quit",
+      "name": "connect, PING, QUIT (connection churn)",
+      "notes": "Models clients with no connection pool. A new connection per request is what exhausts file descriptors and TIME_WAIT sockets.",
+      "safety": "read",
+      "job": {
+        "name": "connect, PING, QUIT (connection churn)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "expectPrefix": "+PONG"
+          }
+        },
+        "method": "GET",
+        "concurrency": 50,
+        "rps": 500,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "body": "PING\r\nQUIT\r\n"
+      }
+    },
+    {
+      "id": "auth-ping",
+      "name": "AUTH then PING",
+      "notes": "Authenticated connection: password check plus ping. Needs REDIS_PASSWORD (CLI only; the web UI does not expand environment variables).",
+      "safety": "read",
+      "job": {
+        "name": "AUTH then PING",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "expectPrefix": "+OK\r\n+PONG"
+          }
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 200,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "body": "AUTH ${REDIS_PASSWORD}\r\nPING\r\n"
+      }
+    },
+    {
+      "id": "set",
+      "name": "SET (string write)",
+      "notes": "Writes keys named blasta:*, so they are easy to delete (redis-cli --scan --pattern 'blasta:*' | xargs redis-cli del). Use a test instance. The simplest write; includes AOF/replication cost.",
+      "safety": "write",
+      "job": {
+        "name": "SET (string write)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "expectPrefix": "+OK"
+          }
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 200,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "body": "SET blasta:str hello\r\n"
+      }
+    },
+    {
+      "id": "get",
+      "name": "GET (string read)",
+      "notes": "The typical cache read. A hit starts with $5, a miss with $-1; both mean Redis answered, so run the SET job first for a hit.",
+      "safety": "read",
+      "job": {
+        "name": "GET (string read)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "expectPrefix": "$"
+          }
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 300,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "body": "GET blasta:str\r\n"
+      }
+    },
+    {
+      "id": "set-get",
+      "name": "SET then GET (pipelined)",
+      "notes": "Writes keys named blasta:*, so they are easy to delete (redis-cli --scan --pattern 'blasta:*' | xargs redis-cli del). Use a test instance. Two commands in one round trip, the way client libraries pipeline.",
+      "safety": "write",
+      "job": {
+        "name": "SET then GET (pipelined)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "expectPrefix": "+OK\r\n$"
+          }
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 200,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "body": "SET blasta:str hello\r\nGET blasta:str\r\n"
+      }
+    },
+    {
+      "id": "setex",
+      "name": "SETEX (cache entry with a TTL)",
+      "notes": "Writes keys named blasta:*, so they are easy to delete (redis-cli --scan --pattern 'blasta:*' | xargs redis-cli del). Use a test instance. Typical cache fill. Many keys expiring together create an expiry storm: raise the rate and watch latency spikes.",
+      "safety": "write",
+      "job": {
+        "name": "SETEX (cache entry with a TTL)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "expectPrefix": "+OK"
+          }
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 200,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "body": "SETEX blasta:ttl 60 cached-value\r\n"
+      }
+    },
+    {
+      "id": "incr",
+      "name": "INCR (counter)",
+      "notes": "Writes keys named blasta:*, so they are easy to delete (redis-cli --scan --pattern 'blasta:*' | xargs redis-cli del). Use a test instance. Rate limiters and counters. Contention on a single hot key shows the single-threaded ceiling.",
+      "safety": "write",
+      "job": {
+        "name": "INCR (counter)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "expectPrefix": ":"
+          }
+        },
+        "method": "GET",
+        "concurrency": 50,
+        "rps": 500,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "body": "INCR blasta:counter\r\n"
+      }
+    },
+    {
+      "id": "hash",
+      "name": "HSET and HGET (hash)",
+      "notes": "Writes keys named blasta:*, so they are easy to delete (redis-cli --scan --pattern 'blasta:*' | xargs redis-cli del). Use a test instance. Session and object storage.",
+      "safety": "write",
+      "job": {
+        "name": "HSET and HGET (hash)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "expectPrefix": ":"
+          }
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 200,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "body": "HSET blasta:hash field value\r\nHGET blasta:hash field\r\n"
+      }
+    },
+    {
+      "id": "list-queue",
+      "name": "LPUSH and RPOP (work queue)",
+      "notes": "Writes keys named blasta:*, so they are easy to delete (redis-cli --scan --pattern 'blasta:*' | xargs redis-cli del). Use a test instance. Simple job queue pattern (Sidekiq, Resque, RQ).",
+      "safety": "write",
+      "job": {
+        "name": "LPUSH and RPOP (work queue)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "expectPrefix": ":"
+          }
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 200,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "body": "LPUSH blasta:queue job\r\nRPOP blasta:queue\r\n"
+      }
+    },
+    {
+      "id": "set-add",
+      "name": "SADD and SISMEMBER (set)",
+      "notes": "Writes keys named blasta:*, so they are easy to delete (redis-cli --scan --pattern 'blasta:*' | xargs redis-cli del). Use a test instance. Tags, unique visitors, membership checks.",
+      "safety": "write",
+      "job": {
+        "name": "SADD and SISMEMBER (set)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "expectPrefix": ":"
+          }
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 200,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "body": "SADD blasta:set member\r\nSISMEMBER blasta:set member\r\n"
+      }
+    },
+    {
+      "id": "zset",
+      "name": "ZADD and ZRANGE (leaderboard)",
+      "notes": "Writes keys named blasta:*, so they are easy to delete (redis-cli --scan --pattern 'blasta:*' | xargs redis-cli del). Use a test instance. Sorted sets cost O(log n) per write; the range read is the part that grows with size.",
+      "safety": "write",
+      "job": {
+        "name": "ZADD and ZRANGE (leaderboard)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "expectPrefix": ":"
+          }
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 100,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "body": "ZADD blasta:board 1 player\r\nZRANGE blasta:board 0 9\r\n"
+      }
+    },
+    {
+      "id": "transaction",
+      "name": "MULTI / EXEC (transaction)",
+      "notes": "Writes keys named blasta:*, so they are easy to delete (redis-cli --scan --pattern 'blasta:*' | xargs redis-cli del). Use a test instance. Atomic block: replies +OK, +QUEUED, +QUEUED, then the results.",
+      "safety": "write",
+      "job": {
+        "name": "MULTI / EXEC (transaction)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "expectPrefix": "+OK\r\n+QUEUED\r\n+QUEUED\r\n*2"
+          }
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 100,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "body": "MULTI\r\nSET blasta:tx a\r\nGET blasta:tx\r\nEXEC\r\n"
+      }
+    },
+    {
+      "id": "lua",
+      "name": "EVAL (Lua script)",
+      "notes": "Server-side scripting blocks Redis while it runs, so a slow script stalls every client. This one is trivial; replace it with your real script.",
+      "safety": "read",
+      "job": {
+        "name": "EVAL (Lua script)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "expectPrefix": ":1"
+          }
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 200,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "body": "EVAL \"return 1\" 0\r\n"
+      }
+    },
+    {
+      "id": "publish",
+      "name": "PUBLISH (pub/sub)",
+      "notes": "Fan-out cost grows with subscribers; with none it is nearly free.",
+      "safety": "write",
+      "job": {
+        "name": "PUBLISH (pub/sub)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "expectPrefix": ":"
+          }
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 200,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "body": "PUBLISH blasta:channel message\r\n"
+      }
+    },
+    {
+      "id": "stream",
+      "name": "XADD (stream append)",
+      "notes": "Writes keys named blasta:*, so they are easy to delete (redis-cli --scan --pattern 'blasta:*' | xargs redis-cli del). Use a test instance. Event log pattern. Streams grow without bound unless trimmed: add MAXLEN in real use.",
+      "safety": "write",
+      "job": {
+        "name": "XADD (stream append)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "expectPrefix": "$"
+          }
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 200,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "body": "XADD blasta:stream MAXLEN ~ 10000 * field value\r\n"
+      }
+    },
+    {
+      "id": "scan",
+      "name": "SCAN (iterate keys)",
+      "notes": "The safe way to walk the keyspace (never use KEYS * in production: it blocks the server).",
+      "safety": "read",
+      "job": {
+        "name": "SCAN (iterate keys)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "expectPrefix": "*2"
+          }
+        },
+        "method": "GET",
+        "concurrency": 5,
+        "rps": 20,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "body": "SCAN 0 COUNT 100\r\n"
+      }
+    },
+    {
+      "id": "dbsize",
+      "name": "DBSIZE",
+      "notes": "O(1) key count: a cheap command useful as a latency baseline.",
+      "safety": "read",
+      "job": {
+        "name": "DBSIZE",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "expectPrefix": ":"
+          }
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 100,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "body": "DBSIZE\r\n"
+      }
+    },
+    {
+      "id": "info",
+      "name": "INFO (monitoring scrape)",
+      "notes": "Prometheus exporters and dashboards call INFO constantly. It builds an ~8 KB report, so it is far costlier than PING.",
+      "safety": "read",
+      "job": {
+        "name": "INFO (monitoring scrape)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "expectPrefix": "$"
+          }
+        },
+        "method": "GET",
+        "concurrency": 5,
+        "rps": 20,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "body": "INFO\r\n"
+      }
+    },
+    {
+      "id": "big-value",
+      "name": "SET with a 16 KB value",
+      "notes": "Writes keys named blasta:*, so they are easy to delete (redis-cli --scan --pattern 'blasta:*' | xargs redis-cli del). Use a test instance. Large values stress the network buffers and replication. Latency grows with size, and values over 1 MB are a known cause of latency spikes.",
+      "safety": "write",
+      "job": {
+        "name": "SET with a 16 KB value",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "expectPrefix": "+OK"
+          }
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 50,
+        "duration": 60000000000,
+        "timeout": 30000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "body": "SET blasta:big xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\r\n"
+      }
+    },
+    {
+      "id": "replication-wait",
+      "name": "SET then WAIT for a replica",
+      "notes": "Writes keys named blasta:*, so they are easy to delete (redis-cli --scan --pattern 'blasta:*' | xargs redis-cli del). Use a test instance. WAIT blocks until a replica acknowledges, so this measures replication lag directly. Needs at least one replica, else it returns :0 after the timeout.",
+      "safety": "write",
+      "job": {
+        "name": "SET then WAIT for a replica",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "expectPrefix": "+OK\r\n:"
+          }
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 50,
+        "duration": 60000000000,
+        "timeout": 30000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "body": "SET blasta:repl 1\r\nWAIT 1 100\r\n"
+      }
+    },
+    {
+      "id": "ramp",
+      "name": "capacity ramp (PING)",
+      "notes": "Ramps to a high rate to find the rate where latency climbs. PING is the least expensive command, so this is an upper bound for your real mix.",
+      "safety": "read",
+      "job": {
+        "name": "capacity ramp (PING)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "expectPrefix": "+PONG"
+          }
+        },
+        "method": "GET",
+        "concurrency": 100,
+        "rps": 5000,
+        "duration": 420000000000,
+        "timeout": 15000000000,
+        "queueSize": 10000,
+        "onQueueFull": "reject",
+        "maxWorkers": 400,
+        "blockPrivate": false,
+        "ramp": 300000000000,
+        "body": "PING\r\n"
+      }
+    },
+    {
+      "id": "soak",
+      "name": "soak (10 min)",
+      "notes": "Steady mixed SET/GET load, long enough to expose memory fragmentation and AOF rewrite pauses.",
+      "safety": "write",
+      "job": {
+        "name": "soak (10 min)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "expectPrefix": "+OK"
+          }
+        },
+        "method": "GET",
+        "concurrency": 30,
+        "rps": 500,
+        "duration": 600000000000,
+        "timeout": 15000000000,
+        "queueSize": 5000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "body": "SET blasta:soak v\r\nGET blasta:soak\r\n"
+      }
+    },
+    {
+      "id": "ent-01-smoke",
+      "name": "Redis / Valkey / KeyDB / Dragonfly: 01 smoke",
+      "notes": "Enterprise plan, step 1 of 10. One request a second for 30 seconds. Run this first, every time: it proves the address, credentials and headers are right and that the environment is up before any real load is applied. Gate: zero errors. Reference request: SET then GET (pipelined). This job WRITES or creates data on every request: staging only, and expect a lot of rows.",
+      "safety": "write",
+      "job": {
+        "name": "Redis / Valkey / KeyDB / Dragonfly: 01 smoke",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "expectPrefix": "+OK\r\n$"
+          }
+        },
+        "method": "GET",
+        "concurrency": 1,
+        "rps": 1,
+        "duration": 30000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "body": "SET blasta:str hello\r\nGET blasta:str\r\n",
+        "slo": {
+          "maxErrorRate": 0
+        }
+      }
+    },
+    {
+      "id": "ent-02-baseline",
+      "name": "Redis / Valkey / KeyDB / Dragonfly: 02 baseline (20% load)",
+      "notes": "Step 2 of 10. About a fifth of normal traffic for 5 minutes: the uncontended latency of this request. Every later result is judged against it, so record p50 and p95. Gate: at most 0.5% errors and the default latency targets. Reference request: SET then GET (pipelined). This job WRITES or creates data on every request: staging only, and expect a lot of rows.",
+      "safety": "write",
+      "job": {
+        "name": "Redis / Valkey / KeyDB / Dragonfly: 02 baseline (20% load)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "expectPrefix": "+OK\r\n$"
+          }
+        },
+        "method": "GET",
+        "concurrency": 4,
+        "rps": 40,
+        "duration": 300000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "body": "SET blasta:str hello\r\nGET blasta:str\r\n",
+        "slo": {
+          "maxErrorRate": 0.5,
+          "maxP95": 50000000,
+          "maxP99": 200000000
+        }
+      }
+    },
+    {
+      "id": "ent-03-average-load",
+      "name": "Redis / Valkey / KeyDB / Dragonfly: 03 average load (SLO check)",
+      "notes": "Step 3 of 10. Normal busy-hour traffic for 10 minutes. The rate is the reference job's rate: raise it to your measured production peak-hour rate. This is the run that proves (or breaks) your SLO. Gate: at most 1% errors, p95 and p99 inside the targets. Reference request: SET then GET (pipelined). This job WRITES or creates data on every request: staging only, and expect a lot of rows.",
+      "safety": "write",
+      "job": {
+        "name": "Redis / Valkey / KeyDB / Dragonfly: 03 average load (SLO check)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "expectPrefix": "+OK\r\n$"
+          }
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 200,
+        "duration": 600000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "body": "SET blasta:str hello\r\nGET blasta:str\r\n",
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 50000000,
+          "maxP99": 200000000
+        }
+      }
+    },
+    {
+      "id": "ent-04-peak-load",
+      "name": "Redis / Valkey / KeyDB / Dragonfly: 04 peak load (2x average)",
+      "notes": "Step 4 of 10. Twice the average for 10 minutes: the busiest hour of the year plus headroom. Latency may rise, but must stay in SLO; if it does not, you have no headroom. Gate: at most 2% errors, latency targets doubled. Reference request: SET then GET (pipelined). This job WRITES or creates data on every request: staging only, and expect a lot of rows.",
+      "safety": "write",
+      "job": {
+        "name": "Redis / Valkey / KeyDB / Dragonfly: 04 peak load (2x average)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "expectPrefix": "+OK\r\n$"
+          }
+        },
+        "method": "GET",
+        "concurrency": 40,
+        "rps": 400,
+        "duration": 600000000000,
+        "timeout": 15000000000,
+        "queueSize": 2000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "body": "SET blasta:str hello\r\nGET blasta:str\r\n",
+        "slo": {
+          "maxErrorRate": 2,
+          "maxP95": 100000000,
+          "maxP99": 400000000
+        }
+      }
+    },
+    {
+      "id": "ent-05-stress",
+      "name": "Redis / Valkey / KeyDB / Dragonfly: 05 stress (ramp to 4x)",
+      "notes": "Step 5 of 10. Ramps to four times average over 10 minutes, then holds for 2. Finds where it degrades and HOW: gracefully (latency rises, errors stay low) or badly (errors, timeouts, crashes, restarts). Observation only, no gate. Reference request: SET then GET (pipelined). This job WRITES or creates data on every request: staging only, and expect a lot of rows.",
+      "safety": "write",
+      "job": {
+        "name": "Redis / Valkey / KeyDB / Dragonfly: 05 stress (ramp to 4x)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "expectPrefix": "+OK\r\n$"
+          }
+        },
+        "method": "GET",
+        "concurrency": 80,
+        "rps": 800,
+        "duration": 720000000000,
+        "timeout": 15000000000,
+        "queueSize": 4000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "body": "SET blasta:str hello\r\nGET blasta:str\r\n",
+        "ramp": 600000000000
+      }
+    },
+    {
+      "id": "ent-06-spike",
+      "name": "Redis / Valkey / KeyDB / Dragonfly: 06 spike (10x in 10 s)",
+      "notes": "Step 6 of 10. Reaches ten times average within 10 seconds and holds for 2 minutes: a campaign email, a news link, a failover. Checks autoscaling, queue limits and load shedding. Gate: at most 5% errors, because shedding load is acceptable and crashing is not. Reference request: SET then GET (pipelined). This job WRITES or creates data on every request: staging only, and expect a lot of rows.",
+      "safety": "write",
+      "job": {
+        "name": "Redis / Valkey / KeyDB / Dragonfly: 06 spike (10x in 10 s)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "expectPrefix": "+OK\r\n$"
+          }
+        },
+        "method": "GET",
+        "concurrency": 200,
+        "rps": 2000,
+        "duration": 130000000000,
+        "timeout": 15000000000,
+        "queueSize": 10000,
+        "onQueueFull": "reject",
+        "maxWorkers": 400,
+        "blockPrivate": false,
+        "body": "SET blasta:str hello\r\nGET blasta:str\r\n",
+        "ramp": 10000000000,
+        "slo": {
+          "maxErrorRate": 5
+        }
+      }
+    },
+    {
+      "id": "ent-07-recovery",
+      "name": "Redis / Valkey / KeyDB / Dragonfly: 07 recovery after the spike",
+      "notes": "Step 7 of 10. Run IMMEDIATELY after the spike, at average load for 5 minutes. Latency and errors must return to the baseline from step 2. If they do not, something is stuck: queues, connection pools, GC, an autoscaler cool-down. Gate: same as average load. Reference request: SET then GET (pipelined). This job WRITES or creates data on every request: staging only, and expect a lot of rows.",
+      "safety": "write",
+      "job": {
+        "name": "Redis / Valkey / KeyDB / Dragonfly: 07 recovery after the spike",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "expectPrefix": "+OK\r\n$"
+          }
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 200,
+        "duration": 300000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "body": "SET blasta:str hello\r\nGET blasta:str\r\n",
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 50000000,
+          "maxP99": 200000000
+        }
+      }
+    },
+    {
+      "id": "ent-08-soak",
+      "name": "Redis / Valkey / KeyDB / Dragonfly: 08 soak (1 hour at 60%)",
+      "notes": "Step 8 of 10. One hour of steady load. Finds leaks and slow decay in memory, connections, file descriptors, disk, log volume and cache churn. Watch the resource graphs: any line that climbs and never flattens is a finding. Gate: at most 0.5% errors. Reference request: SET then GET (pipelined). This job WRITES or creates data on every request: staging only, and expect a lot of rows.",
+      "safety": "write",
+      "job": {
+        "name": "Redis / Valkey / KeyDB / Dragonfly: 08 soak (1 hour at 60%)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "expectPrefix": "+OK\r\n$"
+          }
+        },
+        "method": "GET",
+        "concurrency": 12,
+        "rps": 120,
+        "duration": 3600000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "body": "SET blasta:str hello\r\nGET blasta:str\r\n",
+        "slo": {
+          "maxErrorRate": 0.5,
+          "maxP95": 50000000,
+          "maxP99": 200000000
+        }
+      }
+    },
+    {
+      "id": "ent-09-breakpoint",
+      "name": "Redis / Valkey / KeyDB / Dragonfly: 09 breakpoint (find the ceiling)",
+      "notes": "Step 9 of 10. Ramps to twenty times average over 20 minutes. Stop it when errors pass about 5%: the rate at that moment is your ceiling, and ceiling divided by peak is your capacity margin. Use a production-like environment, never production. Reference request: SET then GET (pipelined). This job WRITES or creates data on every request: staging only, and expect a lot of rows.",
+      "safety": "write",
+      "job": {
+        "name": "Redis / Valkey / KeyDB / Dragonfly: 09 breakpoint (find the ceiling)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "expectPrefix": "+OK\r\n$"
+          }
+        },
+        "method": "GET",
+        "concurrency": 400,
+        "rps": 4000,
+        "duration": 1380000000000,
+        "timeout": 15000000000,
+        "queueSize": 20000,
+        "onQueueFull": "reject",
+        "maxWorkers": 800,
+        "blockPrivate": false,
+        "body": "SET blasta:str hello\r\nGET blasta:str\r\n",
+        "ramp": 1200000000000
+      }
+    },
+    {
+      "id": "ent-10-failover-window",
+      "name": "Redis / Valkey / KeyDB / Dragonfly: 10 resilience window (failover / deploy)",
+      "notes": "Step 10 of 10. Average load for 15 minutes. About 5 minutes in, cause the event you are testing: kill a pod or node, fail over the database, roll out a new version, drain a zone. Errors in the window are your real availability loss. Gate: at most 1% errors overall; read the time series for how long the dip lasted. Reference request: SET then GET (pipelined). This job WRITES or creates data on every request: staging only, and expect a lot of rows.",
+      "safety": "write",
+      "job": {
+        "name": "Redis / Valkey / KeyDB / Dragonfly: 10 resilience window (failover / deploy)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "expectPrefix": "+OK\r\n$"
+          }
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 200,
+        "duration": 900000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "body": "SET blasta:str hello\r\nGET blasta:str\r\n",
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 50000000,
+          "maxP99": 200000000
+        }
+      }
+    },
+    {
+      "id": "ent-x-connection-storm",
+      "name": "Redis / Valkey / KeyDB / Dragonfly: connection storm (ramp to 10x)",
+      "notes": "Ramps new connections per second to ten times normal: a fleet reconnecting after an outage, a deploy that restarts every pod, a network blip. Shows accept-queue, file descriptor and handshake limits. Reference request: SET then GET (pipelined). This job WRITES or creates data on every request: staging only, and expect a lot of rows.",
+      "safety": "write",
+      "job": {
+        "name": "Redis / Valkey / KeyDB / Dragonfly: connection storm (ramp to 10x)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "expectPrefix": "+OK\r\n$"
+          }
+        },
+        "method": "GET",
+        "concurrency": 200,
+        "rps": 2000,
+        "duration": 420000000000,
+        "timeout": 15000000000,
+        "queueSize": 10000,
+        "onQueueFull": "reject",
+        "maxWorkers": 400,
+        "blockPrivate": false,
+        "body": "SET blasta:str hello\r\nGET blasta:str\r\n",
+        "ramp": 120000000000
+      }
+    },
+    {
+      "id": "ent-x-cache-aside-peak",
+      "name": "Redis / Valkey / KeyDB / Dragonfly: cache-aside read peak",
+      "notes": "Five times normal reads for 10 minutes: the application's busiest hour with a warm cache. p95 should stay in single-digit milliseconds. Reference request: GET (string read).",
+      "safety": "read",
+      "job": {
+        "name": "Redis / Valkey / KeyDB / Dragonfly: cache-aside read peak",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "expectPrefix": "$"
+          }
+        },
+        "method": "GET",
+        "concurrency": 100,
+        "rps": 1500,
+        "duration": 600000000000,
+        "timeout": 15000000000,
+        "queueSize": 7500,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "body": "GET blasta:str\r\n",
+        "slo": {
+          "maxErrorRate": 0.1,
+          "maxP95": 5000000,
+          "maxP99": 20000000
+        }
+      }
+    },
+    {
+      "id": "ent-x-hot-key-contention",
+      "name": "Redis / Valkey / KeyDB / Dragonfly: hot key contention",
+      "notes": "Every request increments the SAME counter at high concurrency, like a global rate limiter or a page-view counter. Redis is single-threaded, so one hot key caps throughput however many cores you have. Reference request: INCR (counter). This job WRITES or creates data on every request: staging only, and expect a lot of rows.",
+      "safety": "write",
+      "job": {
+        "name": "Redis / Valkey / KeyDB / Dragonfly: hot key contention",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "expectPrefix": ":"
+          }
+        },
+        "method": "GET",
+        "concurrency": 500,
+        "rps": 5000,
+        "duration": 120000000000,
+        "timeout": 15000000000,
+        "queueSize": 25000,
+        "onQueueFull": "reject",
+        "maxWorkers": 1000,
+        "blockPrivate": false,
+        "body": "INCR blasta:counter\r\n"
+      }
+    },
+    {
+      "id": "ent-x-write-through-peak",
+      "name": "Redis / Valkey / KeyDB / Dragonfly: write-through peak",
+      "notes": "Three times normal write-then-read for 10 minutes: session stores and write-through caches. Reference request: SET then GET (pipelined). This job WRITES or creates data on every request: staging only, and expect a lot of rows.",
+      "safety": "write",
+      "job": {
+        "name": "Redis / Valkey / KeyDB / Dragonfly: write-through peak",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "expectPrefix": "+OK\r\n$"
+          }
+        },
+        "method": "GET",
+        "concurrency": 60,
+        "rps": 600,
+        "duration": 600000000000,
+        "timeout": 15000000000,
+        "queueSize": 3000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "body": "SET blasta:str hello\r\nGET blasta:str\r\n",
+        "slo": {
+          "maxErrorRate": 0.1,
+          "maxP95": 10000000,
+          "maxP99": 40000000
+        }
+      }
+    },
+    {
+      "id": "ent-x-connection-storm",
+      "name": "Redis / Valkey / KeyDB / Dragonfly: client connection storm",
+      "notes": "Applications without a connection pool reconnect for every operation. Ramps to ten times normal. Watch maxclients, file descriptors and TIME_WAIT sockets. Reference request: connect, PING, QUIT (connection churn).",
+      "safety": "read",
+      "job": {
+        "name": "Redis / Valkey / KeyDB / Dragonfly: client connection storm",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "expectPrefix": "+PONG"
+          }
+        },
+        "method": "GET",
+        "concurrency": 500,
+        "rps": 5000,
+        "duration": 300000000000,
+        "timeout": 15000000000,
+        "queueSize": 25000,
+        "onQueueFull": "reject",
+        "maxWorkers": 1000,
+        "blockPrivate": false,
+        "body": "PING\r\nQUIT\r\n",
+        "ramp": 120000000000
+      }
+    },
+    {
+      "id": "ent-x-pipeline-burst",
+      "name": "Redis / Valkey / KeyDB / Dragonfly: pipeline burst (100 commands per request)",
+      "notes": "Client libraries pipeline: 100 SETs in one network write, as bulk loaders and batch workers do. Checks the reply only starts correctly; throughput is 100 commands per request, so the command rate is 100 times the request rate. Reference request: SET (string write). This job WRITES or creates data on every request: staging only, and expect a lot of rows.",
+      "safety": "write",
+      "job": {
+        "name": "Redis / Valkey / KeyDB / Dragonfly: pipeline burst (100 commands per request)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "expectPrefix": "+OK"
+          }
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 50,
+        "duration": 300000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "body": "SET blasta:p0 v\r\nSET blasta:p1 v\r\nSET blasta:p2 v\r\nSET blasta:p3 v\r\nSET blasta:p4 v\r\nSET blasta:p5 v\r\nSET blasta:p6 v\r\nSET blasta:p7 v\r\nSET blasta:p8 v\r\nSET blasta:p9 v\r\nSET blasta:p10 v\r\nSET blasta:p11 v\r\nSET blasta:p12 v\r\nSET blasta:p13 v\r\nSET blasta:p14 v\r\nSET blasta:p15 v\r\nSET blasta:p16 v\r\nSET blasta:p17 v\r\nSET blasta:p18 v\r\nSET blasta:p19 v\r\nSET blasta:p20 v\r\nSET blasta:p21 v\r\nSET blasta:p22 v\r\nSET blasta:p23 v\r\nSET blasta:p24 v\r\nSET blasta:p25 v\r\nSET blasta:p26 v\r\nSET blasta:p27 v\r\nSET blasta:p28 v\r\nSET blasta:p29 v\r\nSET blasta:p30 v\r\nSET blasta:p31 v\r\nSET blasta:p32 v\r\nSET blasta:p33 v\r\nSET blasta:p34 v\r\nSET blasta:p35 v\r\nSET blasta:p36 v\r\nSET blasta:p37 v\r\nSET blasta:p38 v\r\nSET blasta:p39 v\r\nSET blasta:p40 v\r\nSET blasta:p41 v\r\nSET blasta:p42 v\r\nSET blasta:p43 v\r\nSET blasta:p44 v\r\nSET blasta:p45 v\r\nSET blasta:p46 v\r\nSET blasta:p47 v\r\nSET blasta:p48 v\r\nSET blasta:p49 v\r\nSET blasta:p50 v\r\nSET blasta:p51 v\r\nSET blasta:p52 v\r\nSET blasta:p53 v\r\nSET blasta:p54 v\r\nSET blasta:p55 v\r\nSET blasta:p56 v\r\nSET blasta:p57 v\r\nSET blasta:p58 v\r\nSET blasta:p59 v\r\nSET blasta:p60 v\r\nSET blasta:p61 v\r\nSET blasta:p62 v\r\nSET blasta:p63 v\r\nSET blasta:p64 v\r\nSET blasta:p65 v\r\nSET blasta:p66 v\r\nSET blasta:p67 v\r\nSET blasta:p68 v\r\nSET blasta:p69 v\r\nSET blasta:p70 v\r\nSET blasta:p71 v\r\nSET blasta:p72 v\r\nSET blasta:p73 v\r\nSET blasta:p74 v\r\nSET blasta:p75 v\r\nSET blasta:p76 v\r\nSET blasta:p77 v\r\nSET blasta:p78 v\r\nSET blasta:p79 v\r\nSET blasta:p80 v\r\nSET blasta:p81 v\r\nSET blasta:p82 v\r\nSET blasta:p83 v\r\nSET blasta:p84 v\r\nSET blasta:p85 v\r\nSET blasta:p86 v\r\nSET blasta:p87 v\r\nSET blasta:p88 v\r\nSET blasta:p89 v\r\nSET blasta:p90 v\r\nSET blasta:p91 v\r\nSET blasta:p92 v\r\nSET blasta:p93 v\r\nSET blasta:p94 v\r\nSET blasta:p95 v\r\nSET blasta:p96 v\r\nSET blasta:p97 v\r\nSET blasta:p98 v\r\nSET blasta:p99 v\r\n",
+        "slo": {
+          "maxErrorRate": 0.1,
+          "maxP95": 200000000,
+          "maxP99": 800000000
+        }
+      }
+    }
+  ],
+  "secrets": {
+    "REDIS_PASSWORD": {
+      "label": "Redis password",
+      "guide": "The `requirepass` value in redis.conf, or the password of the ACL user. Skip the AUTH job if your instance has no password."
+    }
+  }
+}

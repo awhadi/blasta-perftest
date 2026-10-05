@@ -1,0 +1,19 @@
+{
+  "name": "postgres read-only query",
+  "description": "Reads a WordPress posts index. PG_DSN must be exported; the DSN itself is never in the job file.",
+  "executor": "sql",
+  "target": {
+    "url": "",
+    "meta": { "query": "SELECT post_status, COUNT(*) FROM wp_posts GROUP BY post_status" }
+  },
+  "db": { "driver": "postgres", "dsnEnv": "PG_DSN", "maxOpen": 16, "allowWrite": false },
+  "concurrency": 10,
+  "rps": 100,
+  "burst": 100,
+  "duration": 30000000000,
+  "queueSize": 1000,
+  "onQueueFull": "reject",
+  "timeout": 10000000000,
+  "maxWorkers": 100,
+  "blockPrivate": true
+}

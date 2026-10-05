@@ -1,0 +1,1500 @@
+{
+  "id": "dex",
+  "title": "Dex",
+  "category": "Identity",
+  "summary": "Dex OIDC provider with its connectors. Includes an enterprise test plan (jobs starting ent-).",
+  "stack": "Dex",
+  "variables": [
+    {
+      "name": "url",
+      "default": "https://idp.example.com",
+      "description": "Issuer / base URL, no trailing slash",
+      "placeholder": true,
+      "guide": "The address of the system to test, starting with https:// (or http://) and with no trailing slash, for example https://staging.example.com. Use a system you own, ideally a staging copy. BLASTA runs in a container, so for a service on your own machine use host.docker.internal instead of localhost."
+    },
+    {
+      "name": "clientId",
+      "default": "blasta-test",
+      "description": "A test client registered for load testing",
+      "placeholder": true,
+      "guide": "The ID of a client registered for this test. Create a dedicated test client in your identity provider (Clients / Applications) and copy its client ID. Do not reuse a production client."
+    },
+    {
+      "name": "clientSecret",
+      "default": "${OIDC_CLIENT_SECRET}",
+      "description": "Client secret. Read from the OIDC_CLIENT_SECRET env var by the CLI.",
+      "sensitive": true
+    },
+    {
+      "name": "redirectUri",
+      "default": "https://app.example.com/callback",
+      "description": "A redirect URI registered on that client",
+      "placeholder": true,
+      "guide": "A redirect URI that is registered on that client. Copy one from the client's settings: an unregistered one is refused."
+    },
+    {
+      "name": "scope",
+      "default": "openid%20profile%20email",
+      "description": "Space-separated scopes, URL-encoded",
+      "guide": "The scopes to request, URL-encoded with %20 between them, for example openid%20profile%20email."
+    },
+    {
+      "name": "token",
+      "default": "${OIDC_ACCESS_TOKEN}",
+      "description": "A valid access token. Read from OIDC_ACCESS_TOKEN by the CLI.",
+      "sensitive": true
+    }
+  ],
+  "jobs": [
+    {
+      "id": "discovery",
+      "name": "OIDC discovery document",
+      "notes": "Fetched by every relying party at start-up and on a timer. Cheap, but often served uncached.",
+      "safety": "read",
+      "job": {
+        "name": "OIDC discovery document",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/.well-known/openid-configuration"
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 50,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Accept": "application/json"
+        }
+      }
+    },
+    {
+      "id": "discovery-nocache",
+      "name": "discovery document (cache bypass)",
+      "notes": "Forces the origin to build the document. Shows the cost behind a CDN or cache.",
+      "safety": "read",
+      "job": {
+        "name": "discovery document (cache bypass)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/.well-known/openid-configuration"
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 20,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Accept": "application/json",
+          "Cache-Control": "no-cache",
+          "Pragma": "no-cache"
+        }
+      }
+    },
+    {
+      "id": "jwks",
+      "name": "JSON web key set",
+      "notes": "Every API validating tokens locally refreshes keys from here, and a key rotation causes a thundering herd of fetches.",
+      "safety": "read",
+      "job": {
+        "name": "JSON web key set",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/keys"
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 50,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Accept": "application/json"
+        }
+      }
+    },
+    {
+      "id": "authorize-redirect",
+      "name": "authorization endpoint (login page or redirect)",
+      "notes": "Start of every browser login. Redirects are NOT followed, so this measures the provider itself, not the login page it forwards to.",
+      "safety": "read",
+      "job": {
+        "name": "authorization endpoint (login page or redirect)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/auth?response_type=code&client_id={{clientId}}&redirect_uri={{redirectUri}}&scope={{scope}}&state=blasta&nonce=blasta&code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM&code_challenge_method=S256",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 20,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302,
+          303
+        ],
+        "headers": {
+          "Accept": "text/html"
+        }
+      }
+    },
+    {
+      "id": "authorize-silent",
+      "name": "silent authentication (prompt=none)",
+      "notes": "What SPAs do in a hidden iframe to renew a session. With no session it must answer with a login_required redirect, quickly, and without rendering a page.",
+      "safety": "read",
+      "job": {
+        "name": "silent authentication (prompt=none)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/auth?response_type=code&client_id={{clientId}}&redirect_uri={{redirectUri}}&scope={{scope}}&state=blasta&nonce=blasta&code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM&code_challenge_method=S256&prompt=none",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 20,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302,
+          303
+        ],
+        "headers": {
+          "Accept": "text/html"
+        }
+      }
+    },
+    {
+      "id": "authorize-bad-client",
+      "name": "authorization with an unknown client",
+      "notes": "Error path: an unregistered client_id must be refused cheaply. If it costs as much as a real login, attackers can load you for free.",
+      "safety": "read",
+      "job": {
+        "name": "authorization with an unknown client",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/auth?response_type=code&client_id=blasta-no-such-client&redirect_uri=https://example.invalid/cb&scope=openid&state=x",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 20,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302,
+          303,
+          400,
+          401,
+          403,
+          404
+        ],
+        "headers": {
+          "Accept": "text/html"
+        }
+      }
+    },
+    {
+      "id": "authorize-bad-redirect",
+      "name": "authorization with a wrong redirect_uri",
+      "notes": "Must be rejected with an error page, never redirected (open-redirect check): a 302 to the bad URI would be a vulnerability, so only 4xx and the error page count as success.",
+      "safety": "read",
+      "job": {
+        "name": "authorization with a wrong redirect_uri",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/auth?response_type=code&client_id={{clientId}}&redirect_uri=https://evil.example.invalid/cb&scope=openid&state=x",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 5,
+        "rps": 10,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          400,
+          401,
+          403
+        ],
+        "headers": {
+          "Accept": "text/html"
+        }
+      }
+    },
+    {
+      "id": "token-client-credentials",
+      "name": "token: client credentials",
+      "notes": "Machine-to-machine tokens. Signing a JWT is CPU bound, so this is where most providers saturate first. Creates tokens and sessions: staging only.",
+      "safety": "mutating",
+      "job": {
+        "name": "token: client credentials",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/token"
+        },
+        "method": "POST",
+        "concurrency": 10,
+        "rps": 20,
+        "duration": 60000000000,
+        "timeout": 30000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "Accept": "application/json"
+        },
+        "body": "grant_type=client_credentials&client_id={{clientId}}&client_secret={{clientSecret}}&scope={{scope}}"
+      }
+    },
+    {
+      "id": "token-basic-auth",
+      "name": "token: client credentials with HTTP Basic auth",
+      "notes": "Same grant, client authenticated with an Authorization: Basic header. Replace the header value with base64(clientId:secret) when running from the UI.",
+      "safety": "mutating",
+      "job": {
+        "name": "token: client credentials with HTTP Basic auth",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/token"
+        },
+        "method": "POST",
+        "concurrency": 10,
+        "rps": 20,
+        "duration": 60000000000,
+        "timeout": 30000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "Accept": "application/json",
+          "Authorization": "Basic ${OIDC_CLIENT_BASIC}"
+        },
+        "body": "grant_type=client_credentials&scope={{scope}}"
+      }
+    },
+    {
+      "id": "token-wrong-secret",
+      "name": "token: wrong client secret",
+      "notes": "Failed client authentication. Should be fast, rate limited and logged. Keep the rate low: some providers lock the client after repeated failures.",
+      "safety": "read",
+      "job": {
+        "name": "token: wrong client secret",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/token"
+        },
+        "method": "POST",
+        "concurrency": 5,
+        "rps": 10,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          400,
+          401
+        ],
+        "headers": {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "Accept": "application/json"
+        },
+        "body": "grant_type=client_credentials&client_id={{clientId}}&client_secret=blasta-wrong-secret"
+      }
+    },
+    {
+      "id": "token-invalid-code",
+      "name": "token: invalid authorization code",
+      "notes": "A bogus code at the token endpoint (invalid_grant). Replayed or guessed codes land here, so it must stay cheap.",
+      "safety": "read",
+      "job": {
+        "name": "token: invalid authorization code",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/token"
+        },
+        "method": "POST",
+        "concurrency": 10,
+        "rps": 20,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          400,
+          401
+        ],
+        "headers": {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "Accept": "application/json"
+        },
+        "body": "grant_type=authorization_code&code=blasta-invalid-code&redirect_uri={{redirectUri}}&client_id={{clientId}}&client_secret={{clientSecret}}&code_verifier=blasta"
+      }
+    },
+    {
+      "id": "token-refresh",
+      "name": "token: refresh token grant",
+      "notes": "Token renewal, the most frequent token call in a long-lived app. If refresh tokens ROTATE, only the first request succeeds and the rest fail with invalid_grant: use a client without rotation.",
+      "safety": "mutating",
+      "job": {
+        "name": "token: refresh token grant",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/token"
+        },
+        "method": "POST",
+        "concurrency": 10,
+        "rps": 20,
+        "duration": 60000000000,
+        "timeout": 30000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "Accept": "application/json"
+        },
+        "body": "grant_type=refresh_token&refresh_token=${OIDC_REFRESH_TOKEN}&client_id={{clientId}}&client_secret={{clientSecret}}"
+      }
+    },
+    {
+      "id": "token-exchange",
+      "name": "token: exchange (RFC 8693)",
+      "notes": "Swaps a token for another (service-to-service delegation). Not every provider supports it; a 400 unsupported_grant_type is counted as an error.",
+      "safety": "mutating",
+      "job": {
+        "name": "token: exchange (RFC 8693)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/token"
+        },
+        "method": "POST",
+        "concurrency": 5,
+        "rps": 10,
+        "duration": 60000000000,
+        "timeout": 30000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "Accept": "application/json"
+        },
+        "body": "grant_type=urn:ietf:params:oauth:grant-type:token-exchange&subject_token={{token}}&subject_token_type=urn:ietf:params:oauth:token-type:access_token&client_id={{clientId}}&client_secret={{clientSecret}}"
+      }
+    },
+    {
+      "id": "cors-preflight",
+      "name": "CORS preflight on the token endpoint",
+      "notes": "Browser apps send an OPTIONS before calling the token endpoint. It must be answered at the edge, not by the identity code.",
+      "safety": "read",
+      "job": {
+        "name": "CORS preflight on the token endpoint",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/token"
+        },
+        "method": "OPTIONS",
+        "concurrency": 10,
+        "rps": 50,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          204
+        ],
+        "headers": {
+          "Origin": "{{redirectUri}}",
+          "Access-Control-Request-Method": "POST",
+          "Access-Control-Request-Headers": "content-type"
+        }
+      }
+    },
+    {
+      "id": "token-ramp",
+      "name": "token endpoint capacity ramp",
+      "notes": "Ramps client-credentials requests up to find the rate where latency or errors climb: your token-issuing capacity. Staging only.",
+      "safety": "mutating",
+      "job": {
+        "name": "token endpoint capacity ramp",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/token"
+        },
+        "method": "POST",
+        "concurrency": 100,
+        "rps": 150,
+        "duration": 420000000000,
+        "timeout": 30000000000,
+        "queueSize": 5000,
+        "onQueueFull": "reject",
+        "maxWorkers": 300,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "Accept": "application/json"
+        },
+        "ramp": 300000000000,
+        "body": "grant_type=client_credentials&client_id={{clientId}}&client_secret={{clientSecret}}&scope={{scope}}"
+      }
+    },
+    {
+      "id": "introspect",
+      "name": "token introspection",
+      "notes": "Opaque-token APIs call this on every request, so its latency is added to your whole API. Needs a valid token.",
+      "safety": "read",
+      "job": {
+        "name": "token introspection",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/token/introspect"
+        },
+        "method": "POST",
+        "concurrency": 20,
+        "rps": 100,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "Accept": "application/json"
+        },
+        "body": "token={{token}}&client_id={{clientId}}&client_secret={{clientSecret}}"
+      }
+    },
+    {
+      "id": "introspect-invalid",
+      "name": "introspection of an invalid token",
+      "notes": "Probing with garbage tokens must return active=false quickly. Expensive here means a cheap amplification attack.",
+      "safety": "read",
+      "job": {
+        "name": "introspection of an invalid token",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/token/introspect"
+        },
+        "method": "POST",
+        "concurrency": 20,
+        "rps": 100,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "Accept": "application/json"
+        },
+        "body": "token=blasta-invalid-token&client_id={{clientId}}&client_secret={{clientSecret}}"
+      }
+    },
+    {
+      "id": "userinfo",
+      "name": "userinfo with a valid token",
+      "notes": "Called by apps after login and by gateways per request. Needs a valid token.",
+      "safety": "read",
+      "job": {
+        "name": "userinfo with a valid token",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/userinfo"
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 100,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Accept": "application/json",
+          "Authorization": "Bearer {{token}}"
+        }
+      }
+    },
+    {
+      "id": "userinfo-invalid",
+      "name": "userinfo with an invalid token",
+      "notes": "Rejection path: should be a fast 401.",
+      "safety": "read",
+      "job": {
+        "name": "userinfo with an invalid token",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/userinfo"
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 100,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          401,
+          403
+        ],
+        "headers": {
+          "Accept": "application/json",
+          "Authorization": "Bearer blasta-invalid-token"
+        }
+      }
+    },
+    {
+      "id": "userinfo-no-token",
+      "name": "userinfo without a token",
+      "notes": "Unauthenticated requests: also a fast 401, and a good WAF/rate-limit canary.",
+      "safety": "read",
+      "job": {
+        "name": "userinfo without a token",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/userinfo"
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 100,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          401,
+          403
+        ],
+        "headers": {
+          "Accept": "application/json"
+        }
+      }
+    },
+    {
+      "id": "userinfo-soak",
+      "name": "userinfo soak (10 min)",
+      "notes": "Steady load for ten minutes: finds cache expiry, connection and memory problems in token validation.",
+      "safety": "read",
+      "job": {
+        "name": "userinfo soak (10 min)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/userinfo"
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 50,
+        "duration": 600000000000,
+        "timeout": 15000000000,
+        "queueSize": 5000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Accept": "application/json",
+          "Authorization": "Bearer {{token}}"
+        }
+      }
+    },
+    {
+      "id": "device-authorization",
+      "name": "device authorization (device flow)",
+      "notes": "Starts a TV or CLI login. Creates a pending device code per request, so it also tests the cleanup of abandoned ones. Staging only.",
+      "safety": "mutating",
+      "job": {
+        "name": "device authorization (device flow)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/device/code"
+        },
+        "method": "POST",
+        "concurrency": 5,
+        "rps": 10,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "Accept": "application/json"
+        },
+        "body": "scope={{scope}}&client_id={{clientId}}&client_secret={{clientSecret}}"
+      }
+    },
+    {
+      "id": "health",
+      "name": "provider health / readiness",
+      "notes": "What your load balancer polls. It should stay fast even while tokens are being issued.",
+      "safety": "read",
+      "job": {
+        "name": "provider health / readiness",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/healthz"
+        },
+        "method": "GET",
+        "concurrency": 5,
+        "rps": 20,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ]
+      }
+    },
+    {
+      "id": "ent-01-smoke",
+      "name": "Dex: 01 smoke",
+      "notes": "Enterprise plan, step 1 of 10. One request a second for 30 seconds. Run this first, every time: it proves the address, credentials and headers are right and that the environment is up before any real load is applied. Gate: zero errors. Reference request: authorization endpoint (login page or redirect).",
+      "safety": "read",
+      "job": {
+        "name": "Dex: 01 smoke",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/auth?response_type=code&client_id={{clientId}}&redirect_uri={{redirectUri}}&scope={{scope}}&state=blasta&nonce=blasta&code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM&code_challenge_method=S256",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 1,
+        "rps": 1,
+        "duration": 30000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302,
+          303
+        ],
+        "headers": {
+          "Accept": "text/html"
+        },
+        "slo": {
+          "maxErrorRate": 0
+        }
+      }
+    },
+    {
+      "id": "ent-02-baseline",
+      "name": "Dex: 02 baseline (20% load)",
+      "notes": "Step 2 of 10. About a fifth of normal traffic for 5 minutes: the uncontended latency of this request. Every later result is judged against it, so record p50 and p95. Gate: at most 0.5% errors and the default latency targets. Reference request: authorization endpoint (login page or redirect).",
+      "safety": "read",
+      "job": {
+        "name": "Dex: 02 baseline (20% load)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/auth?response_type=code&client_id={{clientId}}&redirect_uri={{redirectUri}}&scope={{scope}}&state=blasta&nonce=blasta&code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM&code_challenge_method=S256",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 2,
+        "rps": 4,
+        "duration": 300000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302,
+          303
+        ],
+        "headers": {
+          "Accept": "text/html"
+        },
+        "slo": {
+          "maxErrorRate": 0.5,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-03-average-load",
+      "name": "Dex: 03 average load (SLO check)",
+      "notes": "Step 3 of 10. Normal busy-hour traffic for 10 minutes. The rate is the reference job's rate: raise it to your measured production peak-hour rate. This is the run that proves (or breaks) your SLO. Gate: at most 1% errors, p95 and p99 inside the targets. Reference request: authorization endpoint (login page or redirect).",
+      "safety": "read",
+      "job": {
+        "name": "Dex: 03 average load (SLO check)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/auth?response_type=code&client_id={{clientId}}&redirect_uri={{redirectUri}}&scope={{scope}}&state=blasta&nonce=blasta&code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM&code_challenge_method=S256",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 20,
+        "duration": 600000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302,
+          303
+        ],
+        "headers": {
+          "Accept": "text/html"
+        },
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-04-peak-load",
+      "name": "Dex: 04 peak load (2x average)",
+      "notes": "Step 4 of 10. Twice the average for 10 minutes: the busiest hour of the year plus headroom. Latency may rise, but must stay in SLO; if it does not, you have no headroom. Gate: at most 2% errors, latency targets doubled. Reference request: authorization endpoint (login page or redirect).",
+      "safety": "read",
+      "job": {
+        "name": "Dex: 04 peak load (2x average)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/auth?response_type=code&client_id={{clientId}}&redirect_uri={{redirectUri}}&scope={{scope}}&state=blasta&nonce=blasta&code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM&code_challenge_method=S256",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 40,
+        "duration": 600000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302,
+          303
+        ],
+        "headers": {
+          "Accept": "text/html"
+        },
+        "slo": {
+          "maxErrorRate": 2,
+          "maxP95": 2000000000,
+          "maxP99": 4000000000
+        }
+      }
+    },
+    {
+      "id": "ent-05-stress",
+      "name": "Dex: 05 stress (ramp to 4x)",
+      "notes": "Step 5 of 10. Ramps to four times average over 10 minutes, then holds for 2. Finds where it degrades and HOW: gracefully (latency rises, errors stay low) or badly (errors, timeouts, crashes, restarts). Observation only, no gate. Reference request: authorization endpoint (login page or redirect).",
+      "safety": "read",
+      "job": {
+        "name": "Dex: 05 stress (ramp to 4x)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/auth?response_type=code&client_id={{clientId}}&redirect_uri={{redirectUri}}&scope={{scope}}&state=blasta&nonce=blasta&code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM&code_challenge_method=S256",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 40,
+        "rps": 80,
+        "duration": 720000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302,
+          303
+        ],
+        "headers": {
+          "Accept": "text/html"
+        },
+        "ramp": 600000000000
+      }
+    },
+    {
+      "id": "ent-06-spike",
+      "name": "Dex: 06 spike (10x in 10 s)",
+      "notes": "Step 6 of 10. Reaches ten times average within 10 seconds and holds for 2 minutes: a campaign email, a news link, a failover. Checks autoscaling, queue limits and load shedding. Gate: at most 5% errors, because shedding load is acceptable and crashing is not. Reference request: authorization endpoint (login page or redirect).",
+      "safety": "read",
+      "job": {
+        "name": "Dex: 06 spike (10x in 10 s)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/auth?response_type=code&client_id={{clientId}}&redirect_uri={{redirectUri}}&scope={{scope}}&state=blasta&nonce=blasta&code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM&code_challenge_method=S256",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 100,
+        "rps": 200,
+        "duration": 130000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302,
+          303
+        ],
+        "headers": {
+          "Accept": "text/html"
+        },
+        "ramp": 10000000000,
+        "slo": {
+          "maxErrorRate": 5
+        }
+      }
+    },
+    {
+      "id": "ent-07-recovery",
+      "name": "Dex: 07 recovery after the spike",
+      "notes": "Step 7 of 10. Run IMMEDIATELY after the spike, at average load for 5 minutes. Latency and errors must return to the baseline from step 2. If they do not, something is stuck: queues, connection pools, GC, an autoscaler cool-down. Gate: same as average load. Reference request: authorization endpoint (login page or redirect).",
+      "safety": "read",
+      "job": {
+        "name": "Dex: 07 recovery after the spike",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/auth?response_type=code&client_id={{clientId}}&redirect_uri={{redirectUri}}&scope={{scope}}&state=blasta&nonce=blasta&code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM&code_challenge_method=S256",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 20,
+        "duration": 300000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302,
+          303
+        ],
+        "headers": {
+          "Accept": "text/html"
+        },
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-08-soak",
+      "name": "Dex: 08 soak (1 hour at 60%)",
+      "notes": "Step 8 of 10. One hour of steady load. Finds leaks and slow decay in memory, connections, file descriptors, disk, log volume and cache churn. Watch the resource graphs: any line that climbs and never flattens is a finding. Gate: at most 0.5% errors. Reference request: authorization endpoint (login page or redirect).",
+      "safety": "read",
+      "job": {
+        "name": "Dex: 08 soak (1 hour at 60%)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/auth?response_type=code&client_id={{clientId}}&redirect_uri={{redirectUri}}&scope={{scope}}&state=blasta&nonce=blasta&code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM&code_challenge_method=S256",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 6,
+        "rps": 12,
+        "duration": 3600000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302,
+          303
+        ],
+        "headers": {
+          "Accept": "text/html"
+        },
+        "slo": {
+          "maxErrorRate": 0.5,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-09-breakpoint",
+      "name": "Dex: 09 breakpoint (find the ceiling)",
+      "notes": "Step 9 of 10. Ramps to twenty times average over 20 minutes. Stop it when errors pass about 5%: the rate at that moment is your ceiling, and ceiling divided by peak is your capacity margin. Use a production-like environment, never production. Reference request: authorization endpoint (login page or redirect).",
+      "safety": "read",
+      "job": {
+        "name": "Dex: 09 breakpoint (find the ceiling)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/auth?response_type=code&client_id={{clientId}}&redirect_uri={{redirectUri}}&scope={{scope}}&state=blasta&nonce=blasta&code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM&code_challenge_method=S256",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 200,
+        "rps": 400,
+        "duration": 1380000000000,
+        "timeout": 15000000000,
+        "queueSize": 2000,
+        "onQueueFull": "reject",
+        "maxWorkers": 400,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302,
+          303
+        ],
+        "headers": {
+          "Accept": "text/html"
+        },
+        "ramp": 1200000000000
+      }
+    },
+    {
+      "id": "ent-10-failover-window",
+      "name": "Dex: 10 resilience window (failover / deploy)",
+      "notes": "Step 10 of 10. Average load for 15 minutes. About 5 minutes in, cause the event you are testing: kill a pod or node, fail over the database, roll out a new version, drain a zone. Errors in the window are your real availability loss. Gate: at most 1% errors overall; read the time series for how long the dip lasted. Reference request: authorization endpoint (login page or redirect).",
+      "safety": "read",
+      "job": {
+        "name": "Dex: 10 resilience window (failover / deploy)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/auth?response_type=code&client_id={{clientId}}&redirect_uri={{redirectUri}}&scope={{scope}}&state=blasta&nonce=blasta&code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM&code_challenge_method=S256",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 20,
+        "duration": 900000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302,
+          303
+        ],
+        "headers": {
+          "Accept": "text/html"
+        },
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-x-connection-close",
+      "name": "Dex: no keep-alive (new connection per request)",
+      "notes": "Sends Connection: close, so every request pays for a new TCP and TLS handshake: the cost for clients that do not reuse connections (scripts, some mobile SDKs, health checkers). Shows load balancer and TLS termination limits. Reference request: authorization endpoint (login page or redirect).",
+      "safety": "read",
+      "job": {
+        "name": "Dex: no keep-alive (new connection per request)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/auth?response_type=code&client_id={{clientId}}&redirect_uri={{redirectUri}}&scope={{scope}}&state=blasta&nonce=blasta&code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM&code_challenge_method=S256",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 20,
+        "duration": 300000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302,
+          303
+        ],
+        "headers": {
+          "Accept": "text/html",
+          "Connection": "close"
+        },
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 1500000000,
+          "maxP99": 3000000000
+        }
+      }
+    },
+    {
+      "id": "ent-x-bot-traffic",
+      "name": "Dex: crawler traffic (Googlebot user agent)",
+      "notes": "Same request identified as a search crawler. Tests WAF and bot-management rules and whether crawlers get cached or origin responses. Crawlers can easily be a third of all traffic. Reference request: authorization endpoint (login page or redirect).",
+      "safety": "read",
+      "job": {
+        "name": "Dex: crawler traffic (Googlebot user agent)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/auth?response_type=code&client_id={{clientId}}&redirect_uri={{redirectUri}}&scope={{scope}}&state=blasta&nonce=blasta&code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM&code_challenge_method=S256",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 20,
+        "duration": 300000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302,
+          303
+        ],
+        "headers": {
+          "Accept": "text/html",
+          "User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)"
+        },
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-x-large-headers",
+      "name": "Dex: large cookies (~4 KB header)",
+      "notes": "Adds a 4 KB Cookie header, like a logged-in user with many tracking cookies. Proxies and servers reject headers around 8 KB, so this shows how close you are to that limit. Reference request: authorization endpoint (login page or redirect).",
+      "safety": "read",
+      "job": {
+        "name": "Dex: large cookies (~4 KB header)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/auth?response_type=code&client_id={{clientId}}&redirect_uri={{redirectUri}}&scope={{scope}}&state=blasta&nonce=blasta&code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM&code_challenge_method=S256",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 10,
+        "duration": 300000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302,
+          303
+        ],
+        "headers": {
+          "Accept": "text/html",
+          "Cookie": "blasta=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+        },
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-x-monitor-storm",
+      "name": "Dex: uptime monitors (HEAD from many locations)",
+      "notes": "A fleet of synthetic monitors checking the URL with HEAD requests every 30 seconds from 20 locations, plus load balancer probes. Cheap each, constant in total. Reference request: authorization endpoint (login page or redirect).",
+      "safety": "read",
+      "job": {
+        "name": "Dex: uptime monitors (HEAD from many locations)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/auth?response_type=code&client_id={{clientId}}&redirect_uri={{redirectUri}}&scope={{scope}}&state=blasta&nonce=blasta&code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM&code_challenge_method=S256",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "HEAD",
+        "concurrency": 10,
+        "rps": 20,
+        "duration": 600000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          204,
+          301,
+          302,
+          304,
+          405
+        ],
+        "headers": {
+          "Accept": "text/html"
+        },
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-x-login-storm",
+      "name": "Dex: Monday 9am login storm",
+      "notes": "Everyone in the company signs in within a minute of starting work. Ramps login starts to eight times normal over 60 seconds. The identity provider is the one system every other system depends on, so this is the most important identity test. Reference request: authorization endpoint (login page or redirect).",
+      "safety": "read",
+      "job": {
+        "name": "Dex: Monday 9am login storm",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/auth?response_type=code&client_id={{clientId}}&redirect_uri={{redirectUri}}&scope={{scope}}&state=blasta&nonce=blasta&code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM&code_challenge_method=S256",
+          "meta": {
+            "followRedirects": false
+          }
+        },
+        "method": "GET",
+        "concurrency": 80,
+        "rps": 160,
+        "duration": 300000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200,
+          302,
+          303
+        ],
+        "headers": {
+          "Accept": "text/html"
+        },
+        "ramp": 60000000000,
+        "slo": {
+          "maxErrorRate": 5
+        }
+      }
+    },
+    {
+      "id": "ent-x-token-expiry-herd",
+      "name": "Dex: token expiry herd",
+      "notes": "Many services were started together, so their tokens expire together and they all ask for new ones in the same second. Jumps token requests to ten times normal in 10 seconds. Reference request: token: client credentials. This job WRITES or creates data on every request: staging only, and expect a lot of rows.",
+      "safety": "mutating",
+      "job": {
+        "name": "Dex: token expiry herd",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/token"
+        },
+        "method": "POST",
+        "concurrency": 100,
+        "rps": 200,
+        "duration": 120000000000,
+        "timeout": 30000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "Accept": "application/json"
+        },
+        "body": "grant_type=client_credentials&client_id={{clientId}}&client_secret={{clientSecret}}&scope={{scope}}",
+        "ramp": 10000000000,
+        "slo": {
+          "maxErrorRate": 5
+        }
+      }
+    },
+    {
+      "id": "ent-x-gateway-introspection-peak",
+      "name": "Dex: API gateway introspection peak",
+      "notes": "An API gateway that introspects opaque tokens adds one introspection call to every business request, so the identity provider carries the whole API's traffic. Three times normal for 10 minutes. Reference request: token introspection.",
+      "safety": "read",
+      "job": {
+        "name": "Dex: API gateway introspection peak",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/token/introspect"
+        },
+        "method": "POST",
+        "concurrency": 60,
+        "rps": 300,
+        "duration": 600000000000,
+        "timeout": 15000000000,
+        "queueSize": 1500,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "Accept": "application/json"
+        },
+        "body": "token={{token}}&client_id={{clientId}}&client_secret={{clientSecret}}",
+        "slo": {
+          "maxErrorRate": 0.5,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-x-key-rotation-herd",
+      "name": "Dex: signing-key rotation herd",
+      "notes": "After a signing key rotates, every service that validates tokens refetches the key set at once. Twenty times normal for 90 seconds; this should be a cache hit at the edge. Reference request: JSON web key set.",
+      "safety": "read",
+      "job": {
+        "name": "Dex: signing-key rotation herd",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/keys"
+        },
+        "method": "GET",
+        "concurrency": 100,
+        "rps": 1000,
+        "duration": 90000000000,
+        "timeout": 15000000000,
+        "queueSize": 5000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Accept": "application/json"
+        },
+        "ramp": 5000000000,
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-x-userinfo-peak",
+      "name": "Dex: userinfo peak",
+      "notes": "Apps call userinfo after login and on every page load. Three times normal for 10 minutes. Reference request: userinfo with a valid token.",
+      "safety": "read",
+      "job": {
+        "name": "Dex: userinfo peak",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/userinfo"
+        },
+        "method": "GET",
+        "concurrency": 60,
+        "rps": 300,
+        "duration": 600000000000,
+        "timeout": 15000000000,
+        "queueSize": 1500,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Accept": "application/json",
+          "Authorization": "Bearer {{token}}"
+        },
+        "slo": {
+          "maxErrorRate": 0.5,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-x-credential-stuffing-resilience",
+      "name": "Dex: credential-stuffing resilience",
+      "notes": "Ten times the normal rate of failed client authentication for 2 minutes, the shape of a credential-stuffing attack. The provider must stay responsive for real users, rate-limit or lock the attacker, and not spend expensive hashing on each attempt. Run a normal login in parallel to confirm it keeps working. Staging only: it can lock the client. Reference request: token: wrong client secret.",
+      "safety": "read",
+      "job": {
+        "name": "Dex: credential-stuffing resilience",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/token"
+        },
+        "method": "POST",
+        "concurrency": 25,
+        "rps": 100,
+        "duration": 120000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          400,
+          401
+        ],
+        "headers": {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "Accept": "application/json"
+        },
+        "body": "grant_type=client_credentials&client_id={{clientId}}&client_secret=blasta-wrong-secret"
+      }
+    }
+  ],
+  "secrets": {
+    "OIDC_ACCESS_TOKEN": {
+      "label": "Access token",
+      "guide": "Request one with the client-credentials grant:\n`curl -s -d grant_type=client_credentials -d client_id=CLIENT -d client_secret=SECRET -d scope=openid https://IDP/token`\nthen copy `access_token` from the answer. Add scope=openid so userinfo calls are allowed.\nIt expires quickly (often 5 minutes): request a fresh one right before the run, or lengthen the token lifespan on the test client."
+    },
+    "OIDC_CLIENT_BASIC": {
+      "label": "Client credentials, base64",
+      "guide": "The client ID and secret joined by a colon and base64-encoded, used for HTTP Basic client authentication.\n`printf 'CLIENT_ID:CLIENT_SECRET' | base64` (macOS or Linux), then paste the result."
+    },
+    "OIDC_CLIENT_SECRET": {
+      "label": "Client secret",
+      "guide": "In your identity provider open the test client and go to its Credentials (or Secrets) tab, then copy the client secret. Use a dedicated test client, never a production one."
+    },
+    "OIDC_REFRESH_TOKEN": {
+      "label": "Refresh token",
+      "guide": "Sign in once as a test user and copy `refresh_token` from the token response (authorization code flow, or the password grant with scope `openid offline_access`).\nUse a client that does NOT rotate refresh tokens: with rotation only the first request works and the rest fail with invalid_grant."
+    }
+  }
+}

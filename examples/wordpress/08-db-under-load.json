@@ -1,0 +1,18 @@
+{
+  "name": "wp database read under app load",
+  "description": "Run this WHILE 06 or 07 is running, to see whether MySQL saturates first. WordPress's classic failure mode is max_connections exhaustion, which shows up as timeouts rather than a gradual latency rise. Requires PG_DSN-equivalent MYSQL_DSN exported.",
+  "executor": "sql",
+  "target": {
+    "url": "",
+    "meta": { "query": "SELECT option_name, option_value FROM wp_options LIMIT 100" }
+  },
+  "db": { "dsnEnv": "MYSQL_DSN", "maxOpen": 8, "allowWrite": false },
+  "concurrency": 4,
+  "rps": 10,
+  "duration": 180000000000,
+  "timeout": 15000000000,
+  "queueSize": 500,
+  "onQueueFull": "reject",
+  "maxWorkers": 50,
+  "blockPrivate": true
+}

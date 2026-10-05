@@ -1,0 +1,644 @@
+{
+  "id": "mail-servers",
+  "title": "Mail servers (SMTP / IMAP / POP3)",
+  "category": "Mail",
+  "summary": "Greeting checks and connection capacity for SMTP, submission, IMAP and POP3, including the implicit-TLS ports. Includes an enterprise test plan (jobs starting ent-).",
+  "stack": "Postfix, Exim, Dovecot, Courier, Sendmail, Stalwart, Exchange",
+  "variables": [
+    {
+      "name": "host",
+      "default": "mail.example.com",
+      "description": "Mail server host name",
+      "placeholder": true,
+      "guide": "The host name or IP address of the server, without a port or http://, for example redis.staging.example.com. BLASTA runs in a container, so for a service on your own machine use host.docker.internal instead of localhost."
+    },
+    {
+      "name": "smtpPort",
+      "default": "25",
+      "description": "SMTP port",
+      "guide": "The SMTP port, normally 25."
+    },
+    {
+      "name": "submissionPort",
+      "default": "587",
+      "description": "Submission port",
+      "guide": "The mail submission port, normally 587."
+    },
+    {
+      "name": "smtpsPort",
+      "default": "465",
+      "description": "SMTPS port (implicit TLS)",
+      "guide": "The SMTPS port, normally 465."
+    },
+    {
+      "name": "imapPort",
+      "default": "143",
+      "description": "IMAP port",
+      "guide": "The IMAP port, normally 143."
+    },
+    {
+      "name": "imapsPort",
+      "default": "993",
+      "description": "IMAPS port (implicit TLS)",
+      "guide": "The IMAPS port, normally 993."
+    },
+    {
+      "name": "pop3Port",
+      "default": "110",
+      "description": "POP3 port",
+      "guide": "The POP3 port, normally 110."
+    },
+    {
+      "name": "pop3sPort",
+      "default": "995",
+      "description": "POP3S port (implicit TLS)",
+      "guide": "The POP3S port, normally 995."
+    }
+  ],
+  "jobs": [
+    {
+      "id": "smtp-banner",
+      "name": "SMTP greeting (port 25)",
+      "notes": "No mail is sent: this reads the greeting only. Mail servers throttle and ban noisy clients (per-IP connection limits, postscreen, fail2ban), so run from a whitelisted address; a '421 too many connections' reply is counted as an error and shows the limit works. Checks for the 220 greeting: the cost of every inbound delivery attempt, and what spam bots hammer.",
+      "safety": "read",
+      "job": {
+        "name": "SMTP greeting (port 25)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{smtpPort}}",
+          "meta": {
+            "expectPrefix": "220"
+          }
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 20,
+        "duration": 60000000000,
+        "timeout": 30000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false
+      }
+    },
+    {
+      "id": "submission-banner",
+      "name": "submission greeting (port 587)",
+      "notes": "No mail is sent: this reads the greeting only. Mail servers throttle and ban noisy clients (per-IP connection limits, postscreen, fail2ban), so run from a whitelisted address; a '421 too many connections' reply is counted as an error and shows the limit works. Where authenticated users send mail. Usually has stricter limits than port 25.",
+      "safety": "read",
+      "job": {
+        "name": "submission greeting (port 587)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{submissionPort}}",
+          "meta": {
+            "expectPrefix": "220"
+          }
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 20,
+        "duration": 60000000000,
+        "timeout": 30000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false
+      }
+    },
+    {
+      "id": "smtps-accept",
+      "name": "SMTPS accept (port 465)",
+      "notes": "Implicit TLS: the server waits for a ClientHello, so only the TCP accept is timed, not a greeting.",
+      "safety": "read",
+      "job": {
+        "name": "SMTPS accept (port 465)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{smtpsPort}}"
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 20,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false
+      }
+    },
+    {
+      "id": "imap-banner",
+      "name": "IMAP greeting (port 143)",
+      "notes": "No mail is sent: this reads the greeting only. Mail servers throttle and ban noisy clients (per-IP connection limits, postscreen, fail2ban), so run from a whitelisted address; a '421 too many connections' reply is counted as an error and shows the limit works. Checks for '* OK'. Mail clients open several IMAP connections each, so this multiplies with users.",
+      "safety": "read",
+      "job": {
+        "name": "IMAP greeting (port 143)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{imapPort}}",
+          "meta": {
+            "expectPrefix": "* OK"
+          }
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 50,
+        "duration": 60000000000,
+        "timeout": 30000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false
+      }
+    },
+    {
+      "id": "imaps-accept",
+      "name": "IMAPS accept (port 993)",
+      "notes": "Implicit TLS accept only. Dovecot's process limit (process_limit, client_limit) shows here.",
+      "safety": "read",
+      "job": {
+        "name": "IMAPS accept (port 993)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{imapsPort}}"
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 50,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false
+      }
+    },
+    {
+      "id": "pop3-banner",
+      "name": "POP3 greeting (port 110)",
+      "notes": "No mail is sent: this reads the greeting only. Mail servers throttle and ban noisy clients (per-IP connection limits, postscreen, fail2ban), so run from a whitelisted address; a '421 too many connections' reply is counted as an error and shows the limit works. Checks for '+OK'.",
+      "safety": "read",
+      "job": {
+        "name": "POP3 greeting (port 110)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{pop3Port}}",
+          "meta": {
+            "expectPrefix": "+OK"
+          }
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 20,
+        "duration": 60000000000,
+        "timeout": 30000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false
+      }
+    },
+    {
+      "id": "pop3s-accept",
+      "name": "POP3S accept (port 995)",
+      "notes": "Implicit TLS accept only.",
+      "safety": "read",
+      "job": {
+        "name": "POP3S accept (port 995)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{pop3sPort}}"
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 20,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false
+      }
+    },
+    {
+      "id": "smtp-ramp",
+      "name": "inbound connection ramp (port 25)",
+      "notes": "No mail is sent: this reads the greeting only. Mail servers throttle and ban noisy clients (per-IP connection limits, postscreen, fail2ban), so run from a whitelisted address; a '421 too many connections' reply is counted as an error and shows the limit works. Ramps greeting checks to find the connection limit (smtpd_client_connection_count_limit, max_connections). Staging servers only.",
+      "safety": "read",
+      "job": {
+        "name": "inbound connection ramp (port 25)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{smtpPort}}",
+          "meta": {
+            "expectPrefix": "220"
+          }
+        },
+        "method": "GET",
+        "concurrency": 100,
+        "rps": 100,
+        "duration": 420000000000,
+        "timeout": 30000000000,
+        "queueSize": 5000,
+        "onQueueFull": "reject",
+        "maxWorkers": 300,
+        "blockPrivate": false,
+        "ramp": 300000000000
+      }
+    },
+    {
+      "id": "imap-ramp",
+      "name": "IMAP connection ramp (port 143)",
+      "notes": "No mail is sent: this reads the greeting only. Mail servers throttle and ban noisy clients (per-IP connection limits, postscreen, fail2ban), so run from a whitelisted address; a '421 too many connections' reply is counted as an error and shows the limit works. Ramps connections to find where Dovecot's client_limit or the file descriptor limit is reached, e.g. a morning login peak.",
+      "safety": "read",
+      "job": {
+        "name": "IMAP connection ramp (port 143)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{imapPort}}",
+          "meta": {
+            "expectPrefix": "* OK"
+          }
+        },
+        "method": "GET",
+        "concurrency": 100,
+        "rps": 200,
+        "duration": 420000000000,
+        "timeout": 30000000000,
+        "queueSize": 5000,
+        "onQueueFull": "reject",
+        "maxWorkers": 300,
+        "blockPrivate": false,
+        "ramp": 300000000000
+      }
+    },
+    {
+      "id": "ent-01-smoke",
+      "name": "Mail servers (SMTP / IMAP / POP3): 01 smoke",
+      "notes": "Enterprise plan, step 1 of 10. One request a second for 30 seconds. Run this first, every time: it proves the address, credentials and headers are right and that the environment is up before any real load is applied. Gate: zero errors. Reference request: SMTP greeting (port 25).",
+      "safety": "read",
+      "job": {
+        "name": "Mail servers (SMTP / IMAP / POP3): 01 smoke",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{smtpPort}}",
+          "meta": {
+            "expectPrefix": "220"
+          }
+        },
+        "method": "GET",
+        "concurrency": 1,
+        "rps": 1,
+        "duration": 30000000000,
+        "timeout": 30000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "slo": {
+          "maxErrorRate": 0
+        }
+      }
+    },
+    {
+      "id": "ent-02-baseline",
+      "name": "Mail servers (SMTP / IMAP / POP3): 02 baseline (20% load)",
+      "notes": "Step 2 of 10. About a fifth of normal traffic for 5 minutes: the uncontended latency of this request. Every later result is judged against it, so record p50 and p95. Gate: at most 0.5% errors and the default latency targets. Reference request: SMTP greeting (port 25).",
+      "safety": "read",
+      "job": {
+        "name": "Mail servers (SMTP / IMAP / POP3): 02 baseline (20% load)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{smtpPort}}",
+          "meta": {
+            "expectPrefix": "220"
+          }
+        },
+        "method": "GET",
+        "concurrency": 2,
+        "rps": 4,
+        "duration": 300000000000,
+        "timeout": 30000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "slo": {
+          "maxErrorRate": 0.5,
+          "maxP95": 50000000,
+          "maxP99": 200000000
+        }
+      }
+    },
+    {
+      "id": "ent-03-average-load",
+      "name": "Mail servers (SMTP / IMAP / POP3): 03 average load (SLO check)",
+      "notes": "Step 3 of 10. Normal busy-hour traffic for 10 minutes. The rate is the reference job's rate: raise it to your measured production peak-hour rate. This is the run that proves (or breaks) your SLO. Gate: at most 1% errors, p95 and p99 inside the targets. Reference request: SMTP greeting (port 25).",
+      "safety": "read",
+      "job": {
+        "name": "Mail servers (SMTP / IMAP / POP3): 03 average load (SLO check)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{smtpPort}}",
+          "meta": {
+            "expectPrefix": "220"
+          }
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 20,
+        "duration": 600000000000,
+        "timeout": 30000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 50000000,
+          "maxP99": 200000000
+        }
+      }
+    },
+    {
+      "id": "ent-04-peak-load",
+      "name": "Mail servers (SMTP / IMAP / POP3): 04 peak load (2x average)",
+      "notes": "Step 4 of 10. Twice the average for 10 minutes: the busiest hour of the year plus headroom. Latency may rise, but must stay in SLO; if it does not, you have no headroom. Gate: at most 2% errors, latency targets doubled. Reference request: SMTP greeting (port 25).",
+      "safety": "read",
+      "job": {
+        "name": "Mail servers (SMTP / IMAP / POP3): 04 peak load (2x average)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{smtpPort}}",
+          "meta": {
+            "expectPrefix": "220"
+          }
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 40,
+        "duration": 600000000000,
+        "timeout": 30000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "slo": {
+          "maxErrorRate": 2,
+          "maxP95": 100000000,
+          "maxP99": 400000000
+        }
+      }
+    },
+    {
+      "id": "ent-05-stress",
+      "name": "Mail servers (SMTP / IMAP / POP3): 05 stress (ramp to 4x)",
+      "notes": "Step 5 of 10. Ramps to four times average over 10 minutes, then holds for 2. Finds where it degrades and HOW: gracefully (latency rises, errors stay low) or badly (errors, timeouts, crashes, restarts). Observation only, no gate. Reference request: SMTP greeting (port 25).",
+      "safety": "read",
+      "job": {
+        "name": "Mail servers (SMTP / IMAP / POP3): 05 stress (ramp to 4x)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{smtpPort}}",
+          "meta": {
+            "expectPrefix": "220"
+          }
+        },
+        "method": "GET",
+        "concurrency": 40,
+        "rps": 80,
+        "duration": 720000000000,
+        "timeout": 30000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "ramp": 600000000000
+      }
+    },
+    {
+      "id": "ent-06-spike",
+      "name": "Mail servers (SMTP / IMAP / POP3): 06 spike (10x in 10 s)",
+      "notes": "Step 6 of 10. Reaches ten times average within 10 seconds and holds for 2 minutes: a campaign email, a news link, a failover. Checks autoscaling, queue limits and load shedding. Gate: at most 5% errors, because shedding load is acceptable and crashing is not. Reference request: SMTP greeting (port 25).",
+      "safety": "read",
+      "job": {
+        "name": "Mail servers (SMTP / IMAP / POP3): 06 spike (10x in 10 s)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{smtpPort}}",
+          "meta": {
+            "expectPrefix": "220"
+          }
+        },
+        "method": "GET",
+        "concurrency": 100,
+        "rps": 200,
+        "duration": 130000000000,
+        "timeout": 30000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "ramp": 10000000000,
+        "slo": {
+          "maxErrorRate": 5
+        }
+      }
+    },
+    {
+      "id": "ent-07-recovery",
+      "name": "Mail servers (SMTP / IMAP / POP3): 07 recovery after the spike",
+      "notes": "Step 7 of 10. Run IMMEDIATELY after the spike, at average load for 5 minutes. Latency and errors must return to the baseline from step 2. If they do not, something is stuck: queues, connection pools, GC, an autoscaler cool-down. Gate: same as average load. Reference request: SMTP greeting (port 25).",
+      "safety": "read",
+      "job": {
+        "name": "Mail servers (SMTP / IMAP / POP3): 07 recovery after the spike",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{smtpPort}}",
+          "meta": {
+            "expectPrefix": "220"
+          }
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 20,
+        "duration": 300000000000,
+        "timeout": 30000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 50000000,
+          "maxP99": 200000000
+        }
+      }
+    },
+    {
+      "id": "ent-08-soak",
+      "name": "Mail servers (SMTP / IMAP / POP3): 08 soak (1 hour at 60%)",
+      "notes": "Step 8 of 10. One hour of steady load. Finds leaks and slow decay in memory, connections, file descriptors, disk, log volume and cache churn. Watch the resource graphs: any line that climbs and never flattens is a finding. Gate: at most 0.5% errors. Reference request: SMTP greeting (port 25).",
+      "safety": "read",
+      "job": {
+        "name": "Mail servers (SMTP / IMAP / POP3): 08 soak (1 hour at 60%)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{smtpPort}}",
+          "meta": {
+            "expectPrefix": "220"
+          }
+        },
+        "method": "GET",
+        "concurrency": 6,
+        "rps": 12,
+        "duration": 3600000000000,
+        "timeout": 30000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "slo": {
+          "maxErrorRate": 0.5,
+          "maxP95": 50000000,
+          "maxP99": 200000000
+        }
+      }
+    },
+    {
+      "id": "ent-09-breakpoint",
+      "name": "Mail servers (SMTP / IMAP / POP3): 09 breakpoint (find the ceiling)",
+      "notes": "Step 9 of 10. Ramps to twenty times average over 20 minutes. Stop it when errors pass about 5%: the rate at that moment is your ceiling, and ceiling divided by peak is your capacity margin. Use a production-like environment, never production. Reference request: SMTP greeting (port 25).",
+      "safety": "read",
+      "job": {
+        "name": "Mail servers (SMTP / IMAP / POP3): 09 breakpoint (find the ceiling)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{smtpPort}}",
+          "meta": {
+            "expectPrefix": "220"
+          }
+        },
+        "method": "GET",
+        "concurrency": 200,
+        "rps": 400,
+        "duration": 1380000000000,
+        "timeout": 30000000000,
+        "queueSize": 2000,
+        "onQueueFull": "reject",
+        "maxWorkers": 400,
+        "blockPrivate": false,
+        "ramp": 1200000000000
+      }
+    },
+    {
+      "id": "ent-10-failover-window",
+      "name": "Mail servers (SMTP / IMAP / POP3): 10 resilience window (failover / deploy)",
+      "notes": "Step 10 of 10. Average load for 15 minutes. About 5 minutes in, cause the event you are testing: kill a pod or node, fail over the database, roll out a new version, drain a zone. Errors in the window are your real availability loss. Gate: at most 1% errors overall; read the time series for how long the dip lasted. Reference request: SMTP greeting (port 25).",
+      "safety": "read",
+      "job": {
+        "name": "Mail servers (SMTP / IMAP / POP3): 10 resilience window (failover / deploy)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{smtpPort}}",
+          "meta": {
+            "expectPrefix": "220"
+          }
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 20,
+        "duration": 900000000000,
+        "timeout": 30000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 50000000,
+          "maxP99": 200000000
+        }
+      }
+    },
+    {
+      "id": "ent-x-connection-storm",
+      "name": "Mail servers (SMTP / IMAP / POP3): connection storm (ramp to 10x)",
+      "notes": "Ramps new connections per second to ten times normal: a fleet reconnecting after an outage, a deploy that restarts every pod, a network blip. Shows accept-queue, file descriptor and handshake limits. Reference request: SMTP greeting (port 25).",
+      "safety": "read",
+      "job": {
+        "name": "Mail servers (SMTP / IMAP / POP3): connection storm (ramp to 10x)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{smtpPort}}",
+          "meta": {
+            "expectPrefix": "220"
+          }
+        },
+        "method": "GET",
+        "concurrency": 100,
+        "rps": 200,
+        "duration": 420000000000,
+        "timeout": 30000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "ramp": 120000000000
+      }
+    },
+    {
+      "id": "ent-x-inbound-peak",
+      "name": "Mail servers (SMTP / IMAP / POP3): inbound mail peak",
+      "notes": "Three times normal connection attempts for 10 minutes: a newsletter bounce wave or a spam run. Watch per-IP connection limits and the deferred queue. Reference request: SMTP greeting (port 25).",
+      "safety": "read",
+      "job": {
+        "name": "Mail servers (SMTP / IMAP / POP3): inbound mail peak",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{smtpPort}}",
+          "meta": {
+            "expectPrefix": "220"
+          }
+        },
+        "method": "GET",
+        "concurrency": 30,
+        "rps": 60,
+        "duration": 600000000000,
+        "timeout": 30000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false
+      }
+    },
+    {
+      "id": "ent-x-morning-login-wave",
+      "name": "Mail servers (SMTP / IMAP / POP3): morning mailbox login wave",
+      "notes": "Every mail client reconnects at the start of the working day. Ramps to five times normal over 2 minutes. Reference request: IMAP greeting (port 143).",
+      "safety": "read",
+      "job": {
+        "name": "Mail servers (SMTP / IMAP / POP3): morning mailbox login wave",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{imapPort}}",
+          "meta": {
+            "expectPrefix": "* OK"
+          }
+        },
+        "method": "GET",
+        "concurrency": 100,
+        "rps": 250,
+        "duration": 300000000000,
+        "timeout": 30000000000,
+        "queueSize": 1250,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "ramp": 120000000000
+      }
+    }
+  ]
+}

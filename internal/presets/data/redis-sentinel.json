@@ -1,0 +1,513 @@
+{
+  "id": "redis-sentinel",
+  "title": "Redis Sentinel",
+  "category": "Cache",
+  "summary": "Sentinel health, master discovery and quorum checks. Includes an enterprise test plan (jobs starting ent-).",
+  "stack": "Redis Sentinel (port 26379)",
+  "variables": [
+    {
+      "name": "host",
+      "default": "sentinel.example.com",
+      "description": "Sentinel host name",
+      "placeholder": true,
+      "guide": "The host name or IP address of the server, without a port or http://, for example redis.staging.example.com. BLASTA runs in a container, so for a service on your own machine use host.docker.internal instead of localhost."
+    },
+    {
+      "name": "port",
+      "default": "26379",
+      "description": "Sentinel port",
+      "guide": "The port the service listens on. The default is filled in; check the service's configuration if you changed it."
+    },
+    {
+      "name": "master",
+      "default": "mymaster",
+      "description": "Monitored master name",
+      "guide": "The name of the monitored master. In sentinel.conf it is the name after `sentinel monitor`; `SENTINEL masters` lists them."
+    }
+  ],
+  "jobs": [
+    {
+      "id": "ping",
+      "name": "PING",
+      "notes": "Sentinel liveness.",
+      "safety": "read",
+      "job": {
+        "name": "PING",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "expectPrefix": "+PONG"
+          }
+        },
+        "method": "GET",
+        "concurrency": 10,
+        "rps": 50,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "body": "PING\r\n"
+      }
+    },
+    {
+      "id": "get-master",
+      "name": "get-master-addr-by-name",
+      "notes": "What every client does to find the master at start-up and after a failover. A reconnect storm after failover is this job at high rate.",
+      "safety": "read",
+      "job": {
+        "name": "get-master-addr-by-name",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "expectPrefix": "*2"
+          }
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 200,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "body": "SENTINEL get-master-addr-by-name {{master}}\r\n"
+      }
+    },
+    {
+      "id": "masters",
+      "name": "SENTINEL masters",
+      "notes": "Full state of every monitored master.",
+      "safety": "read",
+      "job": {
+        "name": "SENTINEL masters",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "expectPrefix": "*"
+          }
+        },
+        "method": "GET",
+        "concurrency": 5,
+        "rps": 20,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "body": "SENTINEL masters\r\n"
+      }
+    },
+    {
+      "id": "replicas",
+      "name": "SENTINEL replicas",
+      "notes": "Replica list for one master.",
+      "safety": "read",
+      "job": {
+        "name": "SENTINEL replicas",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "expectPrefix": "*"
+          }
+        },
+        "method": "GET",
+        "concurrency": 5,
+        "rps": 20,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "body": "SENTINEL replicas {{master}}\r\n"
+      }
+    },
+    {
+      "id": "ckquorum",
+      "name": "SENTINEL ckquorum",
+      "notes": "Checks that enough Sentinels can authorise a failover. A -NOQUORUM reply is counted as an error, which is the point.",
+      "safety": "read",
+      "job": {
+        "name": "SENTINEL ckquorum",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "expectPrefix": "+OK"
+          }
+        },
+        "method": "GET",
+        "concurrency": 2,
+        "rps": 5,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "body": "SENTINEL ckquorum {{master}}\r\n"
+      }
+    },
+    {
+      "id": "failover-storm",
+      "name": "reconnect storm after failover",
+      "notes": "Simulates thousands of clients re-asking for the master at once, as happens right after a failover.",
+      "safety": "read",
+      "job": {
+        "name": "reconnect storm after failover",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "expectPrefix": "*2"
+          }
+        },
+        "method": "GET",
+        "concurrency": 200,
+        "rps": 1000,
+        "duration": 120000000000,
+        "timeout": 15000000000,
+        "queueSize": 5000,
+        "onQueueFull": "reject",
+        "maxWorkers": 500,
+        "blockPrivate": false,
+        "ramp": 10000000000,
+        "body": "SENTINEL get-master-addr-by-name {{master}}\r\n"
+      }
+    },
+    {
+      "id": "ent-01-smoke",
+      "name": "Redis Sentinel: 01 smoke",
+      "notes": "Enterprise plan, step 1 of 10. One request a second for 30 seconds. Run this first, every time: it proves the address, credentials and headers are right and that the environment is up before any real load is applied. Gate: zero errors. Reference request: get-master-addr-by-name.",
+      "safety": "read",
+      "job": {
+        "name": "Redis Sentinel: 01 smoke",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "expectPrefix": "*2"
+          }
+        },
+        "method": "GET",
+        "concurrency": 1,
+        "rps": 1,
+        "duration": 30000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "body": "SENTINEL get-master-addr-by-name {{master}}\r\n",
+        "slo": {
+          "maxErrorRate": 0
+        }
+      }
+    },
+    {
+      "id": "ent-02-baseline",
+      "name": "Redis Sentinel: 02 baseline (20% load)",
+      "notes": "Step 2 of 10. About a fifth of normal traffic for 5 minutes: the uncontended latency of this request. Every later result is judged against it, so record p50 and p95. Gate: at most 0.5% errors and the default latency targets. Reference request: get-master-addr-by-name.",
+      "safety": "read",
+      "job": {
+        "name": "Redis Sentinel: 02 baseline (20% load)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "expectPrefix": "*2"
+          }
+        },
+        "method": "GET",
+        "concurrency": 4,
+        "rps": 40,
+        "duration": 300000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "body": "SENTINEL get-master-addr-by-name {{master}}\r\n",
+        "slo": {
+          "maxErrorRate": 0.5,
+          "maxP95": 50000000,
+          "maxP99": 200000000
+        }
+      }
+    },
+    {
+      "id": "ent-03-average-load",
+      "name": "Redis Sentinel: 03 average load (SLO check)",
+      "notes": "Step 3 of 10. Normal busy-hour traffic for 10 minutes. The rate is the reference job's rate: raise it to your measured production peak-hour rate. This is the run that proves (or breaks) your SLO. Gate: at most 1% errors, p95 and p99 inside the targets. Reference request: get-master-addr-by-name.",
+      "safety": "read",
+      "job": {
+        "name": "Redis Sentinel: 03 average load (SLO check)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "expectPrefix": "*2"
+          }
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 200,
+        "duration": 600000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "body": "SENTINEL get-master-addr-by-name {{master}}\r\n",
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 50000000,
+          "maxP99": 200000000
+        }
+      }
+    },
+    {
+      "id": "ent-04-peak-load",
+      "name": "Redis Sentinel: 04 peak load (2x average)",
+      "notes": "Step 4 of 10. Twice the average for 10 minutes: the busiest hour of the year plus headroom. Latency may rise, but must stay in SLO; if it does not, you have no headroom. Gate: at most 2% errors, latency targets doubled. Reference request: get-master-addr-by-name.",
+      "safety": "read",
+      "job": {
+        "name": "Redis Sentinel: 04 peak load (2x average)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "expectPrefix": "*2"
+          }
+        },
+        "method": "GET",
+        "concurrency": 40,
+        "rps": 400,
+        "duration": 600000000000,
+        "timeout": 15000000000,
+        "queueSize": 2000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "body": "SENTINEL get-master-addr-by-name {{master}}\r\n",
+        "slo": {
+          "maxErrorRate": 2,
+          "maxP95": 100000000,
+          "maxP99": 400000000
+        }
+      }
+    },
+    {
+      "id": "ent-05-stress",
+      "name": "Redis Sentinel: 05 stress (ramp to 4x)",
+      "notes": "Step 5 of 10. Ramps to four times average over 10 minutes, then holds for 2. Finds where it degrades and HOW: gracefully (latency rises, errors stay low) or badly (errors, timeouts, crashes, restarts). Observation only, no gate. Reference request: get-master-addr-by-name.",
+      "safety": "read",
+      "job": {
+        "name": "Redis Sentinel: 05 stress (ramp to 4x)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "expectPrefix": "*2"
+          }
+        },
+        "method": "GET",
+        "concurrency": 80,
+        "rps": 800,
+        "duration": 720000000000,
+        "timeout": 15000000000,
+        "queueSize": 4000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "body": "SENTINEL get-master-addr-by-name {{master}}\r\n",
+        "ramp": 600000000000
+      }
+    },
+    {
+      "id": "ent-06-spike",
+      "name": "Redis Sentinel: 06 spike (10x in 10 s)",
+      "notes": "Step 6 of 10. Reaches ten times average within 10 seconds and holds for 2 minutes: a campaign email, a news link, a failover. Checks autoscaling, queue limits and load shedding. Gate: at most 5% errors, because shedding load is acceptable and crashing is not. Reference request: get-master-addr-by-name.",
+      "safety": "read",
+      "job": {
+        "name": "Redis Sentinel: 06 spike (10x in 10 s)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "expectPrefix": "*2"
+          }
+        },
+        "method": "GET",
+        "concurrency": 200,
+        "rps": 2000,
+        "duration": 130000000000,
+        "timeout": 15000000000,
+        "queueSize": 10000,
+        "onQueueFull": "reject",
+        "maxWorkers": 400,
+        "blockPrivate": false,
+        "body": "SENTINEL get-master-addr-by-name {{master}}\r\n",
+        "ramp": 10000000000,
+        "slo": {
+          "maxErrorRate": 5
+        }
+      }
+    },
+    {
+      "id": "ent-07-recovery",
+      "name": "Redis Sentinel: 07 recovery after the spike",
+      "notes": "Step 7 of 10. Run IMMEDIATELY after the spike, at average load for 5 minutes. Latency and errors must return to the baseline from step 2. If they do not, something is stuck: queues, connection pools, GC, an autoscaler cool-down. Gate: same as average load. Reference request: get-master-addr-by-name.",
+      "safety": "read",
+      "job": {
+        "name": "Redis Sentinel: 07 recovery after the spike",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "expectPrefix": "*2"
+          }
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 200,
+        "duration": 300000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "body": "SENTINEL get-master-addr-by-name {{master}}\r\n",
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 50000000,
+          "maxP99": 200000000
+        }
+      }
+    },
+    {
+      "id": "ent-08-soak",
+      "name": "Redis Sentinel: 08 soak (1 hour at 60%)",
+      "notes": "Step 8 of 10. One hour of steady load. Finds leaks and slow decay in memory, connections, file descriptors, disk, log volume and cache churn. Watch the resource graphs: any line that climbs and never flattens is a finding. Gate: at most 0.5% errors. Reference request: get-master-addr-by-name.",
+      "safety": "read",
+      "job": {
+        "name": "Redis Sentinel: 08 soak (1 hour at 60%)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "expectPrefix": "*2"
+          }
+        },
+        "method": "GET",
+        "concurrency": 12,
+        "rps": 120,
+        "duration": 3600000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "body": "SENTINEL get-master-addr-by-name {{master}}\r\n",
+        "slo": {
+          "maxErrorRate": 0.5,
+          "maxP95": 50000000,
+          "maxP99": 200000000
+        }
+      }
+    },
+    {
+      "id": "ent-09-breakpoint",
+      "name": "Redis Sentinel: 09 breakpoint (find the ceiling)",
+      "notes": "Step 9 of 10. Ramps to twenty times average over 20 minutes. Stop it when errors pass about 5%: the rate at that moment is your ceiling, and ceiling divided by peak is your capacity margin. Use a production-like environment, never production. Reference request: get-master-addr-by-name.",
+      "safety": "read",
+      "job": {
+        "name": "Redis Sentinel: 09 breakpoint (find the ceiling)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "expectPrefix": "*2"
+          }
+        },
+        "method": "GET",
+        "concurrency": 400,
+        "rps": 4000,
+        "duration": 1380000000000,
+        "timeout": 15000000000,
+        "queueSize": 20000,
+        "onQueueFull": "reject",
+        "maxWorkers": 800,
+        "blockPrivate": false,
+        "body": "SENTINEL get-master-addr-by-name {{master}}\r\n",
+        "ramp": 1200000000000
+      }
+    },
+    {
+      "id": "ent-10-failover-window",
+      "name": "Redis Sentinel: 10 resilience window (failover / deploy)",
+      "notes": "Step 10 of 10. Average load for 15 minutes. About 5 minutes in, cause the event you are testing: kill a pod or node, fail over the database, roll out a new version, drain a zone. Errors in the window are your real availability loss. Gate: at most 1% errors overall; read the time series for how long the dip lasted. Reference request: get-master-addr-by-name.",
+      "safety": "read",
+      "job": {
+        "name": "Redis Sentinel: 10 resilience window (failover / deploy)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "expectPrefix": "*2"
+          }
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 200,
+        "duration": 900000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "body": "SENTINEL get-master-addr-by-name {{master}}\r\n",
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 50000000,
+          "maxP99": 200000000
+        }
+      }
+    },
+    {
+      "id": "ent-x-connection-storm",
+      "name": "Redis Sentinel: connection storm (ramp to 10x)",
+      "notes": "Ramps new connections per second to ten times normal: a fleet reconnecting after an outage, a deploy that restarts every pod, a network blip. Shows accept-queue, file descriptor and handshake limits. Reference request: get-master-addr-by-name.",
+      "safety": "read",
+      "job": {
+        "name": "Redis Sentinel: connection storm (ramp to 10x)",
+        "executor": "tcp",
+        "target": {
+          "url": "tcp://{{host}}:{{port}}",
+          "meta": {
+            "expectPrefix": "*2"
+          }
+        },
+        "method": "GET",
+        "concurrency": 200,
+        "rps": 2000,
+        "duration": 420000000000,
+        "timeout": 15000000000,
+        "queueSize": 10000,
+        "onQueueFull": "reject",
+        "maxWorkers": 400,
+        "blockPrivate": false,
+        "body": "SENTINEL get-master-addr-by-name {{master}}\r\n",
+        "ramp": 120000000000
+      }
+    }
+  ]
+}

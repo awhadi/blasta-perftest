@@ -1,0 +1,31 @@
+# Build output
+/blasta
+/bin/
+/dist/
+
+# Locally generated preset output
+*-jobs/
+
+# Local test artifacts
+*.out
+*.test
+*.prof
+/reports/
+/ui-*.png
+/.playwright-mcp/
+
+# Editor and OS noise
+.DS_Store
+.idea/
+.vscode/
+
+# Secrets and data: never commit these
+.env
+.env.*
+!.env.example
+*.db
+*.db-shm
+*.db-wal
+secret.key
+*.migrated
+/data/

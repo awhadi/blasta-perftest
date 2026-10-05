@@ -1,0 +1,12 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# Deploy into a namespace you choose:  kubectl apply -k deploy/k8s -n blasta
+resources:
+  - pvc.yaml
+  - deployment.yaml
+  - service.yaml
+  - networkpolicy.yaml
+images:
+  - name: blasta
+    newName: blasta        # e.g. registry.example.com/blasta
+    newTag: latest        # pin a version in real use

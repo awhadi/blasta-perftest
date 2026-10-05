@@ -1,0 +1,16 @@
+{
+  "name": "wp search (expensive database query)",
+  "description": "Search is usually the single heaviest read on a WordPress site and the first thing that times out. Keep the rate low.",
+  "executor": "http",
+  "target": { "url": "${WP_URL}/?s=wordpress" },
+  "method": "GET",
+  "headers": { "Accept": "text/html" },
+  "concurrency": 10,
+  "rps": 5,
+  "duration": 60000000000,
+  "timeout": 30000000000,
+  "queueSize": 500,
+  "onQueueFull": "reject",
+  "maxWorkers": 100,
+  "blockPrivate": false
+}

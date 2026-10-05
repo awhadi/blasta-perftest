@@ -1,0 +1,434 @@
+{
+  "id": "meilisearch",
+  "title": "Meilisearch",
+  "category": "Search",
+  "summary": "Health and typo-tolerant search. Includes an enterprise test plan (jobs starting ent-).",
+  "stack": "Meilisearch",
+  "variables": [
+    {
+      "name": "url",
+      "default": "http://localhost:7700",
+      "description": "Meilisearch URL, no trailing slash",
+      "placeholder": true,
+      "guide": "The address of the system to test, starting with https:// (or http://) and with no trailing slash, for example https://staging.example.com. Use a system you own, ideally a staging copy. BLASTA runs in a container, so for a service on your own machine use host.docker.internal instead of localhost."
+    },
+    {
+      "name": "index",
+      "default": "movies",
+      "description": "Index name",
+      "placeholder": true,
+      "guide": "The name of an index. Elasticsearch/OpenSearch: `GET /_cat/indices` lists them. Meilisearch: `GET /indexes`."
+    },
+    {
+      "name": "apiKey",
+      "default": "${MEILI_KEY}",
+      "description": "Search API key. Read from the MEILI_KEY env var by the CLI.",
+      "sensitive": true
+    }
+  ],
+  "jobs": [
+    {
+      "id": "health",
+      "name": "health",
+      "notes": "Unauthenticated liveness.",
+      "safety": "read",
+      "job": {
+        "name": "health",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/health"
+        },
+        "method": "GET",
+        "concurrency": 20,
+        "rps": 25,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Accept": "application/json"
+        }
+      }
+    },
+    {
+      "id": "search",
+      "name": "search query",
+      "notes": "As-you-type search sends one request per keystroke, so real traffic is several times your user count.",
+      "safety": "read",
+      "job": {
+        "name": "search query",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/indexes/{{index}}/search"
+        },
+        "method": "POST",
+        "concurrency": 20,
+        "rps": 100,
+        "duration": 60000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer {{apiKey}}"
+        },
+        "body": "{\"q\":\"test\",\"limit\":10}"
+      }
+    },
+    {
+      "id": "ent-01-smoke",
+      "name": "Meilisearch: 01 smoke",
+      "notes": "Enterprise plan, step 1 of 10. One request a second for 30 seconds. Run this first, every time: it proves the address, credentials and headers are right and that the environment is up before any real load is applied. Gate: zero errors. Reference request: search query.",
+      "safety": "read",
+      "job": {
+        "name": "Meilisearch: 01 smoke",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/indexes/{{index}}/search"
+        },
+        "method": "POST",
+        "concurrency": 1,
+        "rps": 1,
+        "duration": 30000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer {{apiKey}}"
+        },
+        "body": "{\"q\":\"test\",\"limit\":10}",
+        "slo": {
+          "maxErrorRate": 0
+        }
+      }
+    },
+    {
+      "id": "ent-02-baseline",
+      "name": "Meilisearch: 02 baseline (20% load)",
+      "notes": "Step 2 of 10. About a fifth of normal traffic for 5 minutes: the uncontended latency of this request. Every later result is judged against it, so record p50 and p95. Gate: at most 0.5% errors and the default latency targets. Reference request: search query.",
+      "safety": "read",
+      "job": {
+        "name": "Meilisearch: 02 baseline (20% load)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/indexes/{{index}}/search"
+        },
+        "method": "POST",
+        "concurrency": 4,
+        "rps": 20,
+        "duration": 300000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer {{apiKey}}"
+        },
+        "body": "{\"q\":\"test\",\"limit\":10}",
+        "slo": {
+          "maxErrorRate": 0.5,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-03-average-load",
+      "name": "Meilisearch: 03 average load (SLO check)",
+      "notes": "Step 3 of 10. Normal busy-hour traffic for 10 minutes. The rate is the reference job's rate: raise it to your measured production peak-hour rate. This is the run that proves (or breaks) your SLO. Gate: at most 1% errors, p95 and p99 inside the targets. Reference request: search query.",
+      "safety": "read",
+      "job": {
+        "name": "Meilisearch: 03 average load (SLO check)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/indexes/{{index}}/search"
+        },
+        "method": "POST",
+        "concurrency": 20,
+        "rps": 100,
+        "duration": 600000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer {{apiKey}}"
+        },
+        "body": "{\"q\":\"test\",\"limit\":10}",
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-04-peak-load",
+      "name": "Meilisearch: 04 peak load (2x average)",
+      "notes": "Step 4 of 10. Twice the average for 10 minutes: the busiest hour of the year plus headroom. Latency may rise, but must stay in SLO; if it does not, you have no headroom. Gate: at most 2% errors, latency targets doubled. Reference request: search query.",
+      "safety": "read",
+      "job": {
+        "name": "Meilisearch: 04 peak load (2x average)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/indexes/{{index}}/search"
+        },
+        "method": "POST",
+        "concurrency": 40,
+        "rps": 200,
+        "duration": 600000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer {{apiKey}}"
+        },
+        "body": "{\"q\":\"test\",\"limit\":10}",
+        "slo": {
+          "maxErrorRate": 2,
+          "maxP95": 2000000000,
+          "maxP99": 4000000000
+        }
+      }
+    },
+    {
+      "id": "ent-05-stress",
+      "name": "Meilisearch: 05 stress (ramp to 4x)",
+      "notes": "Step 5 of 10. Ramps to four times average over 10 minutes, then holds for 2. Finds where it degrades and HOW: gracefully (latency rises, errors stay low) or badly (errors, timeouts, crashes, restarts). Observation only, no gate. Reference request: search query.",
+      "safety": "read",
+      "job": {
+        "name": "Meilisearch: 05 stress (ramp to 4x)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/indexes/{{index}}/search"
+        },
+        "method": "POST",
+        "concurrency": 80,
+        "rps": 400,
+        "duration": 720000000000,
+        "timeout": 15000000000,
+        "queueSize": 2000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer {{apiKey}}"
+        },
+        "body": "{\"q\":\"test\",\"limit\":10}",
+        "ramp": 600000000000
+      }
+    },
+    {
+      "id": "ent-06-spike",
+      "name": "Meilisearch: 06 spike (10x in 10 s)",
+      "notes": "Step 6 of 10. Reaches ten times average within 10 seconds and holds for 2 minutes: a campaign email, a news link, a failover. Checks autoscaling, queue limits and load shedding. Gate: at most 5% errors, because shedding load is acceptable and crashing is not. Reference request: search query.",
+      "safety": "read",
+      "job": {
+        "name": "Meilisearch: 06 spike (10x in 10 s)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/indexes/{{index}}/search"
+        },
+        "method": "POST",
+        "concurrency": 200,
+        "rps": 1000,
+        "duration": 130000000000,
+        "timeout": 15000000000,
+        "queueSize": 5000,
+        "onQueueFull": "reject",
+        "maxWorkers": 400,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer {{apiKey}}"
+        },
+        "body": "{\"q\":\"test\",\"limit\":10}",
+        "ramp": 10000000000,
+        "slo": {
+          "maxErrorRate": 5
+        }
+      }
+    },
+    {
+      "id": "ent-07-recovery",
+      "name": "Meilisearch: 07 recovery after the spike",
+      "notes": "Step 7 of 10. Run IMMEDIATELY after the spike, at average load for 5 minutes. Latency and errors must return to the baseline from step 2. If they do not, something is stuck: queues, connection pools, GC, an autoscaler cool-down. Gate: same as average load. Reference request: search query.",
+      "safety": "read",
+      "job": {
+        "name": "Meilisearch: 07 recovery after the spike",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/indexes/{{index}}/search"
+        },
+        "method": "POST",
+        "concurrency": 20,
+        "rps": 100,
+        "duration": 300000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer {{apiKey}}"
+        },
+        "body": "{\"q\":\"test\",\"limit\":10}",
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-08-soak",
+      "name": "Meilisearch: 08 soak (1 hour at 60%)",
+      "notes": "Step 8 of 10. One hour of steady load. Finds leaks and slow decay in memory, connections, file descriptors, disk, log volume and cache churn. Watch the resource graphs: any line that climbs and never flattens is a finding. Gate: at most 0.5% errors. Reference request: search query.",
+      "safety": "read",
+      "job": {
+        "name": "Meilisearch: 08 soak (1 hour at 60%)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/indexes/{{index}}/search"
+        },
+        "method": "POST",
+        "concurrency": 12,
+        "rps": 60,
+        "duration": 3600000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer {{apiKey}}"
+        },
+        "body": "{\"q\":\"test\",\"limit\":10}",
+        "slo": {
+          "maxErrorRate": 0.5,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    },
+    {
+      "id": "ent-09-breakpoint",
+      "name": "Meilisearch: 09 breakpoint (find the ceiling)",
+      "notes": "Step 9 of 10. Ramps to twenty times average over 20 minutes. Stop it when errors pass about 5%: the rate at that moment is your ceiling, and ceiling divided by peak is your capacity margin. Use a production-like environment, never production. Reference request: search query.",
+      "safety": "read",
+      "job": {
+        "name": "Meilisearch: 09 breakpoint (find the ceiling)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/indexes/{{index}}/search"
+        },
+        "method": "POST",
+        "concurrency": 400,
+        "rps": 2000,
+        "duration": 1380000000000,
+        "timeout": 15000000000,
+        "queueSize": 10000,
+        "onQueueFull": "reject",
+        "maxWorkers": 800,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer {{apiKey}}"
+        },
+        "body": "{\"q\":\"test\",\"limit\":10}",
+        "ramp": 1200000000000
+      }
+    },
+    {
+      "id": "ent-10-failover-window",
+      "name": "Meilisearch: 10 resilience window (failover / deploy)",
+      "notes": "Step 10 of 10. Average load for 15 minutes. About 5 minutes in, cause the event you are testing: kill a pod or node, fail over the database, roll out a new version, drain a zone. Errors in the window are your real availability loss. Gate: at most 1% errors overall; read the time series for how long the dip lasted. Reference request: search query.",
+      "safety": "read",
+      "job": {
+        "name": "Meilisearch: 10 resilience window (failover / deploy)",
+        "executor": "http",
+        "target": {
+          "url": "{{url}}/indexes/{{index}}/search"
+        },
+        "method": "POST",
+        "concurrency": 20,
+        "rps": 100,
+        "duration": 900000000000,
+        "timeout": 15000000000,
+        "queueSize": 1000,
+        "onQueueFull": "reject",
+        "maxWorkers": 200,
+        "blockPrivate": false,
+        "expectStatus": [
+          200
+        ],
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer {{apiKey}}"
+        },
+        "body": "{\"q\":\"test\",\"limit\":10}",
+        "slo": {
+          "maxErrorRate": 1,
+          "maxP95": 1000000000,
+          "maxP99": 2000000000
+        }
+      }
+    }
+  ],
+  "secrets": {
+    "MEILI_KEY": {
+      "label": "Meilisearch search key",
+      "guide": "`curl -H 'Authorization: Bearer MASTER_KEY' http://HOST:7700/keys` lists the keys: copy the default Search API Key."
+    }
+  }
+}

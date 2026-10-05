@@ -1,0 +1,13 @@
+.git
+.gitignore
+/blasta
+/bin
+/dist
+*-jobs/
+*.out
+*.test
+*.prof
+/reports
+.env*
+Dockerfile
+docker-compose.yml
