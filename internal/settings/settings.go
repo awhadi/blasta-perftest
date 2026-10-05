@@ -17,6 +17,7 @@ const (
 	KeyGuest     = "guest"
 	KeyCaptcha   = "captcha"
 	KeyAnalytics = "analytics"
+	KeyPrivacy   = "privacy"
 )
 
 // General is how people sign up and where BLASTA is reached.
@@ -99,6 +100,20 @@ type Analytics struct {
 	ExtraHosts    []string `json:"extraHosts"`    // more https hosts the provider's script talks to
 	RespectDNT    bool     `json:"respectDnt"`    // stay off for people who send Do Not Track or Global Privacy Control
 	TrackSignedIn bool     `json:"trackSignedIn"` // also count people who are signed in (off: only visitors)
+}
+
+// Privacy is how the site deals with cookie consent and says what it stores. Nothing here is
+// secret. It does not decide what the law requires: that is for the site's operator.
+type Privacy struct {
+	Mode       string `json:"mode"`       // optin | optout | notice | off
+	Message    string `json:"message"`    // the banner text; empty: BLASTA's own
+	PolicyURL  string `json:"policyUrl"`  // the operator's own policy; empty: BLASTA's /privacy page
+	Controller string `json:"controller"` // who runs this site, for the privacy page
+	Contact    string `json:"contact"`    // where to send privacy requests
+	Notes      string `json:"notes"`      // extra paragraphs for the privacy page
+	// NoSelfDelete stops people deleting their own account and test history (off by default:
+	// they can, as most data protection laws expect).
+	NoSelfDelete bool `json:"noSelfDelete"`
 }
 
 // Store reads and writes settings.

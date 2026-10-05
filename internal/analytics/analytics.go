@@ -178,6 +178,16 @@ func umamiScript(c settings.Analytics) string {
 	return "https://cloud.umami.is/script.js"
 }
 
+// Name is the display name of a provider id ("" if unknown).
+func Name(id string) string {
+	for _, p := range Providers {
+		if p.ID == id {
+			return p.Name
+		}
+	}
+	return ""
+}
+
 // prepare returns the tidied settings, and whether they are on and complete.
 func prepare(c settings.Analytics) (settings.Analytics, bool) {
 	if !c.Enabled {

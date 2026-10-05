@@ -35,6 +35,7 @@ func (s *Service) settingsRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/admin/settings/sso", s.saveSSO)
 	mux.HandleFunc("POST /api/admin/settings/smtp", s.saveSMTP)
 	mux.HandleFunc("POST /api/admin/settings/analytics", s.saveAnalytics)
+	mux.HandleFunc("POST /api/admin/settings/privacy", s.savePrivacy)
 	mux.HandleFunc("POST /api/admin/settings/guest", s.saveGuest)
 	mux.HandleFunc("POST /api/admin/settings/captcha", s.saveCaptcha)
 	mux.HandleFunc("POST /api/admin/settings/captcha/verify", s.verifyCaptchaKey)
@@ -60,7 +61,7 @@ func (s *Service) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	cfg := s.conf()
 	saved := map[string]bool{}
-	for _, k := range []string{settings.KeyGeneral, settings.KeySSO, settings.KeySMTP, settings.KeyGuest, settings.KeyCaptcha, settings.KeyAnalytics} {
+	for _, k := range []string{settings.KeyGeneral, settings.KeySSO, settings.KeySMTP, settings.KeyGuest, settings.KeyCaptcha, settings.KeyAnalytics, settings.KeyPrivacy} {
 		var raw map[string]any
 		ok, _ := s.settings.Get(k, &raw)
 		saved[k] = ok
@@ -99,6 +100,8 @@ func (s *Service) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 		"captcha":            captchaView{Captcha: cfg.Captcha, SecretSet: cfg.Captcha.Secret != "", Off: s.base.CaptchaOff},
 		"analytics":          cfg.Analytics,
 		"analyticsProviders": analyticsProviders(),
+		"privacy":            cfg.Privacy,
+		"privacyModes":       privacyModes(),
 		"saved":              saved,
 		"redirectUrl":        s.redirectURL(r),
 	})
@@ -433,7 +436,7 @@ func (s *Service) resetSection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch k := r.PathValue("section"); k {
-	case settings.KeyGeneral, settings.KeySSO, settings.KeySMTP, settings.KeyGuest, settings.KeyCaptcha, settings.KeyAnalytics:
+	case settings.KeyGeneral, settings.KeySSO, settings.KeySMTP, settings.KeyGuest, settings.KeyCaptcha, settings.KeyAnalytics, settings.KeyPrivacy:
 		_ = s.settings.Delete(k)
 		if err := s.Reload(); err != nil {
 			writeErr(w, 400, err.Error())

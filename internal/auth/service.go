@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/awhadi/blasta-perftest/internal/mailer"
+	"github.com/awhadi/blasta-perftest/internal/privacy"
 	"github.com/awhadi/blasta-perftest/internal/settings"
 )
 
@@ -47,6 +48,8 @@ type Config struct {
 	CaptchaOff bool
 	// Analytics is the visitor analytics an administrator switched on (Settings > Analytics).
 	Analytics settings.Analytics
+	// Privacy is how consent is handled and what the privacy page says (Settings > Privacy & Cookies).
+	Privacy settings.Privacy
 }
 
 func (c *Config) defaults() {
@@ -191,6 +194,12 @@ func (s *Service) compose() (Config, error) {
 	if s.settings == nil {
 		return cfg, nil
 	}
+	cfg.Privacy = privacy.Default()
+	if ok, err := s.settings.Get(settings.KeyPrivacy, &cfg.Privacy); err != nil {
+		return cfg, err
+	} else if !ok {
+		cfg.Privacy = privacy.Default()
+	}
 	cfg.Analytics = settings.Analytics{RespectDNT: true}
 	if ok, err := s.settings.Get(settings.KeyAnalytics, &cfg.Analytics); err != nil {
 		return cfg, err
@@ -257,8 +266,9 @@ type PublicConfig struct {
 	Email           bool           `json:"email"` // outgoing mail is set up (password reset works)
 	Guest           bool           `json:"guest"` // visitors may try BLASTA without an account
 	Captcha         *publicCaptcha `json:"captcha,omitempty"`
-	OTP             bool           `json:"otp"`   // sign in with an emailed code
-	Reset           bool           `json:"reset"` // "forgot password" works
+	OTP             bool           `json:"otp"`        // sign in with an emailed code
+	Reset           bool           `json:"reset"`      // "forgot password" works
+	SelfDelete      bool           `json:"selfDelete"` // people may delete their own account
 }
 
 // PublicConfig describes the sign-in options.
@@ -278,6 +288,7 @@ func (s *Service) PublicConfig() PublicConfig {
 	pc.Captcha = s.publicCaptcha()
 	pc.OTP = pc.Email && cfg.OTPLogin
 	pc.Reset = pc.Email && !cfg.DisableReset
+	pc.SelfDelete = !cfg.Privacy.NoSelfDelete
 	return pc
 }
 

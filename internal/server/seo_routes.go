@@ -30,12 +30,13 @@ func (a *API) siteBase(r *http.Request) string {
 	return scheme + "://" + host + a.basePath
 }
 
-// analyticsTag is the line that loads the analytics script, or nothing when none is on.
+// analyticsTag is the line that loads the consent script (which loads analytics once its rules
+// allow), or nothing when there is neither analytics nor a notice to show.
 func (a *API) analyticsTag() template.HTML {
-	if a.auth == nil || !a.auth.AnalyticsOn() {
+	if a.auth == nil || !a.auth.PrivacyNeeded() {
 		return ""
 	}
-	return `<script src="analytics.js" defer></script>`
+	return `<script src="consent.js" defer></script>`
 }
 
 // seoRoutes serves what crawlers read: robots.txt, sitemap.xml and llms.txt. They are public: they only describe
@@ -56,6 +57,30 @@ func seoRoutes(mux *http.ServeMux, a *API) {
 		_, _ = w.Write([]byte(seo.SitemapXSL))
 	})
 	mux.HandleFunc("GET /llms.txt", text("text/markdown; charset=utf-8", seo.LLMs))
+	// The consent banner, built for each request (a signed-in person who is not counted has no
+	// analytics to be asked about), and the privacy page.
+	mux.HandleFunc("GET /consent.js", func(w http.ResponseWriter, r *http.Request) {
+		js := ""
+		if a.auth != nil {
+			js = a.auth.PrivacyScript(r)
+		}
+		if js == "" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-store")
+		_, _ = w.Write([]byte(js))
+	})
+	mux.HandleFunc("GET /privacy", func(w http.ResponseWriter, r *http.Request) {
+		if a.auth == nil {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-store")
+		_, _ = w.Write(a.auth.PrivacyPage("./", a.siteBase(r)+"/privacy"))
+	})
 	// The analytics loader an administrator chose (Settings > Analytics). It is built for each
 	// request, because it is empty for signed-in people unless they are counted too.
 	mux.HandleFunc("GET /analytics.js", func(w http.ResponseWriter, r *http.Request) {

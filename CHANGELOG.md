@@ -7,6 +7,26 @@ feature the middle one, a breaking change the first. The current version is the
 `Version` constant in `internal/version/version.go`; it is shown bottom right in the
 page for signed-in people, by `blasta version`, and in `/api/health`.
 
+## [2.9.0] - 2026-10-05
+
+### Added
+- **Settings > Privacy & Cookies**: how optional cookies are handled and what the site says about
+  your data. A cookie consent banner with four modes (ask first, opt-out, notice only, none),
+  a "Cookie settings" button to change a choice, and analytics that stays off until consent where
+  the mode requires it. See [docs/PRIVACY.md](docs/PRIVACY.md).
+- A privacy page at `/privacy`, generated from the site's real settings: what is stored and for how
+  long, a table of the cookies actually in use (including the bot check, single sign-on, the free
+  trial and analytics when they are on), the visitor's choices, and your own contact, controller
+  name, policy link and extra text. It is linked from the sign-in page and the banner.
+- People can **download their data** (account, sessions, test history) and **delete their own
+  account and history** from My account, after confirming with their password (or their email for
+  single sign-on). Wrong attempts are throttled and the last administrator cannot be deleted. An
+  administrator can switch self-service deletion off.
+
+### Changed
+- Pages load `/consent.js` (when there is analytics or a notice) instead of loading analytics
+  directly, so analytics waits for the visitor's choice. `blasta_consent` remembers it for 12 months.
+
 ## [2.8.0] - 2026-10-05
 
 ### Added

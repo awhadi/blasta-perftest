@@ -184,6 +184,7 @@ __SSR__
       <p class="auth-ok" id="authOk" role="status" hidden></p>
       <p class="auth-links" id="resendRow" hidden><a href="#" id="resendLink">Send the confirmation email again</a></p>
       <p class="auth-links guest-link" id="guestLink" hidden>Just looking? <a href="test">Try a quick test without an account</a></p>
+      <p class="auth-links privacy-link"><a href="privacy">Privacy and cookies</a></p>
     </div>
   </section>
 
@@ -208,6 +209,7 @@ __SSR__
         <div class="side-heading">Site</div>
         <div class="side-group">
           <a href="admin/analytics" data-section="analytics">Analytics</a>
+          <a href="admin/privacy" data-section="privacy">Privacy &amp; Cookies</a>
         </div>
       </div>
       <div class="admin-main" id="adminSection"></div>
@@ -686,6 +688,24 @@ __SSR__
     <div class="dlg-actions">
       <button type="button" class="btn ghost" id="pwCancel">Cancel</button>
       <button type="submit" class="btn primary-sm" id="pwOk">Save password</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="delDlg" class="dlg" aria-labelledby="delTitle">
+  <form id="delForm" novalidate>
+    <h2 id="delTitle">Delete your account</h2>
+    <p class="note">This removes your account, your sign-in sessions and your whole test history. It cannot be undone. Download your data first if you want a copy.</p>
+    <label for="delPassword" id="delPasswordRow">Your password
+      <input id="delPassword" type="password" autocomplete="current-password">
+    </label>
+    <label for="delConfirm" id="delConfirmRow" hidden>Type your email address to confirm
+      <input id="delConfirm" type="text" autocomplete="off" spellcheck="false">
+    </label>
+    <p class="form-error" id="delErr" role="alert" hidden></p>
+    <div class="dlg-actions">
+      <button type="button" class="btn ghost" id="delCancel">Cancel</button>
+      <button type="submit" class="btn danger inline" id="delOk">Delete my account</button>
     </div>
   </form>
 </dialog>

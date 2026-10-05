@@ -166,6 +166,8 @@ func (a *API) routes() {
 	a.mux.HandleFunc("GET /api/presets", a.handleListPresets)
 	a.mux.HandleFunc("GET /api/presets/{id}", a.handleGetPreset)
 	a.mux.HandleFunc("POST /api/presets/{id}/render", a.handleRenderPreset)
+	a.mux.HandleFunc("GET /api/me/export", a.handleExportMe)
+	a.mux.HandleFunc("DELETE /api/me", a.handleDeleteMe)
 	a.mux.HandleFunc("GET /api/jobs", a.handleListJobs)
 	a.mux.HandleFunc("POST /api/jobs", a.handleCreateJob)
 	a.mux.HandleFunc("GET /api/jobs/{id}", a.handleGetJob)

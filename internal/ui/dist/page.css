@@ -8,3 +8,9 @@ h1 { font-size: clamp(1.7rem, 1.2rem + 2vw, 2.4rem); line-height: 1.15; letter-s
 .lead { color: var(--dim); max-width: 70ch; }
 .urls { padding-left: 20px; }
 .urls li { margin: 4px 0; overflow-wrap: anywhere; }
+.doc h2 { margin-top: 32px; font-size: 1.25rem; letter-spacing: -.02em; }
+.doc-table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 15px; }
+.doc-table th, .doc-table td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid color-mix(in srgb, var(--dim) 30%, transparent); }
+.doc-table th { color: var(--dim); font-weight: 600; }
+.doc code { font: 13.5px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.doc .foot { color: var(--dim); font-size: 13px; margin-top: 32px; }

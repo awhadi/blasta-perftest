@@ -106,7 +106,7 @@ function toast(msg, kind, lines) {
 
 /* ---- Short, specific messages for what a save did ---- */
 
-const SETTINGS_TITLE = { general: 'General settings', guest: 'Free trial', smtp: 'SMTP connection', sso: 'Single sign-on', captcha: 'Bot protection', analytics: 'Analytics' };
+const SETTINGS_TITLE = { general: 'General settings', guest: 'Free trial', smtp: 'SMTP connection', sso: 'Single sign-on', captcha: 'Bot protection', analytics: 'Analytics', privacy: 'Privacy settings' };
 
 // Which fields of a settings section differ from what was saved before.
 function changedKeys(before, after) {
@@ -144,6 +144,8 @@ function savedMessage(key, before, after) {
       return 'SMTP connection saved';
     case 'captcha':
       return has('enabled') ? turned('Bot protection', after.enabled) : 'Bot protection settings saved';
+    case 'privacy':
+      return has('mode') && ch.length === 1 ? 'Cookie consent set to \u201c' + after.mode + '\u201d' : 'Privacy settings saved';
     case 'analytics':
       return ch.length === 1 && has('enabled') ? turned('Analytics', after.enabled) : 'Analytics settings saved';
     case 'sso':
@@ -2330,6 +2332,22 @@ function openPasswordDialog(t) {
 
 function wirePasswordDialog() {
   $('pwCancel').onclick = () => $('pwDlg').close();
+  $('delCancel').onclick = () => $('delDlg').close();
+  $('delForm').onsubmit = async (e) => {
+    e.preventDefault();
+    $('delErr').hidden = true;
+    $('delOk').disabled = true;
+    try {
+      await api('/me', { method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: $('delPassword').value, confirm: $('delConfirm').value }) });
+      store.set(SESSION_KEY, '');
+      history.replaceState(null, '', toUrl('#/test'));
+      location.reload();
+    } catch (err) {
+      $('delErr').textContent = err.message;
+      $('delErr').hidden = false;
+    } finally { $('delOk').disabled = false; }
+  };
   $('pwForm').onsubmit = async (e) => {
     e.preventDefault();
     const fail = (m) => { $('pwErr').textContent = m; $('pwErr').hidden = false; };
@@ -2457,8 +2475,18 @@ async function loadAccount() {
     '<div class="settings-subcard account-card"><h3>Appearance</h3><p class="modal-subtitle">Choose how BLASTA looks for you.</p>' +
     '<div class="theme-cards" role="radiogroup" aria-label="Theme">' +
     tile('light', 'Light', 'Bright and warm') + tile('dark', 'Dark', 'Easy on the eyes') + tile('system', 'Match my device', 'Follows your system') +
-    '</div></div></div>';
+    '</div></div>' +
+    '<div class="settings-subcard account-card"><h3>Your data</h3><p class="modal-subtitle">See what is held about you, or remove it. <a href="privacy">Privacy and cookies</a></p>' +
+    '<div class="modal-form-actions"><a class="btn small" href="api/me/export" download="blasta-my-data.json">Download my data</a>' +
+    (authCfg && authCfg.selfDelete ? '<button type="button" class="btn danger inline" id="acDelete">Delete my account</button>' : '') + '</div></div></div>';
   paintAvatar($('acAvatar'), me);
+  if ($('acDelete')) $('acDelete').onclick = () => {
+    $('delPasswordRow').hidden = !me.hasPassword;
+    $('delConfirmRow').hidden = me.hasPassword;
+    $('delPassword').value = $('delConfirm').value = '';
+    $('delErr').hidden = true;
+    $('delDlg').showModal();
+  };
 
   const say = (id) => (msg, ok) => { const o = $(id); o.hidden = false; o.className = 'set-result ' + (ok ? 'ok' : 'bad'); o.textContent = msg; };
   const emailInput = $('acEmail');
@@ -2531,7 +2559,7 @@ async function loadAccount() {
 
 /* ---- Administration: a sidebar of sections, one page each ---- */
 
-const ADMIN_SECTIONS = ['general', 'users', 'trial', 'sso', 'smtp', 'bots', 'analytics'];
+const ADMIN_SECTIONS = ['general', 'users', 'trial', 'sso', 'smtp', 'bots', 'analytics', 'privacy'];
 const num = (id) => parseInt($(id).value, 10) || 0;
 const list = (a) => (a || []).join(', ');
 const unlist = (v) => String(v || '').split(/[,\n]/).map((x) => x.trim()).filter(Boolean);
@@ -2540,7 +2568,7 @@ function showAdmin(section) {
   if (section === 'settings') section = 'general';             // the old address
   if (!ADMIN_SECTIONS.includes(section)) section = 'general';       // the Settings menu lands on General Settings
   document.querySelectorAll('.admin-side a').forEach((a) => a.classList.toggle('active', a.dataset.section === section));
-  const render = { general: renderGeneral, users: renderUsers, trial: renderTrialSettings, sso: renderSso, smtp: renderSmtp, bots: renderBots, analytics: renderAnalytics }[section];
+  const render = { general: renderGeneral, users: renderUsers, trial: renderTrialSettings, sso: renderSso, smtp: renderSmtp, bots: renderBots, analytics: renderAnalytics, privacy: renderPrivacy }[section];
   render().catch((e) => { $('adminSection').innerHTML = '<p class="form-error">' + esc(e.message) + '</p>'; });
 }
 
@@ -2842,6 +2870,34 @@ async function renderAnalytics(staged) {
   const body = () => ({ enabled: $('a-on').checked, provider, id: val('a-id'), scriptUrl: val('a-url'),
     extraHosts: val('a-extra').split(',').map((x) => x.trim()).filter(Boolean), respectDnt: $('a-dnt').checked, trackSignedIn: $('a-signed').checked });
   wireSection('analytics', 'f-analytics', body, renderAnalytics, a);
+}
+
+async function renderPrivacy() {
+  const d = await getSettings(), p = d.privacy, modes = d.privacyModes || [], a = d.analytics;
+  const mode = modes.find((m) => m.id === p.mode) || modes[0] || {};
+  const tracking = a.enabled && a.provider;
+  const ta = (id, label, val, rows, help) => '<label for="' + id + '">' + label + '<textarea id="' + id + '" rows="' + rows + '" spellcheck="true">' + esc(val || '') + '</textarea>' +
+    (help ? '<span class="help">' + help + '</span>' : '') + '</label>';
+  $('adminSection').innerHTML = pageHead('Privacy', 'Privacy & Cookies',
+    'Tell people what this site stores, and let them decide about optional cookies. BLASTA\u2019s own cookies are all essential; consent matters when analytics is on.', saveBtn('f-privacy')) +
+    '<form id="f-privacy" class="modal-form">' +
+    subcard('Cookie consent', 'How visitors are asked about optional cookies (analytics).', tracking ? pill(true, 'Analytics is on', '') : pill(false, '', 'No optional cookies'),
+      sel('p-mode', 'When someone visits', p.mode, modes.map((m) => [m.id, m.name]), esc(mode.help || '')) +
+      (tracking && (p.mode === 'off' || p.mode === 'notice') ? '<p class="set-result bad">Analytics is on, but visitors are not asked. In the EU, the UK and other places that is not enough: choose \u201cAsk first\u201d unless you are sure.</p>' : '') +
+      ta('p-message', 'Banner text', p.message, 3, 'Optional. Leave empty to use BLASTA\u2019s wording, which names the analytics service.')) +
+    subcard('Privacy page', 'BLASTA makes a page at /privacy from these settings and what is switched on.', '',
+      fld('p-controller', 'Who runs this site', p.controller, { ph: 'Example Ltd', hint: 'optional' }) +
+      fld('p-contact', 'Contact for privacy requests', p.contact, { ph: 'privacy@example.com', hint: 'optional' }) +
+      fld('p-policy', 'Your own privacy policy', p.policyUrl, { ph: 'https://example.com/privacy', hint: 'optional', help: 'If set, the banner links to it instead of BLASTA\u2019s page.' }) +
+      ta('p-notes', 'More for the privacy page', p.notes, 5, 'Optional. Separate paragraphs with a blank line.') +
+      '<p class="help"><a href="privacy" target="_blank" rel="noopener">View the privacy page</a></p>') +
+    subcard('People\u2019s rights', 'Everyone can download their data from My account.', '',
+      toggle('p-selfdelete', 'Let people delete their own account and test history', !p.noSelfDelete, 'Most data protection laws expect this. Turn it off only if you must keep records; people can then still ask you.')) +
+    '<div class="modal-form-actions">' + resetBtn(d.saved.privacy, 'f-privacy') + '</div></form>';
+  $('p-mode').onchange = () => { const m = modes.find((x) => x.id === $('p-mode').value); document.querySelector('#p-mode ~ .help').innerHTML = esc((m || {}).help || ''); };
+  const body = () => ({ mode: $('p-mode').value, message: $('p-message').value.trim(), policyUrl: $('p-policy').value.trim(),
+    controller: $('p-controller').value.trim(), contact: $('p-contact').value.trim(), notes: $('p-notes').value.trim(), noSelfDelete: !$('p-selfdelete').checked });
+  wireSection('privacy', 'f-privacy', body, renderPrivacy, p);
 }
 
 async function renderSmtp() {
