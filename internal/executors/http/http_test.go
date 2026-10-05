@@ -4,10 +4,12 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/awhadi/blasta-perftest/internal/engine"
+	"github.com/awhadi/blasta-perftest/internal/version"
 )
 
 func TestDoSuccess(t *testing.T) {
@@ -237,5 +239,27 @@ func TestNormalizeHeaders(t *testing.T) {
 func TestIs2xx(t *testing.T) {
 	if !Is2xx(204) || Is2xx(301) || Is2xx(404) {
 		t.Error("Is2xx misclassified a status")
+	}
+}
+
+// A request names BLASTA (and its version) unless the job sets its own User-Agent: the app
+// puts a "BLASTA/<version>" row in every job's headers, and people may change it.
+func TestUserAgentNamesBlastaUnlessTheJobChangesIt(t *testing.T) {
+	var got string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { got = r.Header.Get("User-Agent") }))
+	defer srv.Close()
+	e := New(Options{Timeout: 5 * time.Second})
+	defer e.CloseIdle()
+	if _, err := e.Do(context.Background(), engine.Request{URL: srv.URL}); err != nil {
+		t.Fatal(err)
+	}
+	if got != version.UserAgent() || !strings.HasPrefix(got, "BLASTA/") {
+		t.Errorf("default agent = %q, want %q", got, version.UserAgent())
+	}
+	if _, err := e.Do(context.Background(), engine.Request{URL: srv.URL, Headers: map[string]string{"user-agent": "my-agent/2"}}); err != nil {
+		t.Fatal(err)
+	}
+	if got != "my-agent/2" {
+		t.Errorf("a job's own agent must be sent as it is, got %q", got)
 	}
 }

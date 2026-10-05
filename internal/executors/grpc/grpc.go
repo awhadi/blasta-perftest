@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/awhadi/blasta-perftest/internal/engine"
+	"github.com/awhadi/blasta-perftest/internal/version"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
@@ -67,6 +68,7 @@ func (e *Executor) conn(target string) (*grpc.ClientConn, error) {
 	e.mu.Unlock()
 
 	opts := []grpc.DialOption{
+		grpc.WithUserAgent(version.UserAgent()), // gRPC adds its own library name after this
 		grpc.WithKeepaliveParams(keepalive.ClientParameters{
 			Time:                30 * time.Second,
 			Timeout:             10 * time.Second,

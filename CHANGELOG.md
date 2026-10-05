@@ -7,6 +7,20 @@ feature the middle one, a breaking change the first. The current version is the
 `Version` constant in `internal/version/version.go`; it is shown bottom right in the
 page for signed-in people, by `blasta version`, and in `/api/health`.
 
+## [2.7.0] - 2026-10-05
+
+### Added
+- Every test starts with a `User-Agent` row in the Headers section, filled with `BLASTA/<version>`
+  (it used to say `BLASTA/1.0` whatever the version), so the systems being tested can tell its
+  traffic. It is an ordinary header: change or remove it if you need to. A template job that
+  brings its own agent (the crawler test sends a Googlebot one) keeps it, with `BLASTA/<version>`
+  added after it, still editable. When a job sends no User-Agent at all, the HTTP, WebSocket and
+  gRPC tests introduce themselves as `BLASTA/<version>`.
+
+### Changed
+- Closing the template banner (the x) also puts away the live results panel. A test that is
+  still running keeps running; only the panel is hidden, and the next test shows it again.
+
 ## [2.6.1] - 2026-10-05
 
 ### Fixed

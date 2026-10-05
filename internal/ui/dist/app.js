@@ -7,6 +7,13 @@ const BASE = new URL(document.baseURI).pathname;
 const toUrl = (route) => BASE + String(route).replace(/^#\/?/, '');
 const routeStr = () => '#/' + location.pathname.slice(BASE.length) + location.search;
 const HOME_TITLE = 'BLASTA: Load and Performance Testing Platform by AWHADI';
+// Every test starts with a User-Agent header row naming BLASTA (and its version), so the
+// systems under test can tell its traffic. It is an ordinary row: people can change or remove it.
+const APP_VERSION = (document.querySelector('meta[name="blasta-version"]') || {}).content || '';
+const BLASTA_UA = 'BLASTA' + (APP_VERSION ? '/' + APP_VERSION : '');
+// A template may bring its own agent (the crawler test sends a Googlebot one): keep it, tagged.
+const taggedAgent = (ua) => !ua ? BLASTA_UA : /blasta/i.test(ua) ? ua : ua + ' ' + BLASTA_UA;
+const isAgentHeader = (k) => String(k).trim().toLowerCase() === 'user-agent';
 const ROUTE_RE = /^(test|templates|history|login|admin|account|reset|confirm|confirm-email)(\/|$)/;
 // Addresses from before pages had paths (/#/templates/auth0, and links in emails) still work.
 if (/^#\/./.test(location.hash)) history.replaceState(null, '', toUrl(location.hash));
@@ -306,7 +313,7 @@ async function startApp() {
   }
   $('executor').value = 'http';
   if (guestMode) applyGuestLimits();
-  headerRow('User-Agent', 'BLASTA/1.0');
+  headerRow('User-Agent', BLASTA_UA);
   $('addHeader').onclick = () => { headerRow(); $('headers').lastChild.querySelector('input').focus(); };
   $('headers').addEventListener('input', countHeaders);
 
@@ -1318,7 +1325,7 @@ function wireTemplateSearch() {
       (!$('tplListView').hidden ? $('tplSearch') : $('jobSearch')).focus();
     }
   });
-  $('tplDismiss').onclick = () => { loadedFrom = null; showBanner(); };
+  $('tplDismiss').onclick = () => { loadedFrom = null; showBanner(); closeResults(); };
   $('tplEdit').onclick = editLoadedJob;
 }
 
@@ -1670,7 +1677,8 @@ function applyDetails(job) {
   Object.entries(job.headers || {}).forEach(([k, v]) => {
     const row = [...document.querySelectorAll('#headers .hrow')]
       .find((r) => r.querySelector('[data-role=k]').value.trim().toLowerCase() === k.toLowerCase());
-    if (row) row.querySelector('[data-role=v]').value = v; else headerRow(k, v);
+    const val = isAgentHeader(k) ? taggedAgent(v) : v;
+    if (row) row.querySelector('[data-role=v]').value = val; else headerRow(k, val);
   });
   countHeaders();
 }
@@ -1712,6 +1720,18 @@ async function editLoadedJob() {
   showFormError('');
   loadedFrom = Object.assign({}, lf, { vars: answers.vars, path: answers.path, secrets: answers.secrets });
   toast('Details updated \u2014 your load settings were not changed', 'ok');
+}
+
+// Closing the template takes its live results away too. A test that is still running keeps
+// running (Stop is not in this panel); only the panel is put away.
+function closeResults() {
+  $('results').hidden = true;
+  if (document.querySelector('.nav-btn[data-view=test]').classList.contains('running')) return;
+  $('resultsEmpty').hidden = false;
+  $('resultsBody').hidden = true;
+  $('verdict').innerHTML = '';
+  $('stats').innerHTML = '';
+  $('runmeta').textContent = '';
 }
 
 function showBanner() {
@@ -1793,8 +1813,8 @@ function usePresetJob(j) {
   }
 
   $('headers').innerHTML = '';
-  Object.entries(job.headers || {}).forEach(([k, v]) => headerRow(k, v));
-  if (!Object.keys(job.headers || {}).length) headerRow('User-Agent', 'BLASTA/1.0');
+  if (!Object.keys(job.headers || {}).some(isAgentHeader)) headerRow('User-Agent', BLASTA_UA);
+  Object.entries(job.headers || {}).forEach(([k, v]) => headerRow(k, isAgentHeader(k) ? taggedAgent(v) : v));
   countHeaders();
 
   if (job.concurrency != null) $('conc').value = job.concurrency;

@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/awhadi/blasta-perftest/internal/engine"
+	"github.com/awhadi/blasta-perftest/internal/version"
 )
 
 // Options configures the executor.
@@ -53,7 +54,7 @@ func New(opt Options) *Executor {
 		}
 	}
 	if opt.UserAgent == "" {
-		opt.UserAgent = "BLASTA/1.0"
+		opt.UserAgent = version.UserAgent()
 	}
 
 	// A fresh dialer per call: net.Dialer carries mutable deadline state and

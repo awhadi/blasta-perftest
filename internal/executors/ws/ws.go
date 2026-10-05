@@ -5,9 +5,11 @@ package ws
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/awhadi/blasta-perftest/internal/engine"
+	"github.com/awhadi/blasta-perftest/internal/version"
 	"github.com/gorilla/websocket"
 )
 
@@ -29,11 +31,23 @@ func New(opt Options) *Executor {
 	if opt.Timeout <= 0 {
 		opt.Timeout = 10 * time.Second
 	}
-	h := make(map[string][]string, len(opt.Headers))
-	for k, v := range opt.Headers {
+	return &Executor{timeout: opt.Timeout, insecure: opt.Insecure, header: handshakeHeader(opt.Headers)}
+}
+
+// handshakeHeader is the job's headers plus, unless the job sets its own User-Agent, BLASTA's.
+func handshakeHeader(in map[string]string) map[string][]string {
+	h := make(map[string][]string, len(in)+1)
+	agent := false
+	for k, v := range in {
 		h[k] = []string{v}
+		if strings.EqualFold(k, "User-Agent") {
+			agent = true
+		}
 	}
-	return &Executor{timeout: opt.Timeout, insecure: opt.Insecure, header: h}
+	if !agent {
+		h["User-Agent"] = []string{version.UserAgent()}
+	}
+	return h
 }
 
 func (e *Executor) Name() string { return "ws" }
