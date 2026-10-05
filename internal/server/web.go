@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"html/template"
 	"io/fs"
 	"log/slog"
 	"net"
@@ -35,11 +36,17 @@ func NewServer(addr string, mgr *Manager, ui fs.FS, log *slog.Logger, opts ...Op
 	mux.Handle("/api/", api)
 	seoRoutes(mux, api)
 	if ui != nil {
-		mux.Handle("/", noCache(uiHandler(ui, api.siteBase)))
+		mux.Handle("/", noCache(uiHandler(ui, api.siteBase, api.analyticsTag)))
 	}
 	var csp cspExtras
 	if api.auth != nil {
-		csp = api.auth.CaptchaCSP
+		// What the page may load beyond itself: the bot check's widget and the analytics an
+		// administrator switched on, each only while it is on.
+		csp = func() (script, frame, style, img, connect []string) {
+			script, frame, style, img, connect = api.auth.CaptchaCSP()
+			as, ac, ai := api.auth.AnalyticsCSP()
+			return append(script, as...), frame, style, append(img, ai...), append(connect, ac...)
+		}
 	}
 	var handler http.Handler = securityHeaders(mux, csp)
 	handler = api.stripBase(gzipSite(handler))
@@ -89,7 +96,7 @@ func (s *Server) Shutdown(ctx context.Context) error {
 var appRoutes = map[string]bool{"test": true, "templates": true, "history": true, "login": true, "admin": true,
 	"account": true, "reset": true, "confirm": true, "confirm-email": true}
 
-func uiHandler(fsys fs.FS, base func(*http.Request) string) http.Handler {
+func uiHandler(fsys fs.FS, base func(*http.Request) string, head func() template.HTML) http.Handler {
 	// index.html is the app. Each address gets its own title, description, canonical address
 	// and, for the template pages, the text of the page, so what a crawler reads is complete
 	// without running scripts. Relative addresses in it start at a <base> worked out from how
@@ -105,6 +112,7 @@ func uiHandler(fsys fs.FS, base func(*http.Request) string) http.Handler {
 			w.Header().Set("X-Robots-Tag", "noindex")
 		}
 		w.WriteHeader(status)
+		m.Head = head()
 		_, _ = w.Write(seo.Render(raw, base(r), seo.BaseHref(r.URL.Path), m))
 	}
 	notFound := func(w http.ResponseWriter, r *http.Request) {

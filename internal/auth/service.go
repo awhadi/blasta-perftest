@@ -45,6 +45,8 @@ type Config struct {
 	// whatever the saved settings say, in case a wrong key locks everyone out.
 	Captcha    settings.Captcha
 	CaptchaOff bool
+	// Analytics is the visitor analytics an administrator switched on (Settings > Analytics).
+	Analytics settings.Analytics
 }
 
 func (c *Config) defaults() {
@@ -188,6 +190,12 @@ func (s *Service) compose() (Config, error) {
 	cfg.AllowedDomains = append([]string(nil), s.base.AllowedDomains...)
 	if s.settings == nil {
 		return cfg, nil
+	}
+	cfg.Analytics = settings.Analytics{RespectDNT: true}
+	if ok, err := s.settings.Get(settings.KeyAnalytics, &cfg.Analytics); err != nil {
+		return cfg, err
+	} else if !ok {
+		cfg.Analytics = settings.Analytics{RespectDNT: true}
 	}
 	var g settings.General
 	if ok, err := s.settings.Get(settings.KeyGeneral, &g); err != nil {

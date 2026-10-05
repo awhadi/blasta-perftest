@@ -13,7 +13,7 @@ import (
 
 const base = "https://perftest.example.test"
 
-var placeholders = []string{"__BASE__", "__BASEHREF__", "__TITLE__", "__DESC__", "__CANON__", "__TYPE__", "__ROBOTS__", "__LDEXTRA__", "__SSR__", "__BODYCLASS__", "__TEMPLATES__", "__JOBS__", "__VERSION__"}
+var placeholders = []string{"__BASE__", "__BASEHREF__", "__TITLE__", "__DESC__", "__CANON__", "__TYPE__", "__ROBOTS__", "__LDEXTRA__", "__ANALYTICS__", "__SSR__", "__BODYCLASS__", "__TEMPLATES__", "__JOBS__", "__VERSION__"}
 
 var (
 	titleRe = regexp.MustCompile(`<title>(.*?)</title>`)

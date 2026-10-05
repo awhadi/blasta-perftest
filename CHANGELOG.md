@@ -7,6 +7,20 @@ feature the middle one, a breaking change the first. The current version is the
 `Version` constant in `internal/version/version.go`; it is shown bottom right in the
 page for signed-in people, by `blasta version`, and in `/api/health`.
 
+## [2.8.0] - 2026-10-05
+
+### Added
+- **Settings > Analytics** for administrators: count visits with your own Google Analytics 4,
+  Google Tag Manager, Plausible, Umami, Matomo, Cloudflare Web Analytics, or another service's
+  script. One switch turns it on or off (the settings stay saved), and "Reset to Default" forgets
+  them. See [docs/ANALYTICS.md](docs/ANALYTICS.md).
+- It is built for the strict security policy: BLASTA serves its own short `/analytics.js`, made
+  from fixed templates and checked values (an id is never pasted as code), and the policy lets
+  through only the hosts the chosen service needs, only while it is on.
+- Privacy defaults: Do Not Track and Global Privacy Control are respected, signed-in people are
+  not counted (an option allows it), and addresses with a one-time token (password reset, email
+  confirmation) are never counted.
+
 ## [2.7.0] - 2026-10-05
 
 ### Added

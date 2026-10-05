@@ -34,6 +34,7 @@ func (s *Service) settingsRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/admin/settings/general", s.saveGeneral)
 	mux.HandleFunc("POST /api/admin/settings/sso", s.saveSSO)
 	mux.HandleFunc("POST /api/admin/settings/smtp", s.saveSMTP)
+	mux.HandleFunc("POST /api/admin/settings/analytics", s.saveAnalytics)
 	mux.HandleFunc("POST /api/admin/settings/guest", s.saveGuest)
 	mux.HandleFunc("POST /api/admin/settings/captcha", s.saveCaptcha)
 	mux.HandleFunc("POST /api/admin/settings/captcha/verify", s.verifyCaptchaKey)
@@ -59,7 +60,7 @@ func (s *Service) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	cfg := s.conf()
 	saved := map[string]bool{}
-	for _, k := range []string{settings.KeyGeneral, settings.KeySSO, settings.KeySMTP, settings.KeyGuest, settings.KeyCaptcha} {
+	for _, k := range []string{settings.KeyGeneral, settings.KeySSO, settings.KeySMTP, settings.KeyGuest, settings.KeyCaptcha, settings.KeyAnalytics} {
 		var raw map[string]any
 		ok, _ := s.settings.Get(k, &raw)
 		saved[k] = ok
@@ -90,14 +91,16 @@ func (s *Service) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 		mail.Port, mail.Security = 587, "starttls"
 	}
 	writeJSON(w, 200, map[string]any{
-		"general":     settings.General{PublicURL: cfg.PublicURL, Registration: cfg.Registration, AllowedDomains: cfg.AllowedDomains, OTPLogin: cfg.OTPLogin, DisableReset: cfg.DisableReset},
-		"sso":         sso,
-		"smtp":        mail,
-		"guest":       cfg.Guest,
-		"mailProblem": s.LastMailProblem(),
-		"captcha":     captchaView{Captcha: cfg.Captcha, SecretSet: cfg.Captcha.Secret != "", Off: s.base.CaptchaOff},
-		"saved":       saved,
-		"redirectUrl": s.redirectURL(r),
+		"general":            settings.General{PublicURL: cfg.PublicURL, Registration: cfg.Registration, AllowedDomains: cfg.AllowedDomains, OTPLogin: cfg.OTPLogin, DisableReset: cfg.DisableReset},
+		"sso":                sso,
+		"smtp":               mail,
+		"guest":              cfg.Guest,
+		"mailProblem":        s.LastMailProblem(),
+		"captcha":            captchaView{Captcha: cfg.Captcha, SecretSet: cfg.Captcha.Secret != "", Off: s.base.CaptchaOff},
+		"analytics":          cfg.Analytics,
+		"analyticsProviders": analyticsProviders(),
+		"saved":              saved,
+		"redirectUrl":        s.redirectURL(r),
 	})
 }
 
@@ -430,7 +433,7 @@ func (s *Service) resetSection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch k := r.PathValue("section"); k {
-	case settings.KeyGeneral, settings.KeySSO, settings.KeySMTP, settings.KeyGuest, settings.KeyCaptcha:
+	case settings.KeyGeneral, settings.KeySSO, settings.KeySMTP, settings.KeyGuest, settings.KeyCaptcha, settings.KeyAnalytics:
 		_ = s.settings.Delete(k)
 		if err := s.Reload(); err != nil {
 			writeErr(w, 400, err.Error())

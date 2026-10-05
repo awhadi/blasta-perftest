@@ -19,7 +19,7 @@ in the page when you are signed in, and in `blasta version`).
   trial for visitors. Everyone's history is private to them.
 - **Run it anywhere:** Docker Compose, Kubernetes, behind a reverse proxy, under a
   path; SQLite by default or PostgreSQL / MariaDB.
-- **Administered from the UI:** registration, SSO, email, bot protection and the
+- **Administered from the UI:** registration, SSO, email, bot protection, analytics and the
   free-trial limits are all settings pages; secrets are stored encrypted.
 
 ## Quick start
@@ -42,6 +42,7 @@ make build
 |---|---|
 | [CHANGELOG.md](CHANGELOG.md) | what changed in each version |
 | [docs/AUTH.md](docs/AUTH.md) | accounts, registration, SSO, email, bot protection, the database, security notes |
+| [docs/ANALYTICS.md](docs/ANALYTICS.md) | counting visits with Google Analytics, Plausible, Matomo and others (admin setting) |
 | [docs/PROXY.md](docs/PROXY.md) | reverse proxies (Pangolin, Traefik, nginx) and running under a path |
 | [docs/KUBERNETES.md](docs/KUBERNETES.md) | manifests and what "available" means for BLASTA |
 | [docs/ENTERPRISE.md](docs/ENTERPRISE.md) | the enterprise test plan on every template |

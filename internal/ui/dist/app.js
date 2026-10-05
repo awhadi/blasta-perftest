@@ -106,7 +106,7 @@ function toast(msg, kind, lines) {
 
 /* ---- Short, specific messages for what a save did ---- */
 
-const SETTINGS_TITLE = { general: 'General settings', guest: 'Free trial', smtp: 'SMTP connection', sso: 'Single sign-on', captcha: 'Bot protection' };
+const SETTINGS_TITLE = { general: 'General settings', guest: 'Free trial', smtp: 'SMTP connection', sso: 'Single sign-on', captcha: 'Bot protection', analytics: 'Analytics' };
 
 // Which fields of a settings section differ from what was saved before.
 function changedKeys(before, after) {
@@ -144,6 +144,8 @@ function savedMessage(key, before, after) {
       return 'SMTP connection saved';
     case 'captcha':
       return has('enabled') ? turned('Bot protection', after.enabled) : 'Bot protection settings saved';
+    case 'analytics':
+      return ch.length === 1 && has('enabled') ? turned('Analytics', after.enabled) : 'Analytics settings saved';
     case 'sso':
       return 'Single sign-on provider saved';
   }
@@ -2529,7 +2531,7 @@ async function loadAccount() {
 
 /* ---- Administration: a sidebar of sections, one page each ---- */
 
-const ADMIN_SECTIONS = ['general', 'users', 'trial', 'sso', 'smtp', 'bots'];
+const ADMIN_SECTIONS = ['general', 'users', 'trial', 'sso', 'smtp', 'bots', 'analytics'];
 const num = (id) => parseInt($(id).value, 10) || 0;
 const list = (a) => (a || []).join(', ');
 const unlist = (v) => String(v || '').split(/[,\n]/).map((x) => x.trim()).filter(Boolean);
@@ -2538,7 +2540,7 @@ function showAdmin(section) {
   if (section === 'settings') section = 'general';             // the old address
   if (!ADMIN_SECTIONS.includes(section)) section = 'general';       // the Settings menu lands on General Settings
   document.querySelectorAll('.admin-side a').forEach((a) => a.classList.toggle('active', a.dataset.section === section));
-  const render = { general: renderGeneral, users: renderUsers, trial: renderTrialSettings, sso: renderSso, smtp: renderSmtp, bots: renderBots }[section];
+  const render = { general: renderGeneral, users: renderUsers, trial: renderTrialSettings, sso: renderSso, smtp: renderSmtp, bots: renderBots, analytics: renderAnalytics }[section];
   render().catch((e) => { $('adminSection').innerHTML = '<p class="form-error">' + esc(e.message) + '</p>'; });
 }
 
@@ -2813,6 +2815,33 @@ async function renderBots(staged) {
       renderBots();
     } catch (err) { sayIn('r-bots')(err.message, false); toast(err.message, 'error'); }
   };
+}
+
+async function renderAnalytics(staged) {
+  const d = await getSettings(), a = d.analytics, provs = d.analyticsProviders || [];
+  const provider = staged || a.provider || 'ga4';
+  const P = provs.find((p) => p.id === provider) || provs[0] || {};
+  const keep = a.provider === provider;        // what is saved belongs to the saved provider
+  $('adminSection').innerHTML = pageHead('Analytics', 'Analytics',
+    'Count visits to this site with your own analytics service. BLASTA loads it only while it is switched on, and lets through only the addresses that service needs.', saveBtn('f-analytics')) +
+    '<form id="f-analytics" class="modal-form">' +
+    subcard('Service', 'Pick one service. Nothing is loaded until you turn it on.', pill(a.enabled && a.provider, 'On', 'Off'),
+      toggle('a-on', 'Load analytics on this site', a.enabled, 'Turn it off to stop all tracking at once. What you entered stays saved.') +
+      sel('a-provider', 'Provider', provider, provs.map((p) => [p.id, p.name])) +
+      (P.idLabel ? fld('a-id', P.idLabel, keep ? a.id : '') : '') +
+      (P.urlHelp ? fld('a-url', P.urlHelp, keep ? a.scriptUrl : '') : '') +
+      '<div class="modal-form-actions">' + resetBtn(d.saved.analytics, 'f-analytics') + '</div>') +
+    subcard('Privacy', 'Who is counted.', '',
+      toggle('a-dnt', 'Respect Do Not Track', a.respectDnt, 'Stays off for people whose browser sends Do Not Track or Global Privacy Control.') +
+      toggle('a-signed', 'Also count people who are signed in', a.trackSignedIn, 'Off: only visitors are counted, never the people using BLASTA. Pages with a one-time token in the address (password reset, email confirmation) are never counted.')) +
+    subcard('Other addresses', 'Only if your service talks to more hosts than it needs by default (for example tags loaded through Google Tag Manager).', '',
+      fld('a-extra', 'Extra allowed hosts', list(a.extraHosts), { ph: 'cdn.example.com, https://*.example.com', hint: 'optional', help: 'Separate with commas. Each is allowed to load scripts and receive data from this site.' })) +
+    '</form>';
+  $('a-provider').onchange = () => renderAnalytics($('a-provider').value);
+  const val = (id) => ($(id) ? $(id).value.trim() : '');
+  const body = () => ({ enabled: $('a-on').checked, provider, id: val('a-id'), scriptUrl: val('a-url'),
+    extraHosts: val('a-extra').split(',').map((x) => x.trim()).filter(Boolean), respectDnt: $('a-dnt').checked, trackSignedIn: $('a-signed').checked });
+  wireSection('analytics', 'f-analytics', body, renderAnalytics, a);
 }
 
 async function renderSmtp() {

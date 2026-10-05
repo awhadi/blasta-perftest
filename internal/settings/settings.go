@@ -11,11 +11,12 @@ import (
 
 // Section names in the settings table.
 const (
-	KeyGeneral = "general"
-	KeySSO     = "sso"
-	KeySMTP    = "smtp"
-	KeyGuest   = "guest"
-	KeyCaptcha = "captcha"
+	KeyGeneral   = "general"
+	KeySSO       = "sso"
+	KeySMTP      = "smtp"
+	KeyGuest     = "guest"
+	KeyCaptcha   = "captcha"
+	KeyAnalytics = "analytics"
 )
 
 // General is how people sign up and where BLASTA is reached.
@@ -85,6 +86,19 @@ type Captcha struct {
 	OnLogin      bool   `json:"onLogin"`    // sign-in and password reset
 	OnRegister   bool   `json:"onRegister"` // creating an account
 	OnGuest      bool   `json:"onGuest"`    // a visitor's first free test
+}
+
+// Analytics is the visitor analytics an administrator can switch on: one provider, loaded by a
+// script BLASTA serves itself (the page's security policy allows no inline code), with only the
+// hosts that provider needs let through. Nothing here is secret: the ids appear in the page.
+type Analytics struct {
+	Enabled       bool     `json:"enabled"`
+	Provider      string   `json:"provider"`      // ga4 | gtm | plausible | umami | matomo | cloudflare | custom
+	ID            string   `json:"id"`            // measurement, container, site or website id; the domain for Plausible
+	ScriptURL     string   `json:"scriptUrl"`     // Plausible host, Umami script, Matomo address, or the custom script
+	ExtraHosts    []string `json:"extraHosts"`    // more https hosts the provider's script talks to
+	RespectDNT    bool     `json:"respectDnt"`    // stay off for people who send Do Not Track or Global Privacy Control
+	TrackSignedIn bool     `json:"trackSignedIn"` // also count people who are signed in (off: only visitors)
 }
 
 // Store reads and writes settings.

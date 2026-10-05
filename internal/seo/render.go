@@ -18,6 +18,7 @@ type Meta struct {
 	Type        string // Open Graph type
 	LD          template.HTML
 	SSR         template.HTML // server-rendered content; shown to anything that does not run scripts
+	Head        template.HTML // extra tags for the end of <head> (the analytics loader, when one is on)
 	NoIndex     bool
 }
 
@@ -66,6 +67,7 @@ func Render(raw []byte, base, baseHref string, m Meta) []byte {
 		"__ROBOTS__", robots,
 		"__BODYCLASS__", bodyClass,
 		"__LDEXTRA__", string(m.LD),
+		"__ANALYTICS__", string(m.Head),
 		"__SSR__", string(m.SSR),
 		"__BASE__", template.HTMLEscapeString(base),
 		"__TEMPLATES__", fmt.Sprint(t), "__JOBS__", fmt.Sprint(j),

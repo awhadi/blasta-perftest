@@ -6,7 +6,7 @@ package version
 
 // Version is shown in the page (bottom right, when signed in), by `blasta version`
 // and in /api/health.
-const Version = "2.7.0"
+const Version = "2.8.0"
 
 // UserAgent is how BLASTA introduces itself to the systems it tests ("BLASTA/2.6.1") when
 // the job does not set its own User-Agent, so the people running them can tell its traffic.
