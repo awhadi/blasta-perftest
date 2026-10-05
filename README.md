@@ -49,12 +49,15 @@ make build
 
 ## Search engines and AI
 
-The app is a single page, which crawlers cannot read, so `/` carries full metadata (title,
-description, Open Graph and Twitter cards, canonical address, structured data) and a
-no-JavaScript summary, and `/robots.txt`, `/sitemap.xml` (the home page and every template, generated from
-the catalogue) and `/llms.txt` (a plain-text description for AI assistants) describe the site. Addresses in them follow
-`BLASTA_PUBLIC_URL`, or the address the request came in on, so set that to your real
-domain. The API stays disallowed for crawlers. The templates are browsed in the app.
+Every page of the app has a real address (`/templates/auth0`, `/history`, `/login`), and the
+server sends each one with its own title, description, canonical address and structured data.
+The template pages (`/templates` and `/templates/<id>`) also carry their full text, rendered on
+the server, so search engines and AI crawlers read them without running scripts; people whose
+scripts run get the app. `/robots.txt`, `/sitemap.xml` (the home page and every template,
+generated from the catalogue) and `/llms.txt` (a plain-text description for AI assistants)
+describe the site. Addresses in them follow `BLASTA_PUBLIC_URL`, or the address the request
+came in on, so set that to your real domain. The API stays disallowed for crawlers, and the
+sign-in, account, history and admin pages are `noindex`. Old `#` addresses still work.
 
 ## Presets
 

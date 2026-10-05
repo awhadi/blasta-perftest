@@ -7,6 +7,28 @@ feature the middle one, a breaking change the first. The current version is the
 `Version` constant in `internal/version/version.go`; it is shown bottom right in the
 page for signed-in people, by `blasta version`, and in `/api/health`.
 
+## [2.6.0] - 2026-10-05
+
+### Added
+- Real addresses for every page of the app: `/templates`, `/templates/auth0`, `/history/<run>`,
+  `/login`, `/admin/users` and so on, instead of `/#/templates/auth0`. The browser's back and
+  forward buttons, new tabs and bookmarks work as before, and old `#` addresses (including the
+  links already sent in emails, and single sign-on returns) are converted automatically.
+- The server renders the text of each template page itself: its own title, description,
+  canonical address, structured data and the full page (what it covers, how to run it, every
+  job, questions and answers), inside the app's page. Search engines and AI crawlers read it
+  without running scripts; people whose scripts run get the app. `/templates` lists all 77.
+- `sitemap.xml` and `llms.txt` list the real template addresses again, generated from the
+  catalogue so a new template appears by itself.
+- Sign-in, account, history and other private pages answer with `noindex`.
+
+### Changed
+- The security policy now allows the page's own `<base>` (`base-uri 'self'`, was `'none'`). It
+  is what lets the same files load from any depth and under any path a proxy mounts the app at,
+  and it still refuses a base on another site.
+- The page title follows the page you are on.
+- Wrong addresses and unknown template ids answer 404 (with `noindex`).
+
 ## [2.5.2] - 2026-10-05
 
 ### Added

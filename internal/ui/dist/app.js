@@ -1,5 +1,15 @@
 'use strict';
 const $ = (id) => document.getElementById(id);
+// Pages have real addresses (/templates/auth0). A route is still written the short way in this
+// file, '#/templates/auth0'; the address bar shows the path. <base> in index.html says where
+// the app starts, so it works at the root of a host or under a path such as /blasta.
+const BASE = new URL(document.baseURI).pathname;
+const toUrl = (route) => BASE + String(route).replace(/^#\/?/, '');
+const routeStr = () => '#/' + location.pathname.slice(BASE.length) + location.search;
+const HOME_TITLE = 'BLASTA: Load and Performance Testing Platform by AWHADI';
+const ROUTE_RE = /^(test|templates|history|login|admin|account|reset|confirm|confirm-email)(\/|$)/;
+// Addresses from before pages had paths (/#/templates/auth0, and links in emails) still work.
+if (/^#\/./.test(location.hash)) history.replaceState(null, '', toUrl(location.hash));
 const api = async (path, opts = {}) => {
   // The API requires this marker so a page on another origin cannot drive the
   // load generator through the user's browser.
@@ -218,20 +228,21 @@ function readHeaders() {
 
 /* ---- Init ------------------------------------------------------------- */
 
-// Hash routes: #/test, #/templates, #/templates/<id>, #/history. Using the hash
-// keeps the browser's back button working and makes a template linkable.
+// Routes: /test, /templates, /templates/<id>, /history. They use the history API, so the
+// browser's back button works and every template has an address of its own.
 const VIEWS = ['test', 'templates', 'history', 'login', 'admin', 'account'];
 function go(hash) {
-  if (location.hash === hash) route(); else location.hash = hash;
+  if (routeStr() === hash) route();
+  else { history.pushState(null, '', toUrl(hash)); route(); }
 }
 
 function route() {
-  const parts = location.hash.replace(/^#\/?/, '').split('/');
+  const parts = routeStr().replace(/^#\/?/, '').split('/');
   const seg = parts[0].split('?')[0];
   let view = ['reset', 'confirm', 'confirm-email'].includes(seg) ? 'login' : VIEWS.includes(seg) ? seg : 'test';   // emailed links open on the sign-in page
   // A visitor on a free trial can use the Test page only: templates and history ask them to sign in.
   if (guestMode && (view === 'history' || view === 'admin' || view === 'account')) {   // templates can be browsed; using them needs an account
-    history.replaceState(null, '', '#/test');
+    history.replaceState(null, '', toUrl('#/test'));
     route();
     openGate(view);
     return;
@@ -239,7 +250,7 @@ function route() {
   // Nobody else can reach a page without signing in; once signed in the sign-in page is pointless.
   if (authCfg && !me && !guestMode && view !== 'login') { go('#/login'); return; }
   // Signed in people have no use for the sign-in page, except to follow a link from an email.
-  if (me && view === 'login' && !/^#\/(reset|confirm|confirm-email)\b/.test(location.hash)) { go('#/test'); return; }
+  if (me && view === 'login' && !/^#\/(reset|confirm|confirm-email)\b/.test(routeStr())) { go('#/test'); return; }
   if (view === 'admin' && !(me && me.role === 'admin')) { go('#/test'); return; }
   document.body.classList.toggle('signed-out', view === 'login');
   const apply = () => {
@@ -256,6 +267,9 @@ function route() {
   if (view === 'login') showLogin();
   if (view === 'account') loadAccount();
   if (view === 'admin') showAdmin(parts[1]);
+  // The title follows the page, as the server's does on a direct visit.
+  if (view === 'test') document.title = HOME_TITLE;
+  if (view === 'templates' && !parts[1]) document.title = 'Load Testing Templates: Websites, APIs, Databases | BLASTA';
   if (view === 'templates') {
     document.querySelectorAll('.tpl-guest-note').forEach((n) => { n.hidden = !guestMode; });
     if (parts[1]) openTemplate(decodeURIComponent(parts[1])); else showTemplateList();
@@ -1268,7 +1282,7 @@ function renderTemplateList() {
           (jobs.length > 3 ? ' <span class="muted">+' + (jobs.length - 3) + ' more</span>' : '') + '</div>';
       }
     }
-    return '<a class="tcard" href="#/templates/' + encodeURIComponent(p.id) + '">' +
+    return '<a class="tcard" href="templates/' + encodeURIComponent(p.id) + '">' +
       '<div class="tcard-head"><span class="ticon">' + catIcon(p.category) + '</span><h3>' + esc(p.title) + '</h3></div>' +
       '<div><span class="tag">' + esc(p.category) + '</span></div>' +
       '<p class="tsum">' + esc(p.description || (p.summary || '').replace(/ Includes an enterprise test plan.*$/, '')) + '</p>' +
@@ -1333,6 +1347,7 @@ async function openTemplate(id) {
 
 function buildTemplateHeader() {
   $('tplTitle').textContent = presetDef.title;
+  document.title = presetDef.title.replace(/ \(.*$/, '') + ' Load Testing Template | BLASTA';
   $('tplCat').textContent = presetDef.category || '';
   $('tplIcon').innerHTML = catIcon(presetDef.category);
   $('presetSummary').textContent = presetDef.description || (presetDef.summary || '').replace(/ Includes an enterprise test plan.*$/, '');
@@ -1708,7 +1723,7 @@ function showBanner() {
     ? '<span class="tag ' + esc(loadedFrom.safety) + '">' + esc(loadedFrom.safety) + '</span> ' : '') +
     (loadedFrom.gate ? '<span class="tag gate">SLO</span>' : '');
   $('tplBannerNotes').textContent = loadedFrom.notes;
-  $('tplChange').href = '#/templates/' + encodeURIComponent(loadedFrom.id);
+  $('tplChange').href = 'templates/' + encodeURIComponent(loadedFrom.id);
 }
 wireTemplateSearch();
 
@@ -1992,7 +2007,7 @@ function sessionEnded() {
   $('userMenu').hidden = true;
   if (authCfg && authCfg.guest) {
     store.set(SESSION_KEY, '');
-    location.hash = '#/test';
+    history.replaceState(null, '', toUrl('#/test'));
     location.reload();
     return;
   }
@@ -2066,7 +2081,7 @@ async function runConfirm(path, token) {
     showAuthError(r.data.error || 'The link is invalid or has expired.');
     return;
   }
-  history.replaceState(null, '', location.pathname + '#/login');
+  history.replaceState(null, '', toUrl('#/login'));
   if (change) {
     $('authTitle').textContent = 'Email address changed';
     $('authSub').textContent = '';
@@ -2103,14 +2118,14 @@ function showLogin() {
   $('regConfirmHelp').hidden = !(authCfg.confirmEmail && !setup);
   $('resendRow').hidden = true;
   $('guestLink').hidden = !(authCfg.guest && !setup);
-  setAuthTab(setup ? 'register' : /[?&]register\b/.test(location.hash) ? 'register' : 'signin');
+  setAuthTab(setup ? 'register' : /[?&]register\b/.test(routeStr()) ? 'register' : 'signin');
   // Forgot-password and reset-link pages share this card.
-  const confirmM = /^#\/confirm\?token=([^&]+)/.exec(location.hash);
-  const confirmEmailM = /^#\/confirm-email\?token=([^&]+)/.exec(location.hash);
+  const confirmM = /^#\/confirm\?token=([^&]+)/.exec(routeStr());
+  const confirmEmailM = /^#\/confirm-email\?token=([^&]+)/.exec(routeStr());
   if (confirmM || confirmEmailM) { runConfirm(confirmM ? 'confirm' : 'email/confirm', decodeURIComponent((confirmM || confirmEmailM)[1])); return; }
-  const tokenM = /^#\/reset\?token=([^&]+)/.exec(location.hash);
-  const forgot = /[?&]forgot\b/.test(location.hash);
-  const otp = /[?&]code\b/.test(location.hash) && authCfg.otp;
+  const tokenM = /^#\/reset\?token=([^&]+)/.exec(routeStr());
+  const forgot = /[?&]forgot\b/.test(routeStr());
+  const otp = /[?&]code\b/.test(routeStr()) && authCfg.otp;
   $('otpForm').hidden = !otp;
   if (otp) {
     $('loginForm').hidden = $('registerForm').hidden = true;
@@ -2135,17 +2150,17 @@ function showLogin() {
     $('forgotForm').hidden = $('resetForm').hidden = true;
   }
   // A failed SSO sign-in comes back here with the reason.
-  const m = /[?&]sso_error=([^&]*)/.exec(location.hash);
+  const m = /[?&]sso_error=([^&]*)/.exec(routeStr());
   if (m) {
     showAuthError(decodeURIComponent(m[1].replace(/\+/g, ' ')));
-    history.replaceState(null, '', location.pathname + '#/login');
+    history.replaceState(null, '', toUrl('#/login'));
   }
 }
 
 function afterSignIn() {
   // A full reload guarantees nothing from a previous account stays in the page.
   store.set(SESSION_KEY, '');
-  location.hash = '#/test';
+  history.replaceState(null, '', toUrl('#/test'));
   location.reload();
 }
 
@@ -2199,7 +2214,7 @@ function wireAuth() {
   $('resetForm').onsubmit = async (e) => {
     e.preventDefault();
     showAuthError('');
-    const m = /^#\/reset\?token=([^&]+)/.exec(location.hash);
+    const m = /^#\/reset\?token=([^&]+)/.exec(routeStr());
     if (!m || !$('resetPassword').value) { showAuthError('Enter a new password.'); return; }
     $('resetBtn').disabled = true;
     const r = await authCall('POST', 'reset', { token: decodeURIComponent(m[1]), password: $('resetPassword').value });
@@ -2268,7 +2283,7 @@ function wireAuth() {
   $('menuSignOut').onclick = async () => {
     await authCall('POST', 'logout');
     store.set(SESSION_KEY, '');
-    location.hash = authCfg && authCfg.guest ? '#/test' : '#/login';    // the homepage, when visitors are welcome
+    history.replaceState(null, '', toUrl(authCfg && authCfg.guest ? '#/test' : '#/login'));    // the homepage, when visitors are welcome
     location.reload();
   };
   wirePasswordDialog();
@@ -2944,7 +2959,7 @@ async function refreshPublicConfig() {
 // With registration switched off there is nothing to offer people who have no account.
 function syncRegistrationLinks() {
   const closed = !!(authCfg && authCfg.registration === 'closed' && !authCfg.needsSetup);
-  document.querySelectorAll('a[href="#/login?register"]').forEach((a) => { a.hidden = closed; });
+  document.querySelectorAll('a[href="login?register"]').forEach((a) => { a.hidden = closed; });
 }
 
 /* ---- Start ---------------------------------------------------------------- */
@@ -2952,13 +2967,34 @@ function syncRegistrationLinks() {
 async function init() {
   $('themeToggle').onclick = () =>
     applyTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
-  window.addEventListener('hashchange', route);
+  window.addEventListener('popstate', route);
+  // Links to the app's own pages are ordinary links (so they can be opened in a new tab and read
+  // by crawlers); a plain click moves within the app without reloading it.
+  document.addEventListener('click', (e) => {
+    if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    const a = e.target.closest && e.target.closest('a[href]');
+    if (!a || a.target || a.hasAttribute('download')) return;
+    const raw = a.getAttribute('href') || '';
+    // <base> would send a link like #main to the app's start page: keep it on this page.
+    if (raw.length > 1 && raw[0] === '#') {
+      const el = document.getElementById(decodeURIComponent(raw.slice(1)));
+      if (el) { e.preventDefault(); el.scrollIntoView(); if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '-1'); el.focus({ preventScroll: true }); }
+      return;
+    }
+    if (raw === '#') return;
+    const u = new URL(a.href, document.baseURI);
+    if (u.origin !== location.origin || !u.pathname.startsWith(BASE)) return;
+    const rest = u.pathname.slice(BASE.length);
+    if (rest !== '' && !ROUTE_RE.test(rest)) return;      // files and the API are not pages
+    e.preventDefault();
+    go('#/' + rest + u.search);
+  });
   wireAuth();
   const signedIn = await bootAuth();
   syncRegistrationLinks();
   // Opening the bare sign-in address (a bookmark, or where a sign-out used to land)
   // goes to the homepage when visitors are welcome; "Sign in" links still work.
-  if (guestMode && /^#\/login\/?$/.test(location.hash)) history.replaceState(null, '', location.pathname + '#/test');
+  if (guestMode && /^#\/login\/?$/.test(routeStr())) history.replaceState(null, '', toUrl('#/test'));
   if (signedIn) await startApp(); else route();
 }
 init();

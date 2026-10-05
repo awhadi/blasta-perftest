@@ -3,6 +3,9 @@
 // trailing slash: /blasta becomes /blasta/.
 (function () {
   var p = location.pathname;
+  // A page's own address (/templates/auth0) needs nothing: the server has already said where
+  // the files are. Only the bare root of a mount point needs its slash.
+  if (/\/(test|templates|history|login|admin|account|reset|confirm|confirm-email)(\/|$)/.test(p)) return;
   if (p.slice(-1) !== '/' && p.split('/').pop().indexOf('.') < 0) location.replace(p + '/' + location.search + location.hash);
 })();
 // Runs before first paint so the page never flashes the wrong colour scheme.
@@ -13,6 +16,7 @@
     t = window.matchMedia && matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
   }
   document.documentElement.setAttribute('data-theme', t);
+  document.documentElement.classList.add('js');   // the server-rendered text of a page is for readers without scripts
   // Safari and Android tint the browser bar with theme-color: use the header's own colour for
   // the theme in effect (which may differ from the device's), now and whenever it changes.
   var COLORS = { light: '#ffffff', dark: '#161b22' };

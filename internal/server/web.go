@@ -85,26 +85,57 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	return s.http.Shutdown(ctx)
 }
 
+// appRoutes are the addresses the app draws pages for (the first part of the path).
+var appRoutes = map[string]bool{"test": true, "templates": true, "history": true, "login": true, "admin": true,
+	"account": true, "reset": true, "confirm": true, "confirm-email": true}
+
 func uiHandler(fsys fs.FS, base func(*http.Request) string) http.Handler {
-	// index.html carries the page's search and sharing metadata, which needs this site's
-	// address and the catalogue size, so it is filled in on the way out.
-	index := func(w http.ResponseWriter, r *http.Request, status int) {
+	// index.html is the app. Each address gets its own title, description, canonical address
+	// and, for the template pages, the text of the page, so what a crawler reads is complete
+	// without running scripts. Relative addresses in it start at a <base> worked out from how
+	// deep the page is, so it works under any path a proxy mounts it at.
+	page := func(w http.ResponseWriter, r *http.Request, status int, m seo.Meta) {
 		raw, err := fs.ReadFile(fsys, "index.html")
 		if err != nil {
 			http.NotFound(w, r)
 			return
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		if status != http.StatusOK {
+		if m.NoIndex {
 			w.Header().Set("X-Robots-Tag", "noindex")
 		}
 		w.WriteHeader(status)
-		_, _ = w.Write(seo.Home(raw, base(r)))
+		_, _ = w.Write(seo.Render(raw, base(r), seo.BaseHref(r.URL.Path), m))
+	}
+	notFound := func(w http.ResponseWriter, r *http.Request) {
+		m := seo.HomeMeta()
+		m.Title, m.Desc, m.NoIndex = "Page not found | BLASTA", "That page does not exist.", true
+		page(w, r, http.StatusNotFound, m)
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p := r.URL.Path
-		if p == "/" || p == "/index.html" {
-			index(w, r, http.StatusOK)
+		first := strings.SplitN(strings.TrimPrefix(p, "/"), "/", 2)[0]
+		switch {
+		case p == "/" || p == "/index.html":
+			page(w, r, http.StatusOK, seo.HomeMeta())
+			return
+		case p == "/templates" || p == "/templates/":
+			page(w, r, http.StatusOK, seo.TemplatesIndex(base(r)))
+			return
+		case strings.HasPrefix(p, "/templates/"):
+			if m, ok := seo.Template(base(r), strings.Trim(strings.TrimPrefix(p, "/templates/"), "/")); ok {
+				page(w, r, http.StatusOK, m)
+			} else {
+				notFound(w, r)
+			}
+			return
+		case appRoutes[first]:
+			// The app's own pages: the Test page is the home page, the rest are private.
+			m := seo.HomeMeta()
+			if first != "test" {
+				m.NoIndex, m.Path = true, strings.Trim(p, "/")
+			}
+			page(w, r, http.StatusOK, m)
 			return
 		}
 		if p == "/favicon.ico" {
@@ -112,10 +143,9 @@ func uiHandler(fsys fs.FS, base func(*http.Request) string) http.Handler {
 		}
 		b, err := fs.ReadFile(fsys, stringsTrim(p))
 		if err != nil {
-			// The app routes with the # part of the address, so any other path is not a
-			// page: answer 404 (search engines must not index it), still with the app so a
-			// person who mistyped lands somewhere useful.
-			index(w, r, http.StatusNotFound)
+			// Anything else is not a page: answer 404 (search engines must not index it),
+			// still with the app so a person who mistyped lands somewhere useful.
+			notFound(w, r)
 			return
 		}
 		// Files are checked with an ETag on each visit (so an upgrade shows at once) and
@@ -168,7 +198,7 @@ func securityHeaders(next http.Handler, extras cspExtras) http.Handler {
 			fr = "frame-src " + strings.Join(frame, " ")
 		}
 		h.Set("Content-Security-Policy", "default-src 'self'; script-src "+join("'self'", script)+"; style-src "+join("'self'", style)+
-			"; img-src "+join("'self' data:", img)+"; connect-src "+join("'self'", connect)+"; "+fr+"; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
+			"; img-src "+join("'self' data:", img)+"; connect-src "+join("'self'", connect)+"; "+fr+"; base-uri 'self'; form-action 'none'; frame-ancestors 'none'")
 		next.ServeHTTP(w, r)
 	})
 }

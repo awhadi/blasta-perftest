@@ -756,3 +756,36 @@ nav::-webkit-scrollbar { display: none; }
 
 /* Shown only when JavaScript is off (search engines and AI crawlers that do not run scripts). */
 .noscript { max-width: 760px; margin: 0 auto; padding: 32px 20px; color: var(--text); }
+
+/* ================= Server-rendered text of a page =================
+   The server sends the text of each template page so search engines and AI crawlers can read
+   it without running scripts. People whose scripts run get the app instead (html.js). */
+html.js .ssr { display: none; }
+html:not(.js) body.ssr-page #main { display: none; }
+.ssr-wrap { max-width: 980px; margin: 0 auto; padding: 24px 20px 56px; }
+.ssr h1 { font-size: clamp(1.7rem, 1.2rem + 2vw, 2.4rem); line-height: 1.15; letter-spacing: -.03em; margin: 8px 0 12px; }
+.ssr h2 { margin-top: 36px; font-size: 1.3rem; letter-spacing: -.02em; }
+.ssr h3 { margin: 0 0 4px; font-size: 1.02rem; }
+.ssr h3 a { color: var(--text); text-decoration: none; }
+.ssr .lead { color: var(--dim); font-size: 1.08rem; max-width: 70ch; }
+.ssr .crumbs { color: var(--dim); font-size: 14px; }
+.ssr .facts { display: flex; flex-wrap: wrap; gap: 8px 24px; color: var(--dim); }
+.ssr .facts b { color: var(--text); margin-right: 4px; }
+.ssr .cards { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+.ssr .cards li { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
+.ssr .cards a { text-decoration: none; }
+.ssr .cards p { margin: 6px 0; color: var(--dim); font-size: 14px; }
+.ssr .meta { color: var(--dim); font-size: 13px; }
+.ssr .job { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 12px 16px; margin: 10px 0; }
+.ssr .job p { margin: 6px 0 0; color: var(--dim); font-size: 14.5px; }
+.ssr .tag { display: inline-block; margin-top: 2px; padding: 0 8px; border: 1px solid var(--border); border-radius: 999px; font-size: 12px; color: var(--ok); }
+.ssr .tag.write { color: var(--warn); }
+.ssr .tag.mutating { color: var(--danger); }
+.ssr .vars dt { margin-top: 10px; }
+.ssr .vars dd { margin: 2px 0 0 0; color: var(--dim); }
+.ssr .steps { padding-left: 22px; }
+.ssr .steps li { margin: 6px 0; }
+.ssr .related { columns: 2; padding-left: 20px; }
+.ssr .catnav { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 8px; }
+.ssr .catnav a { padding: 4px 12px; border: 1px solid var(--border); border-radius: 999px; background: var(--panel); color: var(--text); text-decoration: none; font-size: 14px; }
+.ssr .catnav span { color: var(--dim); }

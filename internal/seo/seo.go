@@ -1,7 +1,8 @@
-// Package seo makes BLASTA findable: the metadata of the home page (the app itself is a
-// single page with hash routes, which search engines and AI crawlers cannot index) plus
-// robots.txt, sitemap.xml and llms.txt, generated from the embedded template catalogue so
-// they cannot drift from the product.
+// Package seo makes BLASTA findable. The app is one page that draws itself with scripts,
+// which many search engines and AI crawlers do not run, so the server also sends the
+// metadata of each address and, for the template pages, their text, all generated from
+// the embedded template catalogue so it cannot drift from the product. It also writes
+// robots.txt, sitemap.xml and llms.txt.
 package seo
 
 import (
@@ -12,7 +13,6 @@ import (
 	"strings"
 
 	"github.com/awhadi/blasta-perftest/internal/presets"
-	"github.com/awhadi/blasta-perftest/internal/version"
 )
 
 const (
@@ -29,15 +29,6 @@ func Counts() (templates, jobs int) {
 	return
 }
 
-// Home fills the placeholders of the app's index.html: __BASE__ (the address this site is
-// reached at), __TEMPLATES__, __JOBS__ and __VERSION__.
-func Home(raw []byte, base string) []byte {
-	t, j := Counts()
-	r := strings.NewReplacer("__BASE__", template.HTMLEscapeString(base), "__TEMPLATES__", fmt.Sprint(t), "__JOBS__", fmt.Sprint(j),
-		"__VERSION__", version.Version)
-	return []byte(r.Replace(string(raw)))
-}
-
 // Robots is robots.txt: the home page may be crawled, the API may not.
 func Robots(base string) string {
 	return "# BLASTA: the home page is open to search engines and AI crawlers.\n" +
@@ -45,8 +36,8 @@ func Robots(base string) string {
 		"Sitemap: " + base + "/sitemap.xml\n"
 }
 
-// Sitemap lists the home page and, built from the catalogue so a new template appears by
-// itself, the in-app address of every template (/#/templates/<id>).
+// Sitemap lists the home page, the template index and one page per template, built from the
+// catalogue so a new template appears by itself.
 func Sitemap(base string) string {
 	var b strings.Builder
 	b.WriteString(`<?xml version="1.0" encoding="UTF-8"?>` + "\n" + `<?xml-stylesheet type="text/xsl" href="sitemap.xsl"?>` + "\n" +
@@ -55,8 +46,9 @@ func Sitemap(base string) string {
 		fmt.Fprintf(&b, "  <url><loc>%s</loc><priority>%s</priority></url>\n", template.HTMLEscapeString(loc), prio)
 	}
 	add(base+"/", "1.0")
+	add(base+"/templates", "0.9")
 	for _, p := range presets.All() {
-		add(base+"/#/templates/"+url.PathEscape(p.ID), "0.7")
+		add(base+"/templates/"+url.PathEscape(p.ID), "0.7")
 	}
 	b.WriteString("</urlset>\n")
 	return b.String()
@@ -99,19 +91,21 @@ func LLMs(base string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "# %s\n\n> %s. Load and performance testing with a web interface and a command line. It generates load against websites, REST, GraphQL and SOAP APIs, gRPC, WebSocket, TCP, databases, caches, queues, mail servers and identity providers (OIDC, SAML, LDAP), shows live charts, keeps a history of runs and can fail a test against pass/fail targets (SLOs). %d ready-made templates with %d jobs.\n\n", siteName, byline, t, j)
 	b.WriteString("BLASTA runs as a Docker container or a single static binary. Every template can be read without an account; using a job needs an account.\n\n")
-	fmt.Fprintf(&b, "## Start here\n\n- [Open BLASTA](%s/): the app (Test page, templates, history)\n\n", base)
-	byCat := map[string][]string{}
+	fmt.Fprintf(&b, "## Start here\n\n- [Open BLASTA](%s/): the app (Test page, templates, history)\n- [All templates](%s/templates): the full catalogue by category\n", base, base)
+	byCat := map[string][]presets.Preset{}
 	for _, p := range presets.All() {
-		byCat[p.Category] = append(byCat[p.Category], p.Title)
+		byCat[p.Category] = append(byCat[p.Category], p)
 	}
 	cats := make([]string, 0, len(byCat))
 	for c := range byCat {
 		cats = append(cats, c)
 	}
 	sort.Strings(cats)
-	b.WriteString("## Templates in the app\n\n")
 	for _, c := range cats {
-		fmt.Fprintf(&b, "- %s: %s\n", c, strings.Join(byCat[c], ", "))
+		fmt.Fprintf(&b, "\n## %s templates\n\n", c)
+		for _, p := range byCat[c] {
+			fmt.Fprintf(&b, "- [%s](%s/templates/%s): %s\n", p.Title, base, url.PathEscape(p.ID), oneLine(blurb(p), 160))
+		}
 	}
 	return b.String()
 }

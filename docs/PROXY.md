@@ -21,6 +21,10 @@ the address of each request from the `Host`, `X-Forwarded-Host`, `X-Forwarded-Pr
 and email, where a fixed address matters. If BLASTA lives under a path, include it:
 `https://example.com/blasta`.
 
+Pages have real paths (`/blasta/templates/auth0`). Each page tells the browser where the files start
+with a `<base>` worked out from its own depth, so this works whether or not the proxy reports the
+prefix, as long as it forwards every path under it to BLASTA.
+
 ## Under a path
 
 The page and every request it makes use relative addresses, so the same build works
