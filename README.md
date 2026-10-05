@@ -185,6 +185,13 @@ docker compose logs -f blasta
 docker compose down
 ```
 
+**Logs.** `docker compose logs -f blasta` shows start-up (with the effective settings),
+sign-ins and refusals, account and settings changes, runs, mail checks and failed requests.
+For more detail set `BLASTA_LOG_LEVEL=debug` in `.env` and run `docker compose up -d`: every
+request is then logged (method, path, status, time, client address). `BLASTA_LOG_FORMAT=json`
+gives JSON lines for a log collector. Passwords, tokens, cookies, request bodies and query
+strings are never logged, and email addresses are masked.
+
 The image is a ~23 MB static binary on Alpine, runs as a non-root user with a
 read-only filesystem and all capabilities dropped, and has a health check.
 

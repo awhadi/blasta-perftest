@@ -37,6 +37,15 @@ func NewServer(addr string, mgr *Manager, ui fs.FS, log *slog.Logger, opts ...Op
 	}
 	var handler http.Handler = securityHeaders(mux, csp)
 	handler = api.stripBase(handler)
+	handler = accessLog(handler, log, func(r *http.Request) string {
+		if api.auth != nil {
+			return api.auth.ClientIP(r)
+		}
+		if h, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+			return h
+		}
+		return r.RemoteAddr
+	})
 	return &Server{
 		api:  api,
 		ui:   ui,

@@ -45,7 +45,7 @@ func main() {
 func run() error {
 	bootstrap.Register()
 
-	log := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	log := newLogger(os.Stderr)
 
 	if len(os.Args) < 2 {
 		return cmdServe(nil, log)
@@ -130,6 +130,11 @@ func cmdServe(args []string, log *slog.Logger) error {
 	if err := requireLoopback(*addr, *allowRemote); err != nil {
 		return err
 	}
+	log.Info("BLASTA starting", "version", version.Version, "logLevel", logLevelName(), "addr", *addr,
+		"auth", *signIn, "dataDir", *dataDir, "databaseUrlSet", *dbURL != "", "publicUrl", *publicURL,
+		"basePath", os.Getenv("BLASTA_BASE_PATH"), "trustedProxies", os.Getenv("BLASTA_TRUSTED_PROXIES"),
+		"registration", os.Getenv("BLASTA_REGISTRATION"), "guest", os.Getenv("BLASTA_GUEST"))
+	log.Debug("debug logging is on: every request is logged (method, path, status, time, client address); no bodies, headers, cookies or query strings")
 	var d *db.DB
 	if *dataDir != "" || *dbURL != "" {
 		var err error

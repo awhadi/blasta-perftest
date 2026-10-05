@@ -56,6 +56,7 @@ func (s *Service) noteDelivery(to []string, subject string, err error) {
 	defer s.mailMu.Unlock()
 	if err == nil {
 		s.mailProblem = nil
+		s.lg().Debug("email sent", "to", len(to), "subject", subject)
 		return
 	}
 	masked := make([]string, len(to))

@@ -107,10 +107,12 @@ func (s *Service) commit(w http.ResponseWriter, key string, save func() error) {
 	var prev map[string]any
 	had, _ := s.settings.Get(key, &prev)
 	if err := save(); err != nil {
+		s.lg().Error("settings could not be saved", "section", key, "err", err.Error())
 		writeErr(w, 500, "could not save: "+err.Error())
 		return
 	}
 	if err := s.Reload(); err != nil {
+		s.lg().Warn("settings refused and rolled back", "section", key, "err", err.Error())
 		if had {
 			_ = s.settings.Put(key, prev)
 		} else {
@@ -120,6 +122,7 @@ func (s *Service) commit(w http.ResponseWriter, key string, save func() error) {
 		writeErr(w, 400, err.Error())
 		return
 	}
+	s.lg().Info("settings saved", "section", key)
 	writeJSON(w, 200, map[string]string{"status": "saved"})
 }
 
@@ -307,9 +310,11 @@ func (s *Service) testSMTP(w http.ResponseWriter, r *http.Request) {
 		"Sent from Administration > Settings > Email Delivery.")
 	err = mailer.SendHTML(toMailer(v), []string{u.Email}, "BLASTA test email", text, html)
 	if err != nil {
+		s.lg().Warn("test email failed", "host", v.Host, "port", v.Port, "security", v.Security, "err", err.Error())
 		writeErr(w, 400, err.Error())
 		return
 	}
+	s.lg().Info("test email sent", "host", v.Host, "to", maskAddr(u.Email))
 	writeJSON(w, 200, map[string]string{"status": "sent to " + u.Email})
 }
 
@@ -450,9 +455,11 @@ func (s *Service) verifySMTP(w http.ResponseWriter, r *http.Request) {
 	}
 	msg, err := mailer.Verify(toMailer(v))
 	if err != nil {
+		s.lg().Warn("mail server check failed", "host", v.Host, "port", v.Port, "security", v.Security, "err", err.Error())
 		writeErr(w, 400, err.Error())
 		return
 	}
+	s.lg().Info("mail server check passed", "host", v.Host, "port", v.Port, "security", v.Security)
 	writeJSON(w, 200, map[string]string{"status": msg})
 }
 

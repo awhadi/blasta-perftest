@@ -228,6 +228,7 @@ func (s *Service) Routes(mux *http.ServeMux) {
 			s.adminError(w, err)
 			return
 		}
+		s.lg().Info("account created by an administrator", "user", who(u), "role", u.Role, "by", who(UserFrom(r.Context())))
 		writeJSON(w, 201, view(u))
 	})
 	mux.HandleFunc("POST /api/admin/users/{id}/resend", func(w http.ResponseWriter, r *http.Request) {
@@ -305,6 +306,11 @@ func (s *Service) handleLogin(w http.ResponseWriter, r *http.Request) {
 	u, token, err := s.Login(in.Email, in.Password, s.clientIP(r))
 	if err != nil {
 		var th *ThrottledError
+		if errors.As(err, &th) {
+			s.lg().Warn("sign-in throttled", "email", maskAddr(in.Email), "ip", s.clientIP(r), "retryAfter", th.RetryAfter.Round(time.Second).String())
+		} else {
+			s.lg().Info("sign-in refused", "email", maskAddr(in.Email), "ip", s.clientIP(r), "reason", err.Error())
+		}
 		switch {
 		case errors.As(err, &th):
 			w.Header().Set("Retry-After", strconv.Itoa(int(th.RetryAfter.Seconds())+1))
@@ -321,6 +327,7 @@ func (s *Service) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.setSession(w, r, token)
+	s.lg().Info("signed in", "user", who(u), "ip", s.clientIP(r))
 	writeJSON(w, 200, view(u))
 }
 
@@ -338,6 +345,7 @@ func (s *Service) handleRegister(w http.ResponseWriter, r *http.Request) {
 	}
 	u, err := s.RegisterFrom(s.siteBase(r), in.Email, in.Name, in.Password, in.SetupToken, s.clientIP(r))
 	if err != nil {
+		s.lg().Info("registration refused", "email", maskAddr(in.Email), "ip", s.clientIP(r), "reason", err.Error())
 		var th *ThrottledError
 		var weak WeakPasswordError
 		switch {
@@ -363,6 +371,7 @@ func (s *Service) handleRegister(w http.ResponseWriter, r *http.Request) {
 			s.setSession(w, r, token)
 		}
 	}
+	s.lg().Info("account created", "user", who(u), "role", u.Role, "status", u.Status, "ip", s.clientIP(r))
 	writeJSON(w, 201, view(u))
 }
 
@@ -389,6 +398,7 @@ func (s *Service) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 		}
 		if !VerifyPassword(in.Current, u.PasswordHash) {
 			s.loginEmail.Fail(u.Email, now)
+			s.lg().Warn("password change refused: wrong current password", "user", who(u), "ip", s.clientIP(r))
 			writeErr(w, 403, "the current password is wrong", "invalid_credentials")
 			return
 		}
@@ -402,6 +412,7 @@ func (s *Service) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 	if _, token, err := s.startSession(fresh); err == nil {
 		s.setSession(w, r, token)
 	}
+	s.lg().Info("password changed", "user", who(u), "ip", s.clientIP(r))
 	writeJSON(w, 200, map[string]string{"status": "password changed", "hadPassword": strconv.FormatBool(u.PasswordHash != "")})
 }
 
@@ -504,7 +515,9 @@ func (s *Service) handleOIDCStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	authURL, state, err := oidc.Start(r.Context(), s.redirectURL(r), safeNext(r.URL.Query().Get("next")))
+	s.lg().Debug("single sign-on started", "redirect", s.redirectURL(r), "ip", s.clientIP(r))
 	if err != nil {
+		s.lg().Warn("single sign-on could not start", "err", err.Error())
 		s.ssoFail(w, r, err.Error())
 		return
 	}
@@ -523,6 +536,7 @@ func (s *Service) handleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{Name: stateCookie, Value: "", Path: "/", MaxAge: -1})
 	q := r.URL.Query()
 	if e := q.Get("error"); e != "" {
+		s.lg().Warn("single sign-on: the provider returned an error", "error", e, "description", q.Get("error_description"))
 		s.ssoFail(w, r, "the provider returned an error: "+e+" "+q.Get("error_description"))
 		return
 	}
@@ -532,14 +546,17 @@ func (s *Service) handleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 	}
 	claims, next, err := oidc.Finish(r.Context(), s.redirectURL(r), q.Get("state"), cookieState, q.Get("code"))
 	if err != nil {
+		s.lg().Warn("single sign-on failed", "stage", "token exchange or validation", "err", err.Error(), "ip", s.clientIP(r))
 		s.ssoFail(w, r, err.Error())
 		return
 	}
-	_, token, err := s.LoginSSO(claims)
+	u, token, err := s.LoginSSO(claims)
 	if err != nil {
+		s.lg().Warn("single sign-on refused", "email", maskAddr(claims.Email), "err", err.Error(), "ip", s.clientIP(r))
 		s.ssoFail(w, r, err.Error())
 		return
 	}
+	s.lg().Info("signed in with single sign-on", "user", who(u), "ip", s.clientIP(r))
 	s.setSession(w, r, token)
 	relativeRedirect(w, backHome(next))
 }
@@ -555,6 +572,7 @@ func (s *Service) handleForgot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	err := s.RequestResetFrom(s.siteBase(r), in.Email, s.clientIP(r))
+	s.lg().Info("password reset requested", "email", maskAddr(in.Email), "ip", s.clientIP(r), "ok", err == nil)
 	var th *ThrottledError
 	switch {
 	case errors.As(err, &th):
@@ -578,9 +596,11 @@ func (s *Service) handleReset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.ResetPassword(in.Token, in.Password); err != nil {
+		s.lg().Info("password reset refused", "ip", s.clientIP(r), "reason", err.Error())
 		s.adminError(w, err)
 		return
 	}
+	s.lg().Info("password reset completed", "ip", s.clientIP(r))
 	writeJSON(w, 200, map[string]string{"status": "password changed"})
 }
 
@@ -592,9 +612,11 @@ func (s *Service) handleConfirm(w http.ResponseWriter, r *http.Request) {
 	}
 	u, token, err := s.ConfirmEmail(in.Token)
 	if err != nil {
+		s.lg().Info("email confirmation refused", "ip", s.clientIP(r), "reason", err.Error())
 		writeErr(w, 400, err.Error(), "invalid_token")
 		return
 	}
+	s.lg().Info("email address confirmed", "user", who(u), "ip", s.clientIP(r))
 	if token != "" {
 		s.setSession(w, r, token)
 	}

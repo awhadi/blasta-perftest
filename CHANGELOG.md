@@ -7,6 +7,20 @@ feature the middle one, a breaking change the first. The current version is the
 `Version` constant in `internal/version/version.go`; it is shown bottom right in the
 page for signed-in people, by `blasta version`, and in `/api/health`.
 
+## [2.2.0] - 2026-10-05
+
+### Added
+- More useful `docker compose logs`: a start-up line with the effective configuration
+  (version, address, sign-in, database, public URL, proxies), and events for sign-ins and
+  refusals (with the reason), new accounts, password changes and resets, email
+  confirmation, single sign-on, settings saved or refused, and mail server checks and test
+  emails (with the error from the server when they fail).
+- `BLASTA_LOG_LEVEL` (`debug`, `info`, `warn`, `error`; `BLASTA_DEBUG=true` is a shortcut
+  for debug) and `BLASTA_LOG_FORMAT=json`. At `debug` every request is logged (method, path,
+  status, time, client address); at `info` only failed requests are.
+- Logs never contain passwords, session tokens, one-time codes, cookies, request bodies or
+  query strings; email addresses are masked.
+
 ## [2.1.3] - 2026-10-05
 
 ### Fixed
