@@ -4,28 +4,29 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="light dark">
-<title>BLASTA: Load &amp; Performance Testing Platform by AWHADI</title>
-<meta name="description" content="Free, self-hosted load testing for websites, APIs, databases, gRPC, WebSockets and SAML/OIDC logins. __TEMPLATES__ ready-made templates, live charts and pass/fail gates.">
-<meta name="keywords" content="load testing, performance testing, stress testing, API load test, website load test, SAML load test, OIDC load test, database benchmark, self-hosted, open source, k6 alternative, JMeter alternative">
+<title>BLASTA: Load and Performance Testing Platform by AWHADI</title>
+<meta name="description" content="Load and performance testing for websites, APIs, databases and identity providers. __TEMPLATES__ ready-made templates, live results and pass/fail targets.">
 <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">
-<meta name="author" content="AWHADI">
 <meta name="theme-color" content="#e8663a">
 <link rel="canonical" href="__BASE__/">
 <link rel="sitemap" type="application/xml" href="__BASE__/sitemap.xml">
-<link rel="alternate" type="text/plain" href="__BASE__/llms.txt" title="BLASTA for AI assistants">
+<link rel="alternate" type="text/plain" href="__BASE__/llms.txt" title="BLASTA in plain text">
 <meta property="og:site_name" content="BLASTA">
+<meta property="og:locale" content="en">
 <meta property="og:type" content="website">
-<meta property="og:title" content="BLASTA: Load &amp; Performance Testing Platform by AWHADI">
-<meta property="og:description" content="Free, self-hosted load testing for websites, APIs, databases, gRPC, WebSockets and SAML/OIDC logins. __TEMPLATES__ ready-made templates, live charts and pass/fail gates.">
+<meta property="og:title" content="BLASTA: Load and Performance Testing Platform by AWHADI">
+<meta property="og:description" content="Load and performance testing for websites, APIs, databases and identity providers. __TEMPLATES__ ready-made templates, live results and pass/fail targets.">
 <meta property="og:url" content="__BASE__/">
 <meta property="og:image" content="__BASE__/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="BLASTA logo">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="BLASTA: Load &amp; Performance Testing Platform by AWHADI">
-<meta name="twitter:description" content="Free, self-hosted load testing for websites, APIs, databases, gRPC, WebSockets and SAML/OIDC logins. __TEMPLATES__ ready-made templates.">
+<meta name="twitter:title" content="BLASTA: Load and Performance Testing Platform by AWHADI">
+<meta name="twitter:description" content="Load and performance testing for websites, APIs, databases and identity providers. __TEMPLATES__ ready-made templates, live results and pass/fail targets.">
 <meta name="twitter:image" content="__BASE__/og.png">
-<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","name":"BLASTA","alternateName":"BLASTA Performance & Load Testing Platform","url":"__BASE__/","description":"Performance & Load Testing Platform by AWHADI"},{"@type":"SoftwareApplication","name":"BLASTA","applicationCategory":"DeveloperApplication","applicationSubCategory":"Load testing and performance testing","operatingSystem":"Linux, macOS, Windows (Docker or a single static binary)","url":"__BASE__/","image":"__BASE__/og.png","description":"Self-hosted load and performance testing with a web interface and a CLI. Generates load against HTTP, SQL, TCP, gRPC and WebSocket targets, with __TEMPLATES__ ready-made templates (__JOBS__ jobs), live charts, run history and pass/fail SLO gates.","featureList":["Load, stress, spike and soak tests","Websites, REST, GraphQL and SOAP APIs","gRPC, WebSocket and TCP","Databases, caches and message queues","SAML, OpenID Connect and LDAP identity providers","Live charts and saved run history","Pass/fail SLO gates for CI","__TEMPLATES__ ready-made templates"],"offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"author":{"@type":"Organization","name":"AWHADI"}}]}</script>
+<meta name="twitter:image:alt" content="BLASTA logo">
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"Organization","@id":"__BASE__/#org","name":"AWHADI","url":"__BASE__/","logo":"__BASE__/og.png"},{"@type":"WebSite","@id":"__BASE__/#site","name":"BLASTA","alternateName":"BLASTA Performance & Load Testing Platform","url":"__BASE__/","description":"Performance & Load Testing Platform by AWHADI","inLanguage":"en","publisher":{"@id":"__BASE__/#org"}},{"@type":"SoftwareApplication","@id":"__BASE__/#app","name":"BLASTA","applicationCategory":"DeveloperApplication","applicationSubCategory":"Load testing and performance testing","operatingSystem":"Linux, macOS, Windows","url":"__BASE__/","image":"__BASE__/og.png","description":"Load and performance testing with a web interface and a command line. Generates load against HTTP, SQL, TCP, gRPC and WebSocket targets, with __TEMPLATES__ ready-made templates (__JOBS__ jobs), live charts, run history and pass/fail targets.","featureList":["Load, stress, spike and soak tests","Websites and REST, GraphQL and SOAP APIs","gRPC, WebSocket and TCP","Databases, caches and message queues","SAML, OpenID Connect and LDAP identity providers","Live charts and saved run history","Pass/fail targets (SLOs) for continuous integration"],"author":{"@id":"__BASE__/#org"},"publisher":{"@id":"__BASE__/#org"}}]}</script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23e8663a'/%3E%3Cpath d='M18 4 8 18h7l-1 10 10-14h-7z' fill='%231a1207'/%3E%3C/svg%3E">
 <link rel="preload" href="fonts/space-grotesk-latin-wght.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="fonts/dm-sans-latin-wght.woff2" as="font" type="font/woff2" crossorigin>
@@ -38,7 +39,7 @@
 <noscript>
 <div class="noscript">
 <h1>BLASTA: Performance &amp; Load Testing Platform by AWHADI</h1>
-<p>BLASTA is a free, self-hosted load and performance testing tool with a web interface and a CLI. It generates load against websites, REST, GraphQL and SOAP APIs, gRPC, WebSocket, TCP, databases, caches, queues, mail servers and identity providers (SAML, OpenID Connect, LDAP), shows live charts, keeps a history of runs and can fail a test against pass/fail targets (SLOs).</p>
+<p>BLASTA is a load and performance testing platform with a web interface and a command line. It generates load against websites, REST, GraphQL and SOAP APIs, gRPC, WebSocket, TCP, databases, caches, queues, mail servers and identity providers (SAML, OpenID Connect, LDAP), shows live charts, keeps a history of runs and can fail a test against pass/fail targets (SLOs).</p>
 <p>The app needs JavaScript. Without it you can still read what it offers:</p>
 <ul>
 <li><a href="templates/">All __TEMPLATES__ load testing templates (__JOBS__ jobs)</a>, by category</li>

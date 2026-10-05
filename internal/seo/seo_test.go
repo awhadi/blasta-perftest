@@ -2,6 +2,7 @@ package seo
 
 import (
 	"encoding/json"
+	"os"
 	"regexp"
 	"strings"
 	"testing"
@@ -30,11 +31,17 @@ func TestEveryTemplateHasACompletePage(t *testing.T) {
 		if title == nil || desc == nil {
 			t.Fatalf("%s: missing title or description", p.ID)
 		}
-		if len(title[1]) > 80 {
+		// What search results show: titles up to about 60 characters, descriptions 70 to 160.
+		if len(title[1]) > 60 {
 			t.Errorf("%s: title is %d chars: %s", p.ID, len(title[1]), title[1])
 		}
-		if len(desc[1]) < 40 || len(desc[1]) > 200 {
+		if len(desc[1]) < 70 || len(desc[1]) > 160 {
 			t.Errorf("%s: description is %d chars: %s", p.ID, len(desc[1]), desc[1])
+		}
+		for _, bad := range []string{"free", "self-hosted", "alternative", "best "} {
+			if strings.Contains(strings.ToLower(title[1]+" "+desc[1]), bad) {
+				t.Errorf("%s: metadata must not make claims like %q: %s / %s", p.ID, bad, title[1], desc[1])
+			}
 		}
 		if other, dup := titles[title[1]]; dup {
 			t.Errorf("%s and %s share the title %q", p.ID, other, title[1])
@@ -102,4 +109,53 @@ func TestPageEscapesContent(t *testing.T) {
 	if !strings.Contains(string(NotFound(base)), `content="noindex"`) {
 		t.Error("a not-found page must be noindex")
 	}
+}
+
+func TestHomeAndIndexMetadata(t *testing.T) {
+	raw, err := os.ReadFile("../ui/dist/index.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, html := range map[string]string{"index": string(Index(base)), "home": string(Home(raw, base))} {
+		title, desc := titleRe.FindStringSubmatch(html), descRe.FindStringSubmatch(html)
+		if title == nil || desc == nil || len(title[1]) > 60 || len(desc[1]) < 70 || len(desc[1]) > 160 {
+			t.Errorf("%s: title %v description %v", name, title, desc)
+			continue
+		}
+		if m := strings.ToLower(title[1] + " " + desc[1]); strings.Contains(m, "free") || strings.Contains(m, "self-hosted") {
+			t.Errorf("%s: no marketing claims in the title or description: %s / %s", name, title[1], desc[1])
+		}
+		if strings.Contains(html, `name="keywords"`) {
+			t.Errorf("%s: the keywords tag is ignored by search engines and looks spammy", name)
+		}
+	}
+}
+
+// Every template page must say something of its own: no two share their overview.
+func TestTemplatePagesHaveOriginalContent(t *testing.T) {
+	seen := map[string]string{}
+	for _, p := range presets.All() {
+		key := string(overview(p))
+		if other, dup := seen[key]; dup {
+			t.Errorf("%s and %s have the same overview", p.ID, other)
+		}
+		seen[key] = p.ID
+		html := string(mustPage(t, p.ID))
+		for _, want := range []string{"<h2>About this ", "<h2>How to load test ", "<h2>Frequently asked questions</h2>", `"@type":"FAQPage"`} {
+			if !strings.Contains(html, want) {
+				t.Errorf("%s: missing %q", p.ID, want)
+			}
+		}
+		if len(strings.Fields(regexp.MustCompile(`<[^>]+>`).ReplaceAllString(html, " "))) < 250 {
+			t.Errorf("%s: page is thin", p.ID)
+		}
+	}
+}
+
+func mustPage(t *testing.T, id string) []byte {
+	b, ok := Page(base, id)
+	if !ok {
+		t.Fatal(id)
+	}
+	return b
 }

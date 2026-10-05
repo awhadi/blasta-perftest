@@ -97,8 +97,8 @@ const SitemapXSL = `<?xml version="1.0" encoding="UTF-8"?>
 func LLMs(base string) string {
 	t, j := Counts()
 	var b strings.Builder
-	fmt.Fprintf(&b, "# %s\n\n> %s. A free, self-hosted load and performance testing tool with a web interface and a CLI: it generates load against websites, REST/GraphQL/SOAP APIs, gRPC, WebSocket, TCP, databases, caches, queues, mail servers and identity providers (OIDC, SAML, LDAP), shows live charts, keeps a history of runs and can fail a test against pass/fail (SLO) targets. %d ready-made templates with %d jobs.\n\n", siteName, byline, t, j)
-	fmt.Fprintf(&b, "BLASTA runs as a Docker container or a single static binary. Visitors can read every template without an account; using a job needs an account (an administrator can also allow a short free trial on the Test page).\n\n")
+	fmt.Fprintf(&b, "# %s\n\n> %s. Load and performance testing with a web interface and a command line. It generates load against websites, REST, GraphQL and SOAP APIs, gRPC, WebSocket, TCP, databases, caches, queues, mail servers and identity providers (OIDC, SAML, LDAP), shows live charts, keeps a history of runs and can fail a test against pass/fail targets (SLOs). %d ready-made templates with %d jobs.\n\n", siteName, byline, t, j)
+	b.WriteString("BLASTA runs as a Docker container or a single static binary. Every template can be read without an account; using a job needs an account.\n\n")
 	b.WriteString("## Start here\n\n")
 	fmt.Fprintf(&b, "- [Open BLASTA](%s/): the app (Test page, templates, history)\n", base)
 	fmt.Fprintf(&b, "- [All templates](%s/templates/): the full catalogue by category\n", base)
@@ -221,6 +221,19 @@ func render(p page) []byte {
 
 func esc(s string) string { return template.HTMLEscapeString(s) }
 
+func slug(s string) string {
+	var b strings.Builder
+	for _, r := range strings.ToLower(s) {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
+			b.WriteRune(r)
+		case b.Len() > 0 && !strings.HasSuffix(b.String(), "-"):
+			b.WriteRune('-')
+		}
+	}
+	return strings.Trim(b.String(), "-")
+}
+
 // Index is the page at /templates/: every template, by category.
 func Index(base string) []byte {
 	all := presets.All()
@@ -237,8 +250,13 @@ func Index(base string) []byte {
 	var b strings.Builder
 	var items []map[string]any
 	n := 0
+	b.WriteString("<p>Each template is a set of ready-made load test jobs for one system or protocol, from a simple smoke test to a full enterprise plan with stress, spike, soak and breakpoint stages and pass/fail targets. Pick the system you run, set your own address, and run the jobs in BLASTA.</p><nav class=\"catnav\" aria-label=\"Categories\">")
 	for _, c := range cats {
-		fmt.Fprintf(&b, "<section><h2>%s</h2><ul class=\"cards\">", esc(c))
+		fmt.Fprintf(&b, "<a href=\"#%s\">%s <span>%d</span></a>", esc(slug(c)), esc(c), len(byCat[c]))
+	}
+	b.WriteString("</nav>")
+	for _, c := range cats {
+		fmt.Fprintf(&b, "<section id=\"%s\"><h2>%s load testing templates</h2><ul class=\"cards\">", esc(slug(c)), esc(c))
 		for _, p := range byCat[c] {
 			n++
 			link := base + "/templates/" + url.PathEscape(p.ID)
@@ -250,14 +268,14 @@ func Index(base string) []byte {
 	}
 	canon := base + "/templates/"
 	crumbs := []crumb{{"BLASTA", base + "/"}, {"Templates", canon}}
-	desc := fmt.Sprintf("%d ready-made load and performance test templates (%d jobs) for websites, APIs, databases, caches, identity providers (SAML, OIDC, LDAP) and more. Free to browse; run them in BLASTA.", t, j)
+	desc := fmt.Sprintf("%d ready-made load and performance test templates (%d jobs) for websites, APIs, databases, caches and identity providers such as SAML and OIDC.", t, j)
 	ld := ldJSON(map[string]any{"@context": "https://schema.org", "@graph": []any{
 		map[string]any{"@type": "CollectionPage", "name": "Load testing templates", "description": desc, "url": canon,
 			"isPartOf": map[string]any{"@type": "WebSite", "name": siteName, "url": base + "/"}},
 		map[string]any{"@type": "ItemList", "numberOfItems": t, "itemListElement": items},
 		breadcrumbLD(crumbs),
 	}})
-	return render(page{Title: "Load testing templates for websites, APIs, databases and SAML/OIDC | BLASTA", Desc: desc, Canonical: canon, Base: base, Type: "website",
+	return render(page{Title: "Load Testing Templates: Websites, APIs, Databases | BLASTA", Desc: desc, Canonical: canon, Base: base, Type: "website",
 		H1: "Load testing templates", Lead: desc, Crumbs: crumbs, LD: ld, Body: template.HTML(b.String())})
 }
 
@@ -265,6 +283,44 @@ var safetyText = map[string]string{
 	"read":     "Read-only",
 	"write":    "Writes data",
 	"mutating": "Changes state: use a staging system",
+}
+
+// shortName drops a trailing bracket from a long name: "X (a, b, c)" becomes "X".
+func shortName(name string) string {
+	if i := strings.Index(name, " ("); i > 0 {
+		return name[:i]
+	}
+	return name
+}
+
+// templateTitle is "<name> Load Testing Template | BLASTA", kept within 60 characters (what
+// search results show) by shortening the name, then the wording.
+func templateTitle(name string) string {
+	for _, f := range []struct{ name, tail string }{
+		{name, " Load Testing Template | BLASTA"},
+		{shortName(name), " Load Testing Template | BLASTA"},
+		{shortName(name), " Load Testing | BLASTA"},
+		{shortName(name), " | BLASTA"},
+	} {
+		if t := f.name + f.tail; len(t) <= 60 {
+			return t
+		}
+	}
+	return oneLine(shortName(name), 50) + " | BLASTA"
+}
+
+// templateDesc is what the template is (its summary) plus how many jobs it holds, kept
+// within about 155 characters (what search results show).
+func templateDesc(p presets.Preset, sum string) string {
+	tail := fmt.Sprintf(" %d load test jobs in BLASTA.", len(p.Jobs))
+	if len(sum) < 50 {
+		sum = strings.TrimRight(sum, " .") + ". Ready-made load tests for " + shortName(p.Title) + "."
+	}
+	sum = oneLine(sum, 155-len(tail))
+	if !strings.HasSuffix(sum, ".") && !strings.HasSuffix(sum, "…") {
+		sum += "."
+	}
+	return sum + tail
 }
 
 // Page is the page for one template, or false if there is none with that id.
@@ -275,21 +331,7 @@ func Page(base, id string) ([]byte, bool) {
 	}
 	canon := base + "/templates/" + url.PathEscape(p.ID)
 	sum := clean(p.Summary)
-	title := fmt.Sprintf("%s load test template (%d jobs) | BLASTA", p.Title, len(p.Jobs))
-	if len(title) > 70 {
-		title = p.Title + " load test template | BLASTA"
-	}
-	if len(title) > 70 { // long names like "X (a / b / c)": keep what comes before the bracket
-		short := p.Title
-		if i := strings.Index(short, " ("); i > 0 {
-			short = short[:i]
-		}
-		title = short + " load test template | BLASTA"
-	}
-	desc := oneLine(fmt.Sprintf("%s Ready-made load test for %s: %d jobs with pass/fail targets. Free to browse in BLASTA.", sum, p.Title, len(p.Jobs)), 300)
-	if len(desc) > 160 {
-		desc = oneLine(sum, 150) + " Load test template, " + fmt.Sprint(len(p.Jobs)) + " jobs."
-	}
+	title, desc := templateTitle(p.Title), templateDesc(p, sum)
 	var b strings.Builder
 	b.WriteString("<p class=\"facts\">")
 	fmt.Fprintf(&b, "<span><b>Category</b> %s</span>", esc(p.Category))
@@ -298,6 +340,9 @@ func Page(base, id string) ([]byte, bool) {
 	}
 	fmt.Fprintf(&b, "<span><b>Jobs</b> %d</span></p>", len(p.Jobs))
 	fmt.Fprintf(&b, "<p><a class=\"btn\" href=\"%s/#/templates/%s\">Open this template in BLASTA</a></p>", esc(base), url.PathEscape(p.ID))
+
+	b.WriteString(string(overview(p)))
+	b.WriteString(string(howTo(p)))
 
 	var vars []presets.Variable
 	for _, v := range p.Variables {
@@ -350,6 +395,8 @@ func Page(base, id string) ([]byte, bool) {
 			job(j)
 		}
 	}
+	questions := faq(p)
+	b.WriteString(string(faqHTML(questions)))
 	var rel []presets.Preset
 	for _, o := range presets.All() {
 		if o.Category == p.Category && o.ID != p.ID {
@@ -369,15 +416,16 @@ func Page(base, id string) ([]byte, bool) {
 
 	crumbs := []crumb{{"BLASTA", base + "/"}, {"Templates", base + "/templates/"}, {p.Title, canon}}
 	ld := ldJSON(map[string]any{"@context": "https://schema.org", "@graph": []any{
-		map[string]any{"@type": "TechArticle", "headline": p.Title + " load test template", "description": desc, "url": canon,
-			"about": p.Title, "keywords": strings.Join([]string{"load testing", "performance testing", p.Title, p.Category}, ", "),
+		map[string]any{"@type": "TechArticle", "headline": shortName(p.Title) + " load testing template", "description": desc, "url": canon,
+			"about":      p.Title,
 			"inLanguage": "en", "author": map[string]any{"@type": "Organization", "name": "AWHADI"},
 			"isPartOf": map[string]any{"@type": "WebSite", "name": siteName, "url": base + "/"}},
+		faqLD(questions),
 		map[string]any{"@type": "ItemList", "name": p.Title + " jobs", "numberOfItems": len(items), "itemListElement": items},
 		breadcrumbLD(crumbs),
 	}})
 	return render(page{Title: title, Desc: desc, Canonical: canon, Base: base, Type: "article",
-		H1: p.Title + " load test template", Lead: sum, Crumbs: crumbs, LD: ld, Body: template.HTML(b.String())}), true
+		H1: shortName(p.Title) + " load testing template", Lead: sum, Crumbs: crumbs, LD: ld, Body: template.HTML(b.String())}), true
 }
 
 // NotFound is the page for an unknown template.

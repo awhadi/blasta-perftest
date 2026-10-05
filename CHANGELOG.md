@@ -7,6 +7,20 @@ feature the middle one, a breaking change the first. The current version is the
 `Version` constant in `internal/version/version.go`; it is shown bottom right in the
 page for signed-in people, by `blasta version`, and in `/api/health`.
 
+## [2.3.2] - 2026-10-05
+
+### Changed
+- Search metadata rewritten to follow search-engine guidance: plain titles under 60
+  characters ("WordPress Load Testing Template | BLASTA"), descriptions of 70 to 160
+  characters that say what the page is, and no marketing claims ("free", "self-hosted").
+  The keywords tag (ignored by search engines) is gone, and the structured data now
+  describes the organisation, site and application without offers.
+- Every template page now has its own content, generated from that template's real jobs:
+  an overview (what it tests, how many jobs, scenarios, enterprise plan stages, pass/fail
+  targets), a how-to-run section naming the settings it needs, a safety summary, and a
+  question-and-answer section with matching FAQ structured data. The template index has
+  category sections with jump links.
+
 ## [2.3.1] - 2026-10-05
 
 ### Fixed

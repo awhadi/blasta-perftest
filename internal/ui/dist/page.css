@@ -40,3 +40,8 @@ code { font: 13.5px ui-monospace, SFMono-Regular, Menlo, monospace; background: 
 .foot { padding-top: 20px; padding-bottom: 32px; color: var(--dim); font-size: 13px; border-top: 1px solid var(--border); }
 .urls { padding-left: 20px; }
 .urls li { margin: 4px 0; overflow-wrap: anywhere; }
+.steps { padding-left: 22px; }
+.steps li { margin: 6px 0; }
+.catnav { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 8px; }
+.catnav a { padding: 4px 12px; border: 1px solid var(--border); border-radius: 999px; background: var(--panel); color: var(--text); text-decoration: none; font-size: 14px; }
+.catnav span { color: var(--dim); }
