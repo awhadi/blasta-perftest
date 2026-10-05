@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/awhadi/blasta-perftest/internal/presets"
+	"github.com/awhadi/blasta-perftest/internal/version"
 )
 
 const (
@@ -34,7 +35,8 @@ func Counts() (templates, jobs int) {
 // reached at), __TEMPLATES__ and __JOBS__.
 func Home(raw []byte, base string) []byte {
 	t, j := Counts()
-	r := strings.NewReplacer("__BASE__", template.HTMLEscapeString(base), "__TEMPLATES__", fmt.Sprint(t), "__JOBS__", fmt.Sprint(j))
+	r := strings.NewReplacer("__BASE__", template.HTMLEscapeString(base), "__TEMPLATES__", fmt.Sprint(t), "__JOBS__", fmt.Sprint(j),
+		"__VERSION__", version.Version)
 	return []byte(r.Replace(string(raw)))
 }
 
@@ -192,6 +194,13 @@ type page struct {
 	LD                                 template.HTML
 	Body                               template.HTML
 	NotFound                           bool
+}
+
+// publisher is the organisation behind the site, with a square logo (at least 112 px, as
+// search engines require).
+func publisher(base string) map[string]any {
+	return map[string]any{"@type": "Organization", "name": "AWHADI", "url": base + "/",
+		"logo": map[string]any{"@type": "ImageObject", "url": base + "/logo.png", "width": 512, "height": 512}}
 }
 
 func breadcrumbLD(cs []crumb) map[string]any {
@@ -447,8 +456,10 @@ func Page(base, id string) ([]byte, bool) {
 	ld := ldJSON(map[string]any{"@context": "https://schema.org", "@graph": []any{
 		map[string]any{"@type": "TechArticle", "headline": shortName(p.Title) + " load testing template", "description": desc, "url": canon,
 			"about":      p.Title,
-			"inLanguage": "en", "author": map[string]any{"@type": "Organization", "name": "AWHADI"},
-			"isPartOf": map[string]any{"@type": "WebSite", "name": siteName, "url": base + "/"}},
+			"inLanguage": "en", "articleSection": p.Category, "image": base + "/og.png", "mainEntityOfPage": canon,
+			"author":    publisher(base),
+			"publisher": publisher(base),
+			"isPartOf":  map[string]any{"@type": "WebSite", "name": siteName, "url": base + "/"}},
 		faqLD(questions),
 		map[string]any{"@type": "ItemList", "name": p.Title + " jobs", "numberOfItems": len(items), "itemListElement": items},
 		breadcrumbLD(crumbs),

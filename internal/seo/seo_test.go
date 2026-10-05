@@ -179,3 +179,67 @@ func TestHomePageHasOneH1AndNoEmptyHeadings(t *testing.T) {
 		}
 	}
 }
+
+// Structured data rules (Google's guidelines): valid JSON, no empty values, absolute URLs,
+// and the properties an article needs (image, author, publisher with a logo).
+func TestStructuredDataFollowsTheRules(t *testing.T) {
+	raw, _ := os.ReadFile("../ui/dist/index.html")
+	pages := map[string]string{"home": string(Home(raw, base)), "index": string(Index(base))}
+	for _, p := range presets.All() {
+		pages[p.ID] = string(mustPage(t, p.ID))
+	}
+	var walk func(v any, path string, name string)
+	walk = func(v any, path, name string) {
+		switch x := v.(type) {
+		case map[string]any:
+			for k, y := range x {
+				walk(y, path+"."+k, name)
+			}
+		case []any:
+			for i, y := range x {
+				walk(y, path+"["+string(rune('0'+i%10))+"]", name)
+			}
+		case string:
+			if x == "" {
+				t.Errorf("%s: empty value at %s", name, path)
+			}
+			for _, k := range []string{".url", ".item", ".logo", ".image", ".mainEntityOfPage"} {
+				if strings.HasSuffix(path, k) && !strings.HasPrefix(x, "http") {
+					t.Errorf("%s: %s must be an absolute URL, got %q", name, path, x)
+				}
+			}
+		}
+	}
+	for name, html := range pages {
+		blocks := ldRe.FindAllStringSubmatch(html, -1)
+		if len(blocks) == 0 {
+			t.Errorf("%s: no structured data", name)
+		}
+		for _, b := range blocks {
+			var doc map[string]any
+			if err := json.Unmarshal([]byte(b[1]), &doc); err != nil {
+				t.Errorf("%s: invalid JSON: %v", name, err)
+				continue
+			}
+			walk(doc, "", name)
+			for _, n := range doc["@graph"].([]any) {
+				node := n.(map[string]any)
+				switch node["@type"] {
+				case "TechArticle":
+					for _, k := range []string{"headline", "description", "image", "author", "publisher", "mainEntityOfPage"} {
+						if node[k] == nil {
+							t.Errorf("%s: TechArticle lacks %s", name, k)
+						}
+					}
+				case "Organization":
+					if node["logo"] == nil {
+						t.Errorf("%s: Organization lacks a logo", name)
+					}
+				}
+			}
+		}
+	}
+	if !strings.Contains(pages["home"], `"softwareVersion":"`) || strings.Contains(pages["home"], "__") {
+		t.Error("the home page should state the software version and leave no placeholders")
+	}
+}

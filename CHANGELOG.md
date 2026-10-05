@@ -7,6 +7,16 @@ feature the middle one, a breaking change the first. The current version is the
 `Version` constant in `internal/version/version.go`; it is shown bottom right in the
 page for signed-in people, by `blasta version`, and in `/api/health`.
 
+## [2.4.3] - 2026-10-05
+
+### Changed
+- Structured data brought in line with search-engine guidelines: the organisation now has a
+  square 512 px logo (`/logo.png`) and links to the GitHub project; the application states
+  its version; every template article names its image, author, publisher (with logo),
+  category and main page. A test checks all pages: valid JSON, no empty values, absolute
+  URLs and the required properties. Nothing is invented: there are no ratings, prices or
+  dates, because the product has none to state.
+
 ## [2.4.2] - 2026-10-05
 
 ### Fixed
