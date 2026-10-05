@@ -250,7 +250,8 @@ Resetting a password signs that person out everywhere.
 Accounts, sessions, run history, settings and trial counters all live in **one
 database**. The default is **SQLite**: a single file, `blasta.db`, in the data
 directory (`/data` in Docker and Kubernetes), with nothing else to run. For a shared
-or managed database, set `BLASTA_DATABASE_URL`:
+or managed database, set `BLASTA_DATABASE_URL` (Docker users: the step-by-step
+guide is [DATABASE.md](DATABASE.md)):
 
 | Value | Database |
 |---|---|

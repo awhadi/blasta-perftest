@@ -1,0 +1,32 @@
+# PostgreSQL instead of the built-in SQLite. Add to .env:
+#
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.postgres.yml
+#   BLASTA_DB_PASSWORD=<a long random value without special characters>
+#
+# then `docker compose up -d --build`. See docs/DATABASE.md.
+services:
+  blasta:
+    environment:
+      BLASTA_DATABASE_URL: postgres://blasta:${BLASTA_DB_PASSWORD:?set BLASTA_DB_PASSWORD in .env}@db:5432/blasta?sslmode=disable
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: blasta
+      POSTGRES_PASSWORD: ${BLASTA_DB_PASSWORD:?set BLASTA_DB_PASSWORD in .env}
+      POSTGRES_DB: blasta
+    volumes:
+      - blasta-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U blasta -d blasta"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  blasta-db:
+    name: blasta-db

@@ -7,6 +7,14 @@ feature the middle one, a breaking change the first. The current version is the
 `Version` constant in `internal/version/version.go`; it is shown bottom right in the
 page for signed-in people, by `blasta version`, and in `/api/health`.
 
+## [2.1.0] - 2026-10-05
+
+### Added
+- PostgreSQL and MariaDB in Docker by editing only `.env`: `docker-compose.postgres.yml`
+  and `docker-compose.mariadb.yml` add a health-checked `db` container and point blasta
+  at it. Enable one with a `COMPOSE_FILE` line and set `BLASTA_DB_PASSWORD`.
+- `docs/DATABASE.md` with the steps, external databases, backups and switching back.
+
 ## [2.0.0] - 2026-10-05
 
 ### Changed

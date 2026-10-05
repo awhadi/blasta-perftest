@@ -1,0 +1,33 @@
+# MariaDB instead of the built-in SQLite. Add to .env:
+#
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.mariadb.yml
+#   BLASTA_DB_PASSWORD=<a long random value without special characters>
+#
+# then `docker compose up -d --build`. See docs/DATABASE.md.
+services:
+  blasta:
+    environment:
+      BLASTA_DATABASE_URL: mysql://blasta:${BLASTA_DB_PASSWORD:?set BLASTA_DB_PASSWORD in .env}@db:3306/blasta
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: mariadb:11
+    restart: unless-stopped
+    environment:
+      MARIADB_DATABASE: blasta
+      MARIADB_USER: blasta
+      MARIADB_PASSWORD: ${BLASTA_DB_PASSWORD:?set BLASTA_DB_PASSWORD in .env}
+      MARIADB_RANDOM_ROOT_PASSWORD: "1"
+    volumes:
+      - blasta-db:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+volumes:
+  blasta-db:
+    name: blasta-db

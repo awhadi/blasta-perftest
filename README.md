@@ -201,8 +201,8 @@ read-only filesystem and all capabilities dropped, and has a health check.
 - **Everything is saved** in one database, `blasta.db` on the `blasta-data` volume
   (`/data`): accounts, run history (each person sees only their own) and the
   settings an administrator changes in the UI (single sign-on, email, free-trial
-  limits). It survives restarts and rebuilds. Use PostgreSQL or MariaDB instead with
-  `BLASTA_DATABASE_URL`. Outside Docker it is opt-in: `blasta serve --data-dir DIR`
+  limits). It survives restarts and rebuilds. Use PostgreSQL or MariaDB instead by
+  editing `.env` only: see [docs/DATABASE.md](docs/DATABASE.md). Outside Docker it is opt-in: `blasta serve --data-dir DIR`
   or `BLASTA_DATA_DIR`. A test that is running when the process dies is lost. See
   [docs/AUTH.md](docs/AUTH.md).
 - **Behind a reverse proxy or under a path** (Pangolin, Traefik, nginx, `/blasta`):
