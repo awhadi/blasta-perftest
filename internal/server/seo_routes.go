@@ -29,9 +29,8 @@ func (a *API) siteBase(r *http.Request) string {
 	return scheme + "://" + host + a.basePath
 }
 
-// seoRoutes serves what crawlers read: robots.txt, sitemap.xml, llms.txt and a plain,
-// server-rendered page for the template index and for every template. They are public:
-// they only describe the catalogue and need no account.
+// seoRoutes serves what crawlers read: robots.txt, sitemap.xml and llms.txt. They are public: they only describe
+// the product and need no account.
 func seoRoutes(mux *http.ServeMux, a *API) {
 	text := func(ctype string, body func(base string) string) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
@@ -48,24 +47,4 @@ func seoRoutes(mux *http.ServeMux, a *API) {
 		_, _ = w.Write([]byte(seo.SitemapXSL))
 	})
 	mux.HandleFunc("GET /llms.txt", text("text/markdown; charset=utf-8", seo.LLMs))
-	html := func(w http.ResponseWriter, status int, b []byte) {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Header().Set("Cache-Control", "public, max-age=3600")
-		w.WriteHeader(status)
-		_, _ = w.Write(b)
-	}
-	mux.HandleFunc("GET /templates", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, a.siteBase(r)+"/templates/", http.StatusMovedPermanently)
-	})
-	mux.HandleFunc("GET /templates/{$}", func(w http.ResponseWriter, r *http.Request) {
-		html(w, http.StatusOK, seo.Index(a.siteBase(r)))
-	})
-	mux.HandleFunc("GET /templates/{id}", func(w http.ResponseWriter, r *http.Request) {
-		base := a.siteBase(r)
-		if b, ok := seo.Page(base, r.PathValue("id")); ok {
-			html(w, http.StatusOK, b)
-			return
-		}
-		html(w, http.StatusNotFound, seo.NotFound(base))
-	})
 }

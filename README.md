@@ -49,14 +49,12 @@ make build
 
 ## Search engines and AI
 
-The app is a single page, which crawlers cannot read, so BLASTA also serves plain pages
-for them, all generated from the built-in catalogue: `/` carries full metadata (title,
+The app is a single page, which crawlers cannot read, so `/` carries full metadata (title,
 description, Open Graph and Twitter cards, canonical address, structured data) and a
-no-JavaScript summary; `/templates/` lists every template and `/templates/<id>` has a
-page per template with all of its jobs; `/robots.txt`, `/sitemap.xml` and `/llms.txt`
-(a Markdown map for AI assistants) tie it together. Addresses in them follow
+no-JavaScript summary, and `/robots.txt`, `/sitemap.xml` and `/llms.txt` (a plain-text
+description for AI assistants) describe the site. Addresses in them follow
 `BLASTA_PUBLIC_URL`, or the address the request came in on, so set that to your real
-domain. The API stays disallowed for crawlers.
+domain. The API stays disallowed for crawlers. The templates are browsed in the app.
 
 ## Presets
 

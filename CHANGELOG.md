@@ -7,6 +7,16 @@ feature the middle one, a breaking change the first. The current version is the
 `Version` constant in `internal/version/version.go`; it is shown bottom right in the
 page for signed-in people, by `blasta version`, and in `/api/health`.
 
+## [2.5.0] - 2026-10-05
+
+### Removed
+- The public `/templates/` pages (the index and one page per template, added in 2.3.0) and
+  everything only they used: their entries in the sitemap and `llms.txt`, their structured
+  data and the link from the no-JavaScript fallback. Templates are browsed in the app
+  (`#/templates/<id>`), which visitors can read without an account. The home page metadata,
+  `robots.txt`, a one-page `sitemap.xml`, `llms.txt` (now a plain list of the templates by
+  category) and the favicon, compression and caching fixes stay. `/templates/...` answers 404.
+
 ## [2.4.4] - 2026-10-05
 
 ### Removed
