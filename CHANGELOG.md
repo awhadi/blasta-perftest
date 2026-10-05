@@ -7,6 +7,14 @@ feature the middle one, a breaking change the first. The current version is the
 `Version` constant in `internal/version/version.go`; it is shown bottom right in the
 page for signed-in people, by `blasta version`, and in `/api/health`.
 
+## [2.5.1] - 2026-10-05
+
+### Fixed
+- Safari (and Android browsers) coloured the browser bar and page edges orange, because the
+  `theme-color` added for search metadata used the accent colour. It now matches the
+  header (white in the light theme, dark grey in the dark theme) and follows the theme you
+  pick in the app, not only the device's.
+
 ## [2.5.0] - 2026-10-05
 
 ### Removed

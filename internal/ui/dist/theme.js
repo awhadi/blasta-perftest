@@ -13,4 +13,17 @@
     t = window.matchMedia && matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
   }
   document.documentElement.setAttribute('data-theme', t);
+  // Safari and Android tint the browser bar with theme-color: use the header's own colour for
+  // the theme in effect (which may differ from the device's), now and whenever it changes.
+  var COLORS = { light: '#ffffff', dark: '#161b22' };
+  function tint() {
+    var metas = document.querySelectorAll('meta[name="theme-color"]');
+    if (!metas.length) return;
+    var m = metas[0];
+    for (var i = 1; i < metas.length; i++) metas[i].parentNode.removeChild(metas[i]);
+    m.removeAttribute('media');
+    m.setAttribute('content', COLORS[document.documentElement.getAttribute('data-theme')] || COLORS.dark);
+  }
+  tint();
+  if (window.MutationObserver) new MutationObserver(tint).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 })();
