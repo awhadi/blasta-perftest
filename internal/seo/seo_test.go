@@ -160,3 +160,22 @@ func mustPage(t *testing.T, id string) []byte {
 	}
 	return b
 }
+
+// The app has several views, only one visible at a time. Search engines read the whole
+// document, so exactly one <h1> may exist in it (the others are h2 with the heading role)
+// and no heading may be empty.
+func TestHomePageHasOneH1AndNoEmptyHeadings(t *testing.T) {
+	raw, err := os.ReadFile("../ui/dist/index.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	page := regexp.MustCompile(`(?s)<noscript>.*?</noscript>`).ReplaceAllString(string(Home(raw, base)), "")
+	if n := len(regexp.MustCompile(`<h1[\s>]`).FindAllString(page, -1)); n != 1 {
+		t.Errorf("the page must have one h1 outside the no-JavaScript fallback, found %d", n)
+	}
+	for _, m := range regexp.MustCompile(`(?s)<h([1-6])[^>]*>(.*?)</h[1-6]>`).FindAllStringSubmatch(page, -1) {
+		if strings.TrimSpace(regexp.MustCompile(`<[^>]+>`).ReplaceAllString(m[2], "")) == "" {
+			t.Errorf("empty heading: %s", m[0])
+		}
+	}
+}

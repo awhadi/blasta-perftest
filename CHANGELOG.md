@@ -7,6 +7,15 @@ feature the middle one, a breaking change the first. The current version is the
 `Version` constant in `internal/version/version.go`; it is shown bottom right in the
 page for signed-in people, by `blasta version`, and in `/api/health`.
 
+## [2.4.2] - 2026-10-05
+
+### Fixed
+- The home page had six `<h1>` headings, one per hidden app view, and a few empty headings
+  that scripts fill in later. It now has a single `<h1>`; the other views use `<h2>` with
+  the level-1 heading role, so screen readers see no change and looks are unchanged. The
+  empty headings have placeholder text. A test keeps it that way.
+- The home page description now mentions run history and is about 155 characters.
+
 ## [2.4.1] - 2026-10-05
 
 ### Fixed

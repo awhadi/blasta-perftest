@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <title>BLASTA: Load and Performance Testing Platform by AWHADI</title>
-<meta name="description" content="Load and performance testing for websites, APIs, databases and identity providers. __TEMPLATES__ ready-made templates, live results and pass/fail targets.">
+<meta name="description" content="Load and performance testing for websites, APIs, databases and identity providers. __TEMPLATES__ ready-made templates, live results, run history and pass/fail targets.">
 <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">
 <meta name="theme-color" content="#e8663a">
 <link rel="icon" type="image/png" sizes="48x48" href="favicon.png">
@@ -16,7 +16,7 @@
 <meta property="og:locale" content="en">
 <meta property="og:type" content="website">
 <meta property="og:title" content="BLASTA: Load and Performance Testing Platform by AWHADI">
-<meta property="og:description" content="Load and performance testing for websites, APIs, databases and identity providers. __TEMPLATES__ ready-made templates, live results and pass/fail targets.">
+<meta property="og:description" content="Load and performance testing for websites, APIs, databases and identity providers. __TEMPLATES__ ready-made templates, live results, run history and pass/fail targets.">
 <meta property="og:url" content="__BASE__/">
 <meta property="og:image" content="__BASE__/og.png">
 <meta property="og:image:width" content="1200">
@@ -24,7 +24,7 @@
 <meta property="og:image:alt" content="BLASTA logo">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="BLASTA: Load and Performance Testing Platform by AWHADI">
-<meta name="twitter:description" content="Load and performance testing for websites, APIs, databases and identity providers. __TEMPLATES__ ready-made templates, live results and pass/fail targets.">
+<meta name="twitter:description" content="Load and performance testing for websites, APIs, databases and identity providers. __TEMPLATES__ ready-made templates, live results, run history and pass/fail targets.">
 <meta name="twitter:image" content="__BASE__/og.png">
 <meta name="twitter:image:alt" content="BLASTA logo">
 <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"Organization","@id":"__BASE__/#org","name":"AWHADI","url":"__BASE__/","logo":"__BASE__/og.png"},{"@type":"WebSite","@id":"__BASE__/#site","name":"BLASTA","alternateName":"BLASTA Performance & Load Testing Platform","url":"__BASE__/","description":"Performance & Load Testing Platform by AWHADI","inLanguage":"en","publisher":{"@id":"__BASE__/#org"}},{"@type":"SoftwareApplication","@id":"__BASE__/#app","name":"BLASTA","applicationCategory":"DeveloperApplication","applicationSubCategory":"Load testing and performance testing","operatingSystem":"Linux, macOS, Windows","url":"__BASE__/","image":"__BASE__/og.png","description":"Load and performance testing with a web interface and a command line. Generates load against HTTP, SQL, TCP, gRPC and WebSocket targets, with __TEMPLATES__ ready-made templates (__JOBS__ jobs), live charts, run history and pass/fail targets.","featureList":["Load, stress, spike and soak tests","Websites and REST, GraphQL and SOAP APIs","gRPC, WebSocket and TCP","Databases, caches and message queues","SAML, OpenID Connect and LDAP identity providers","Live charts and saved run history","Pass/fail targets (SLOs) for continuous integration"],"author":{"@id":"__BASE__/#org"},"publisher":{"@id":"__BASE__/#org"}}]}</script>
@@ -93,7 +93,7 @@
 <main id="main">
   <section id="view-login" class="view" hidden>
     <div class="auth-card">
-      <h1 id="authTitle" tabindex="-1">Sign in</h1>
+      <h2 class="pt" role="heading" aria-level="1" id="authTitle" tabindex="-1">Sign in</h2>
       <p class="auth-sub" id="authSub">Welcome back. Sign in to run and review load tests.</p>
 
       <div class="auth-tabs" id="authTabs" role="tablist">
@@ -499,7 +499,7 @@
   <section id="view-templates" class="view" hidden>
     <div id="tplListView">
       <div class="intro">
-        <h1 tabindex="-1">Pick a <span class="grad">template</span></h1>
+        <h2 class="pt" role="heading" aria-level="1" tabindex="-1">Pick a <span class="grad">template</span></h2>
         <p>Ready-made jobs for common systems. Search by system, protocol or what you want to test
            (<em>wordpress</em>, <em>saml</em>, <em>redis</em>, <em>spike</em>, <em>login storm</em>&hellip;), pick a job, and it opens on the Test page ready to run.</p>
         <p class="note tpl-guest-note" hidden>You are browsing as a visitor: you can read every template and job. Sign in or create an account to use them.</p>
@@ -524,7 +524,7 @@
     <div id="tplDetailView" hidden>
       <a class="back" href="#/templates">&larr; All templates</a>
       <div class="intro">
-        <h1 tabindex="-1"><span class="ticon" id="tplIcon" aria-hidden="true"></span><span id="tplTitle"></span> <span class="tag" id="tplCat"></span></h1>
+        <h2 class="pt" role="heading" aria-level="1" tabindex="-1"><span class="ticon" id="tplIcon" aria-hidden="true"></span><span id="tplTitle">Template</span> <span class="tag" id="tplCat"></span></h2>
         <p id="presetSummary"></p>
         <p class="muted" id="tplStack"></p>
         <p class="note tpl-guest-note" hidden>You are browsing as a visitor: you can read every job here. Sign in or create an account to use them.</p>
@@ -551,7 +551,7 @@
   <section id="view-history" class="view" hidden>
     <div id="histListView">
       <div class="intro">
-        <h1 tabindex="-1">Run <span class="grad">history</span></h1>
+        <h2 class="pt" role="heading" aria-level="1" tabindex="-1">Run <span class="grad">history</span></h2>
         <p>Your tests. Open one to see it the way it looked live, with its charts, load settings and server usage.</p>
       </div>
       <div class="hist-tools" id="histTools" hidden>
@@ -572,7 +572,7 @@
       <a class="back" href="#/history">&larr; All runs</a>
       <div class="panel results">
         <div class="results-head">
-          <h2 id="histTitle" tabindex="-1"></h2>
+          <h2 id="histTitle" tabindex="-1">Run details</h2>
           <span id="histState"></span>
           <div class="spacer"></div>
           <a class="btn small" id="histJson" href="#" download>Download JSON</a>
@@ -598,7 +598,7 @@
 
 <dialog id="askDlg" class="dlg" aria-labelledby="askTitle">
   <form id="askForm" novalidate>
-    <h2 id="askTitle"></h2>
+    <h2 id="askTitle">Set up this job</h2>
     <p class="note" id="askIntro"></p>
     <div id="askFields"></div>
     <p class="form-error" id="askErr" role="alert" hidden></p>

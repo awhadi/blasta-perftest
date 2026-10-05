@@ -261,7 +261,7 @@ function route() {
     if (parts[1]) openTemplate(decodeURIComponent(parts[1])); else showTemplateList();
   }
   // Move focus to the new page's heading so keyboard and screen-reader users land in context.
-  const focusHeading = () => { const h = document.querySelector('#view-' + view + ' h1'); if (h && lastNav) h.focus({ preventScroll: true }); };
+  const focusHeading = () => { const h = document.querySelector('#view-' + view + ' h1, #view-' + view + ' h2.pt'); if (h && lastNav) h.focus({ preventScroll: true }); };
   focusHeading();
   lastNav = true;
 }

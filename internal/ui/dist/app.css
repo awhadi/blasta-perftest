@@ -60,7 +60,7 @@ body {
 .skip:focus { left: 8px; }
 h1, h2, h3 { font-family: var(--display); }
 button, a, label.check, summary, .chip, select { cursor: pointer; }
-.view:focus, .view h1:focus { outline: none; }
+.view:focus, .view h1:focus, .view h2.pt:focus { outline: none; }
 ::selection { background: var(--accent-soft); }
 
 /* ================= Header ================= */
@@ -97,8 +97,8 @@ nav { display: flex; align-self: stretch; gap: 6px; margin-left: 10px; }
 /* ================= Layout ================= */
 main { max-width: 1240px; margin: 0 auto; padding: 36px 24px 72px; }
 .intro { margin-bottom: 24px; }
-.intro h1 { margin: 0 0 8px; font-size: clamp(1.75rem, 1.2rem + 2.2vw, 2.6rem); font-weight: 700; letter-spacing: -.035em; line-height: 1.08; text-wrap: balance; }
-.intro h1 .grad { background: linear-gradient(100deg, var(--accent-bright), var(--accent) 60%, color-mix(in srgb, var(--accent) 70%, var(--info))); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.intro :is(h1, h2.pt) { margin: 0 0 8px; font-size: clamp(1.75rem, 1.2rem + 2.2vw, 2.6rem); font-weight: 700; letter-spacing: -.035em; line-height: 1.08; text-wrap: balance; }
+.intro :is(h1, h2.pt) .grad { background: linear-gradient(100deg, var(--accent-bright), var(--accent) 60%, color-mix(in srgb, var(--accent) 70%, var(--info))); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .intro p { margin: 0; color: var(--dim); max-width: 64ch; font-size: 16px; text-wrap: pretty; }
 .layout { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 20px; align-items: start; }
 .col-main { display: grid; gap: 20px; min-width: 0; }
@@ -323,8 +323,8 @@ td a:hover { text-decoration: underline; }
 @keyframes shimmer { to { background-position: -120% 0; } }
 .back { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 14px; color: var(--dim); text-decoration: none; font-size: 13.5px; font-weight: 500; }
 .back:hover { color: var(--accent); }
-.intro h1 .tag { font-size: 11.5px; vertical-align: middle; margin-left: 8px; letter-spacing: 0; font-family: var(--mono); font-weight: 500; }
-.intro h1 .ticon { display: inline-grid; vertical-align: middle; margin-right: 10px; width: 44px; height: 44px; }
+.intro :is(h1, h2.pt) .tag { font-size: 11.5px; vertical-align: middle; margin-left: 8px; letter-spacing: 0; font-family: var(--mono); font-weight: 500; }
+.intro :is(h1, h2.pt) .ticon { display: inline-grid; vertical-align: middle; margin-right: 10px; width: 44px; height: 44px; }
 #tplDetailView .panel { margin-bottom: 20px; }
 .preset-vars { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); column-gap: 16px; }
 .jobs-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 14px; }
@@ -444,7 +444,7 @@ td.jobcell { max-width: 190px; overflow: hidden; text-overflow: ellipsis; font-f
 body.signed-out .bar { display: none; }
 
 .auth-card { width: min(440px, 100%); margin: 8vh auto 0; padding: 32px; background: var(--panel); border: 1px solid var(--border); border-radius: var(--r-lg); box-shadow: inset 0 1px 0 var(--highlight), 0 30px 60px -30px var(--shadow); }
-.auth-card h1 { margin: 0 0 6px; font-size: 26px; font-weight: 700; letter-spacing: -.03em; line-height: 1.15; text-wrap: balance; }
+.auth-card :is(h1, h2.pt) { margin: 0 0 6px; font-size: 26px; font-weight: 700; letter-spacing: -.03em; line-height: 1.15; text-wrap: balance; }
 .auth-sub { margin: 0 0 22px; color: var(--dim); font-size: 14.5px; }
 .auth-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; margin-bottom: 18px; background: var(--bg-alt); border: 1px solid var(--border); border-radius: 11px; }
 .auth-tabs[hidden] { display: none; }
