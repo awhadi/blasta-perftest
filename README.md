@@ -51,8 +51,8 @@ make build
 
 The app is a single page, which crawlers cannot read, so `/` carries full metadata (title,
 description, Open Graph and Twitter cards, canonical address, structured data) and a
-no-JavaScript summary, and `/robots.txt`, `/sitemap.xml` and `/llms.txt` (a plain-text
-description for AI assistants) describe the site. Addresses in them follow
+no-JavaScript summary, and `/robots.txt`, `/sitemap.xml` (the home page and every template, generated from
+the catalogue) and `/llms.txt` (a plain-text description for AI assistants) describe the site. Addresses in them follow
 `BLASTA_PUBLIC_URL`, or the address the request came in on, so set that to your real
 domain. The API stays disallowed for crawlers. The templates are browsed in the app.
 

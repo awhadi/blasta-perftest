@@ -7,6 +7,7 @@ package seo
 import (
 	"fmt"
 	"html/template"
+	"net/url"
 	"sort"
 	"strings"
 
@@ -44,12 +45,21 @@ func Robots(base string) string {
 		"Sitemap: " + base + "/sitemap.xml\n"
 }
 
-// Sitemap lists the home page.
+// Sitemap lists the home page and, built from the catalogue so a new template appears by
+// itself, the in-app address of every template (/#/templates/<id>).
 func Sitemap(base string) string {
-	return `<?xml version="1.0" encoding="UTF-8"?>` + "\n" + `<?xml-stylesheet type="text/xsl" href="sitemap.xsl"?>` + "\n" +
-		`<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">` + "\n" +
-		fmt.Sprintf("  <url><loc>%s</loc><priority>1.0</priority></url>\n", template.HTMLEscapeString(base+"/")) +
-		"</urlset>\n"
+	var b strings.Builder
+	b.WriteString(`<?xml version="1.0" encoding="UTF-8"?>` + "\n" + `<?xml-stylesheet type="text/xsl" href="sitemap.xsl"?>` + "\n" +
+		`<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">` + "\n")
+	add := func(loc, prio string) {
+		fmt.Fprintf(&b, "  <url><loc>%s</loc><priority>%s</priority></url>\n", template.HTMLEscapeString(loc), prio)
+	}
+	add(base+"/", "1.0")
+	for _, p := range presets.All() {
+		add(base+"/#/templates/"+url.PathEscape(p.ID), "0.7")
+	}
+	b.WriteString("</urlset>\n")
+	return b.String()
 }
 
 // SitemapXSL turns sitemap.xml into a readable table when a person opens it in a browser;

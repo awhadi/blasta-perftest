@@ -7,6 +7,14 @@ feature the middle one, a breaking change the first. The current version is the
 `Version` constant in `internal/version/version.go`; it is shown bottom right in the
 page for signed-in people, by `blasta version`, and in `/api/health`.
 
+## [2.5.2] - 2026-10-05
+
+### Added
+- `sitemap.xml` now lists every template (`/#/templates/<id>`) next to the home page. It is
+  generated from the built-in catalogue, so a new template appears without any extra step.
+  Note that search engines ignore the part after `#`, so these entries do not by themselves
+  make individual templates searchable.
+
 ## [2.5.1] - 2026-10-05
 
 ### Fixed

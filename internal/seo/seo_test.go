@@ -7,6 +7,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/awhadi/blasta-perftest/internal/presets"
 )
 
 const base = "https://perftest.example.test"
@@ -116,8 +118,17 @@ func TestStructuredDataFollowsTheRules(t *testing.T) {
 
 func TestSitemapRobotsAndLLMs(t *testing.T) {
 	sm := Sitemap(base)
-	if strings.Count(sm, "<loc>") != 1 || !strings.Contains(sm, "<loc>"+base+"/</loc>") || !strings.Contains(sm, `href="sitemap.xsl"`) {
-		t.Errorf("sitemap: %s", sm)
+	// The home page plus one entry per template, whatever the catalogue holds.
+	if got, want := strings.Count(sm, "<loc>"), 1+len(presets.All()); got != want {
+		t.Errorf("sitemap has %d urls, want %d", got, want)
+	}
+	for _, loc := range []string{base + "/", base + "/#/templates/wordpress", base + "/#/templates/auth0", base + "/#/templates/realtime"} {
+		if !strings.Contains(sm, "<loc>"+loc+"</loc>") {
+			t.Errorf("sitemap lacks %s", loc)
+		}
+	}
+	if !strings.Contains(sm, `href="sitemap.xsl"`) {
+		t.Error("the sitemap should point at its stylesheet")
 	}
 	r := Robots(base)
 	if !strings.Contains(r, "Disallow: /api/") || !strings.Contains(r, "Sitemap: "+base+"/sitemap.xml") || strings.Contains(r, "Disallow: /\n") {

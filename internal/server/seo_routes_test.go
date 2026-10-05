@@ -34,7 +34,7 @@ func TestCrawlerRoutes(t *testing.T) {
 	if w := siteGet(h, "/robots.txt", nil); w.Code != 200 || !strings.HasPrefix(w.Header().Get("Content-Type"), "text/plain") || !strings.Contains(w.Body.String(), "Sitemap: https://perftest.example.test/sitemap.xml") {
 		t.Errorf("robots: %d %s", w.Code, w.Body.String())
 	}
-	if w := siteGet(h, "/sitemap.xml", nil); w.Code != 200 || !strings.Contains(w.Header().Get("Content-Type"), "xml") || !strings.Contains(w.Body.String(), "https://perftest.example.test/") {
+	if w := siteGet(h, "/sitemap.xml", nil); w.Code != 200 || !strings.Contains(w.Header().Get("Content-Type"), "xml") || !strings.Contains(w.Body.String(), "https://perftest.example.test/#/templates/auth0") {
 		t.Errorf("sitemap: %d", w.Code)
 	}
 	if w := siteGet(h, "/sitemap.xsl", nil); w.Code != 200 || !strings.HasPrefix(w.Header().Get("Content-Type"), "text/xsl") {
