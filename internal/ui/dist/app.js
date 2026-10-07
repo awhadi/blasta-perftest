@@ -3621,6 +3621,7 @@ function paintRunning() {
   dock.hidden = n === 0 || guestMode;
   document.body.classList.toggle('has-dock', !dock.hidden);
   $('dockCount').textContent = n;
+  $('dockBadge').textContent = n;
   if (n) {
     $('dockList').innerHTML = runningNow.map(dockItem).join('');
     $('dockList').querySelectorAll('.run-bar span[data-pct]').forEach((s) => { s.style.width = s.dataset.pct + '%'; });
@@ -3645,7 +3646,19 @@ function dockItem(r) {
     '<button type="button" class="card-x" data-act="stop" aria-label="Stop this job" title="Stop this job">&times;</button></div>';
 }
 
+// The panel can be folded to a narrow rail; the choice is remembered in this browser.
+function setDock(collapsed) {
+  $('runDock').classList.toggle('collapsed', collapsed);
+  document.body.classList.toggle('dock-collapsed', collapsed);
+  const t = $('dockToggle');
+  t.setAttribute('aria-expanded', String(!collapsed));
+  t.title = collapsed ? 'Show the running jobs' : 'Collapse the panel';
+  store.set('blasta.dock', collapsed ? 'closed' : 'open');
+}
+
 function wireRunning() {
+  setDock(store.get('blasta.dock') === 'closed');
+  $('dockToggle').onclick = () => setDock(!$('runDock').classList.contains('collapsed'));
   $('dockList').onclick = async (e) => {
     const b = e.target.closest('[data-act]');
     if (!b) return;

@@ -98,7 +98,12 @@ __ANALYTICS__
 
 __SSR__
 <aside class="run-dock" id="runDock" aria-label="Running jobs" hidden>
-  <h2>Running jobs <span class="count" id="dockCount"></span></h2>
+  <div class="dock-head">
+    <h2>Running jobs <span class="count" id="dockCount"></span></h2>
+    <button type="button" class="dock-toggle" id="dockToggle" aria-expanded="true" aria-controls="dockList" title="Collapse the panel">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg><span class="dock-badge" id="dockBadge"></span>
+    </button>
+  </div>
   <div class="dock-list" id="dockList"></div>
 </aside>
 <main id="main">

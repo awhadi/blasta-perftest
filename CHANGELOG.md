@@ -7,6 +7,12 @@ feature the middle one, a breaking change the first. The current version is the
 `Version` constant in `internal/version/version.go`; it is shown bottom right in the
 page for signed-in people, by `blasta version`, and in `/api/health`.
 
+## [2.14.1] - 2026-10-07
+
+### Added
+- The Running jobs panel can be **collapsed** to a narrow rail (with the number of running jobs) and opened again
+  with the arrow at its top. The choice is remembered in your browser.
+
 ## [2.14.0] - 2026-10-07
 
 ### Changed

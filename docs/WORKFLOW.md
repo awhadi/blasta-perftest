@@ -30,7 +30,7 @@ Press **Start job** as often as you like: each press starts another job and you 
 you can change the form and start the next one. While anything is running, a **Running jobs** panel
 appears on the left of every page, with each job's name, target and progress and a **×** to stop it.
 Click a job there to watch it live under **Running jobs** in the menu (charts, numbers, **Stop job**, the
-JSON and CSV downloads). The panel and the menu item go away when nothing is running; finished jobs are
+JSON and CSV downloads). Fold the panel to a narrow rail with the arrow at its top (it is remembered). The panel and the menu item go away when nothing is running; finished jobs are
 in History. A job that finishes while you are elsewhere is announced. One person may have 5 running at
 once (set `BLASTA_MAX_RUNNING` to change this). People see only their own jobs. A visitor on a free
 trial has no panel: the job opens straight in Running jobs.

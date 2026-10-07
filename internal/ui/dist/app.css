@@ -892,3 +892,25 @@ body.has-dock main { margin-left: max(256px, calc((100vw - 1240px) / 2)); margin
   body.has-dock main { margin-left: auto; margin-right: auto; }
 }
 @media (max-width: 1260px) { body.has-dock .layout { grid-template-columns: 1fr; } body.has-dock .col-side { position: static; } }
+
+.dock-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 0 12px; }
+.dock-head h2 { margin: 0 4px; }
+.dock-toggle { position: relative; flex: none; width: 30px; height: 30px; padding: 0; margin: 0; display: grid; place-items: center; background: transparent; border: 1px solid var(--border); border-radius: 8px; color: var(--dim); cursor: pointer; }
+.dock-toggle:hover { color: var(--accent); border-color: var(--accent); }
+.dock-toggle svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; transition: transform .2s; }
+.dock-badge { display: none; }
+.run-dock.collapsed { width: 56px; padding: 16px 8px; overflow: hidden; }
+.run-dock.collapsed .dock-head h2, .run-dock.collapsed .dock-list { display: none; }
+.run-dock.collapsed .dock-head { justify-content: center; flex-direction: column; margin: 0; }
+.run-dock.collapsed .dock-toggle svg { transform: rotate(180deg); }
+.run-dock.collapsed .dock-badge { display: block; position: absolute; top: 36px; left: 50%; transform: translateX(-50%); font: 700 12px var(--mono); color: var(--accent); }
+.run-dock.collapsed .dock-toggle { margin-bottom: 22px; }
+body.has-dock.dock-collapsed main { margin-left: max(76px, calc((100vw - 1240px) / 2)); }
+@media (max-width: 900px) {
+  .run-dock.collapsed { width: auto; padding: 8px 12px; }
+  .run-dock.collapsed .dock-head { flex-direction: row; justify-content: space-between; }
+  .run-dock.collapsed .dock-head h2 { display: block; }
+  .run-dock.collapsed .dock-badge, .run-dock.collapsed .dock-toggle { margin: 0; }
+  .run-dock.collapsed .dock-badge { position: static; transform: none; }
+  body.has-dock.dock-collapsed main { margin-left: auto; }
+}
