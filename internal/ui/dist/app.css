@@ -210,7 +210,7 @@ fieldset.slo legend { font-size: 13.5px; font-weight: 500; padding: 0 8px; }
 .seg button[aria-checked="true"] { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 3px var(--accent-soft); }
 .seg button[aria-checked="true"] b { color: var(--accent); }
 
-.summary { font-size: 14px; color: var(--dim); margin-bottom: 18px; line-height: 1.65; }
+.summary { overflow-wrap: anywhere; word-break: break-word; font-size: 14px; color: var(--dim); margin-bottom: 18px; line-height: 1.65; }
 .summary b { color: var(--text); font-weight: 600; }
 .summary .big { display: block; font: 700 clamp(1.7rem, 1.3rem + 1.4vw, 2.2rem)/1.1 var(--display); letter-spacing: -.035em; color: var(--text); margin: 4px 0 6px; font-variant-numeric: tabular-nums; }
 .form-error { background: var(--danger-soft); border: 1px solid var(--danger); color: var(--danger); border-radius: var(--r-sm); padding: 10px 14px; font-size: 13.5px; margin-bottom: 14px; }

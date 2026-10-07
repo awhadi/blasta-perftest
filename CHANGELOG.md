@@ -7,6 +7,13 @@ feature the middle one, a breaking change the first. The current version is the
 `Version` constant in `internal/version/version.go`; it is shown bottom right in the
 page for signed-in people, by `blasta version`, and in `/api/health`.
 
+## [2.13.1] - 2026-10-07
+
+### Fixed
+- A long address (an SSO authorize link, say) ran out of the box in the "About N requests sent to ..."
+  summary on the Jobs page. It now wraps, so all of it is shown.
+- The button under Start job said "Save as template"; it now says "Save as favorite", like everywhere else.
+
 ## [2.13.0] - 2026-10-07
 
 ### Added
