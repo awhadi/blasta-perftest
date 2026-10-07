@@ -79,6 +79,7 @@ __ANALYTICS__
           <span class="tag" id="menuRole"></span>
         </div>
         <a href="account" role="menuitem">My account</a>
+        <a href="templates?mine" role="menuitem">My templates</a>
         <a href="admin" id="menuAdmin" role="menuitem" hidden>Settings <span class="count" id="menuPending"></span></a>
         <button type="button" id="menuSignOut" role="menuitem">Sign out</button>
       </div>
@@ -256,9 +257,11 @@ __SSR__
       <div class="col-main">
         <div class="panel" id="targetPanel">
           <h2><span class="step">1</span> What do you want to test?
-            <a class="btn small tpl-link" id="tplLink" href="templates" title="Ready-made jobs for common systems">
+            <span class="tpl-actions">
+              <a class="btn small tpl-link" id="tplLink" href="templates" title="Ready-made jobs for common systems">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>Use a template</a>
-            <button class="btn small tpl-link" id="importBtn" type="button" title="Start from a curl command, a HAR file, a Postman collection or an OpenAPI document">Import&hellip;</button></h2>
+              <button class="btn small tpl-link" id="importBtn" type="button" title="Start from a curl command, a HAR file, a Postman collection or an OpenAPI document">Import&hellip;</button>
+            </span></h2>
 
           <label for="executor">Type
             <select id="executor"></select>
@@ -771,7 +774,7 @@ __SSR__
     <div id="impList" class="imp-list" hidden></div>
     <div class="dlg-actions">
       <button type="button" class="btn ghost" id="impClose">Close</button>
-      <button type="button" class="btn small" id="impSaveAll" hidden>Save all as templates</button>
+      <button type="button" class="btn" id="impSaveAll" hidden>Save all as templates</button>
       <button type="button" class="btn primary-sm" id="impUse" hidden>Use this request</button>
     </div>
   </form>

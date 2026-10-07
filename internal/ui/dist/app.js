@@ -3300,7 +3300,7 @@ async function readImport() {
     (impResult.skipped ? ' (' + impResult.skipped + ' images, scripts and similar left out)' : '');
   $('impList').innerHTML = rs.map((r, i) =>
     '<label class="imp-item"><input type="radio" name="impPick" value="' + i + '"' + (i === 0 ? ' checked' : '') + '>' +
-    '<span><strong>' + esc(r.method) + '</strong> ' + esc(r.name) + '<small class="mono">' + esc(r.url) + '</small>' +
+    '<span class="imp-text"><span class="imp-name"><b class="imp-method">' + esc(r.method) + '</b> ' + esc(r.name.replace(new RegExp('^' + r.method + '\\s+'), '')) + '</span><small class="mono">' + esc(r.url) + '</small>' +
     (r.notes || []).map((n) => '<small class="imp-note">' + esc(n) + '</small>').join('') + '</span></label>').join('') +
     (impResult.warnings || []).map((w) => '<p class="note">' + esc(w) + '</p>').join('');
   $('impList').hidden = false;

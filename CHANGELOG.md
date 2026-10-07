@@ -7,6 +7,18 @@ feature the middle one, a breaking change the first. The current version is the
 `Version` constant in `internal/version/version.go`; it is shown bottom right in the
 page for signed-in people, by `blasta version`, and in `/api/health`.
 
+## [2.10.1] - 2026-10-07
+
+### Changed
+- **My templates** is now in the user menu, between My account and Settings.
+- On the Test page, "Use a template" and "Import..." sit together at the right of the heading
+  (adding Import had pushed "Use a template" to the middle).
+
+### Fixed
+- The Import dialog now matches the rest of the app: the choice list had stretched radio buttons, the
+  method was shown twice ("POST POST /v1/orders"), and the buttons along the bottom were different
+  sizes from those in other dialogs.
+
 ## [2.10.0] - 2026-10-07
 
 ### Added
