@@ -65,6 +65,11 @@ func TestPageSaysWhatTheSiteDoes(t *testing.T) {
 			t.Errorf("page lacks %q", want)
 		}
 	}
+	for _, want := range []string{"Templates you save", "Notification settings"} {
+		if !strings.Contains(off, want) {
+			t.Errorf("page lacks %q", want)
+		}
+	}
 	if strings.Contains(off, "Counting visits") || strings.Contains(off, "blasta_oidc_state") || strings.Contains(off, "Cookie settings") {
 		t.Error("the page must not mention what is switched off")
 	}

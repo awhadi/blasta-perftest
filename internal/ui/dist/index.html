@@ -246,6 +246,7 @@ __SSR__
       </div>
       <div class="tpl-banner-actions">
         <button class="btn small" id="tplEdit" type="button">Edit details</button>
+        <button class="btn small primary-sm" id="tplSave" type="button" hidden>Save changes</button>
         <a class="btn small" id="tplChange" href="templates">Change job</a>
         <button class="btn ghost small" id="tplDismiss" type="button" aria-label="Dismiss">&times;</button>
       </div>
@@ -256,7 +257,8 @@ __SSR__
         <div class="panel" id="targetPanel">
           <h2><span class="step">1</span> What do you want to test?
             <a class="btn small tpl-link" id="tplLink" href="templates" title="Ready-made jobs for common systems">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>Use a template</a></h2>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>Use a template</a>
+            <button class="btn small tpl-link" id="importBtn" type="button" title="Start from a curl command, a HAR file, a Postman collection or an OpenAPI document">Import&hellip;</button></h2>
 
           <label for="executor">Type
             <select id="executor"></select>
@@ -444,6 +446,10 @@ __SSR__
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>Start test</button>
           <button id="stop" class="btn danger" type="button" disabled>Stop</button>
           <p class="kbd-hint">or press <kbd>Ctrl</kbd>/<kbd>&#8984;</kbd> + <kbd>Enter</kbd></p>
+          <div class="run-extras">
+            <button class="btn small" id="saveTpl" type="button" title="Keep this setup to run again later" hidden>Save as template</button>
+            <button class="btn small" id="dlJob" type="button" title="Download this setup as a job file for the blasta command line (credentials left out)">Download job file</button>
+          </div>
           <div id="safety" class="safety"></div>
         </div>
       </aside>
@@ -454,6 +460,7 @@ __SSR__
         <h2>Live results</h2>
         <span class="muted" id="runmeta"></span>
         <div class="spacer"></div>
+        <button class="btn ghost small" id="runAgain" type="button" title="Run the same test again" hidden>Run again</button>
         <a class="btn ghost small" id="dl-json" href="#" download>Download JSON</a>
         <a class="btn ghost small" id="dl-csv" href="#" download>Download CSV</a>
       </div>
@@ -508,6 +515,30 @@ __SSR__
   </section>
 
   <section id="view-templates" class="view" hidden>
+    <div class="chips tpl-tabs" id="tplTabs" role="navigation" aria-label="Templates" hidden>
+      <a class="chip on" id="tabBuiltin" href="templates">Built-in</a>
+      <a class="chip" id="tabMine" href="templates?mine">My templates <span class="n" id="myCount"></span></a>
+    </div>
+
+    <div id="myTplView" hidden>
+      <div class="intro">
+        <h2 class="pt" role="heading" aria-level="1" tabindex="-1">Your <span class="grad">templates</span></h2>
+        <p>Setups you saved from the Test page. Each one keeps the target, headers, body, load settings and pass/fail targets, so next time you open it and press Start. Credentials are stored encrypted and are only ever visible to you.</p>
+      </div>
+      <div class="tpl-toolbar">
+        <span class="muted" id="myCount2" role="status"></span>
+        <span class="spacer"></span>
+        <button class="btn small" id="myImport" type="button">Import a file&hellip;</button>
+      </div>
+      <div class="tgrid" id="myGrid"></div>
+      <div class="empty" id="myEmpty" hidden>
+        <div class="empty-art" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 4h14v16l-7-4-7 4z"/></svg></div>
+        <p><strong>Nothing saved yet</strong></p>
+        <p class="muted-p">Set up a test on the Test page and press <em>Save as template</em>, or import a curl command, a HAR file, a Postman collection or an OpenAPI document.</p>
+        <p><a class="btn small" href="test">Go to the Test page</a></p>
+      </div>
+    </div>
+
     <div id="tplListView">
       <div class="intro">
         <h2 class="pt" role="heading" aria-level="1" tabindex="-1">Pick a <span class="grad">template</span></h2>
@@ -589,9 +620,23 @@ __SSR__
           <a class="btn small" id="histJson" href="#" download>Download JSON</a>
           <a class="btn small" id="histCsv" href="#" download>Download CSV</a>
           <button class="btn small danger-outline can-del" id="histDelete" type="button" hidden>Delete run</button>
+          <button class="btn small" id="histBaseline" type="button" title="Compare later runs of this test with this one">Set as baseline</button>
+          <button class="btn small" id="histSaveTpl" type="button" hidden title="Keep this run's target and load settings as a template">Save as template</button>
           <button class="btn small primary-sm" id="histReuse" type="button" title="Fill the Test form with this run's target and load settings">Use these settings</button>
         </div>
         <dl class="hist-meta" id="histMeta"></dl>
+        <div class="cmp" id="histCompare" hidden>
+          <h3>Compare with another run</h3>
+          <p class="note" id="cmpHint"></p>
+          <div class="cmp-form">
+            <label for="cmpWith">Compare with<select id="cmpWith"></select></label>
+            <label for="cmpLat">p95 and p99 may be slower by <span class="hint">% (optional)</span><input id="cmpLat" type="number" min="0" step="1" placeholder="15"></label>
+            <label for="cmpErr">Error rate may rise by <span class="hint">points (optional)</span><input id="cmpErr" type="number" min="0" step="0.1" placeholder="1"></label>
+            <label for="cmpThr">Throughput may fall by <span class="hint">% (optional)</span><input id="cmpThr" type="number" min="0" step="1" placeholder="10"></label>
+            <button class="btn small primary-sm" id="cmpGo" type="button">Compare</button>
+          </div>
+          <div id="cmpOut" aria-live="polite"></div>
+        </div>
         <p class="muted" id="histNoSeries" hidden>Charts were not recorded for this run (it was saved by an older version).</p>
         <div id="histBody"></div>
       </div>
@@ -688,6 +733,46 @@ __SSR__
     <div class="dlg-actions">
       <button type="button" class="btn ghost" id="pwCancel">Cancel</button>
       <button type="submit" class="btn primary-sm" id="pwOk">Save password</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="saveTplDlg" class="dlg" aria-labelledby="stTitle">
+  <form id="stForm" novalidate>
+    <h2 id="stTitle">Save as template</h2>
+    <p class="note" id="stNote">Keeps this whole setup: the target, headers, body, load settings and pass/fail targets. Credentials in it are stored encrypted and are only visible to you.</p>
+    <label for="stName">Name
+      <input id="stName" type="text" maxlength="120" autocomplete="off" spellcheck="false">
+    </label>
+    <label for="stDesc">Description <span class="hint">optional</span>
+      <textarea id="stDesc" rows="3" maxlength="500" spellcheck="true"></textarea>
+    </label>
+    <label class="toggle-row" id="stUpdateRow" hidden><input id="stUpdate" type="checkbox"><span id="stUpdateText">Update the saved template instead of making a new one</span></label>
+    <p class="form-error" id="stErr" role="alert" hidden></p>
+    <div class="dlg-actions">
+      <button type="button" class="btn ghost" id="stCancel">Cancel</button>
+      <button type="submit" class="btn primary-sm" id="stOk">Save template</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="importDlg" class="dlg dlg-wide" aria-labelledby="impTitle">
+  <form id="impForm" novalidate>
+    <h2 id="impTitle">Import</h2>
+    <p class="note">Paste a <strong>curl</strong> command (in your browser: Network tab, right-click a request, Copy as cURL), or the contents of a <strong>HAR</strong> file, a <strong>Postman</strong> collection or an <strong>OpenAPI / Swagger</strong> document. Nothing is sent: BLASTA only reads it.</p>
+    <textarea id="impText" rows="7" spellcheck="false" placeholder="curl 'https://api.example.com/v1/items' -H 'accept: application/json'"></textarea>
+    <div class="imp-row">
+      <label class="btn small" for="impFile">Choose a file&hellip;</label>
+      <input id="impFile" type="file" accept=".json,.har,.yaml,.yml,.txt,application/json" hidden>
+      <button type="button" class="btn small primary-sm" id="impRead">Read</button>
+      <span class="muted" id="impFormat"></span>
+    </div>
+    <p class="form-error" id="impErr" role="alert" hidden></p>
+    <div id="impList" class="imp-list" hidden></div>
+    <div class="dlg-actions">
+      <button type="button" class="btn ghost" id="impClose">Close</button>
+      <button type="button" class="btn small" id="impSaveAll" hidden>Save all as templates</button>
+      <button type="button" class="btn primary-sm" id="impUse" hidden>Use this request</button>
     </div>
   </form>
 </dialog>

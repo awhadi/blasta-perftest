@@ -53,6 +53,8 @@ const tplSource = `<!doctype html>
 <tr><td>Your account: email address, name, role, an optional photo, and your password as a salted hash (never the password itself)</td><td>To let you sign in</td><td>Until the account is deleted</td></tr>
 <tr><td>Sign-in sessions: a random token (kept hashed), when it was used, the network address and the browser</td><td>To keep you signed in, and to show and end your sessions</td><td>Until it expires (at most {{.SessionDays}} days) or you sign out</td></tr>
 <tr><td>Your test history: the address tested, the test settings and the results (not headers or request bodies)</td><td>So you can review and compare your tests</td><td>Until you delete it or your account</td></tr>
+<tr><td>Templates you save: the test setups (target, headers, body, load settings), kept encrypted</td><td>So you can run them again</td><td>Until you delete them or your account</td></tr>
+<tr><td>Notification settings: whether to email you, and any Slack, Teams or webhook addresses you add (kept encrypted)</td><td>To tell you when your tests finish</td><td>Until you remove them or delete your account</td></tr>
 {{if .Guest}}<tr><td>Free-trial use by visitors: a random id, the number of tests, and the network address per day</td><td>To apply the free-trial limits and stop abuse</td><td>About 3 days</td></tr>{{end}}
 <tr><td>Network addresses of requests</td><td>To limit sign-in attempts and abuse, and in the server's log with the page, time and result of each request</td><td>Briefly in memory; the log as the operator keeps it</td></tr>
 </tbody>

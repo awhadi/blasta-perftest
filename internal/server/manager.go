@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -44,6 +45,8 @@ type RunView struct {
 	// Plan is how the run was configured: the non-sensitive load settings and
 	// SLO. Headers, bodies and credentials are never stored.
 	Plan *RunPlan `json:"plan,omitempty"`
+	// Baseline marks the run its owner compares later runs of the same test against.
+	Baseline bool `json:"baseline,omitempty"`
 }
 
 // RunPlan is the load profile a run used, kept so History can show it and judge
@@ -116,6 +119,8 @@ type Manager struct {
 	subs  map[string]map[chan collector.Snapshot]struct{}
 	log   *slog.Logger
 	hist  *history // nil when persistence is off
+	// onFinish, if set, hears about every run that ends (notifications use it).
+	onFinish func(RunView)
 	// newRecorder builds the per-run resource recorder; tests replace it.
 	newRecorder func() *sysstat.Recorder
 }
@@ -164,6 +169,71 @@ func (m *Manager) persist(v RunView) {
 	if err := m.hist.save(v); err != nil {
 		m.log.Warn("could not save run history", "runId", v.ID, "err", err)
 	}
+}
+
+// timeSuffix is the " · 10:15 AM" that manual runs carry in their name, so runs can be told apart
+// in the history. It is not part of what the test is.
+var timeSuffix = regexp.MustCompile(`\s·\s\d{1,2}:\d{2}(\s?[AaPp][Mm])?$`)
+
+// sameTest says whether two runs are runs of one test: the same protocol, target and name (not
+// counting the time of day a manual run is named with).
+func sameTest(a, b RunView) bool {
+	return a.Owner == b.Owner && a.Executor == b.Executor && a.Target == b.Target &&
+		timeSuffix.ReplaceAllString(a.JobName, "") == timeSuffix.ReplaceAllString(b.JobName, "")
+}
+
+// SetBaseline marks a finished run as the baseline for its test (or takes the mark away). A test is
+// the same job name, protocol and target; only one run of it is the baseline at a time.
+func (m *Manager) SetBaseline(runID string, on bool) error {
+	m.mu.RLock()
+	run, ok := m.runs[runID]
+	var peers []*Run
+	for _, r := range m.runs {
+		peers = append(peers, r)
+	}
+	m.mu.RUnlock()
+	if !ok {
+		return fmt.Errorf("run %s not found", runID)
+	}
+	run.mu.Lock()
+	if run.State == "running" {
+		run.mu.Unlock()
+		return errors.New("wait for the run to finish before using it as a baseline")
+	}
+	run.Baseline = on
+	v := run.RunView
+	run.mu.Unlock()
+	m.persist(v)
+	if !on {
+		return nil
+	}
+	for _, p := range peers {
+		if p == run {
+			continue
+		}
+		p.mu.Lock()
+		same := p.Baseline && sameTest(p.RunView, v)
+		if same {
+			p.Baseline = false
+		}
+		pv := p.RunView
+		p.mu.Unlock()
+		if same {
+			m.persist(pv)
+		}
+	}
+	return nil
+}
+
+// SetOnFinish registers what happens when a run ends.
+func (m *Manager) SetOnFinish(f func(RunView)) { m.onFinish = f }
+
+// DB is the database that holds history (and people's saved templates), or nil without one.
+func (m *Manager) DB() *db.DB {
+	if m.hist == nil {
+		return nil
+	}
+	return m.hist.db
 }
 
 func NewManager(log *slog.Logger) *Manager {
@@ -485,6 +555,9 @@ func (m *Manager) finish(run *Run, aborted bool, reason string) {
 	run.mu.Lock()
 	run.State, run.Reason, run.EndedAt, run.Summary = final.State, final.Reason, final.EndedAt, final.Summary
 	run.mu.Unlock()
+	if m.onFinish != nil {
+		go m.onFinish(final)
+	}
 	m.log.Info("run finished", "runId", run.ID, "total", final.Summary.Total,
 		"errors", final.Summary.Errors, "avgRps", int64(final.Summary.AvgRPS))
 	m.closeSubs(run.ID)

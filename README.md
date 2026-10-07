@@ -13,7 +13,10 @@ in the page when you are signed in, and in `blasta version`).
 - **Test anything common:** websites and APIs, databases, caches, queues, identity
   providers (OIDC/SAML), LDAP, mail servers, REST/SOAP; with SLO pass/fail gates.
 - **Live results and history:** streaming charts, the CPU/RAM the test itself used,
-  and every past run to reopen, compare and download.
+  and every past run to reopen, download and compare with a baseline.
+- **Your own templates:** save a setup (credentials stored encrypted), run it again later,
+  export it as a job file; import from curl, HAR, Postman or OpenAPI; get told by email,
+  Slack, Teams or a webhook when a test finishes. See [docs/WORKFLOW.md](docs/WORKFLOW.md).
 - **Teams:** accounts with registration, single sign-on (OpenID Connect), email
   confirmation, one-time sign-in codes, password reset, bot protection, and a free
   trial for visitors. Everyone's history is private to them.
@@ -42,6 +45,7 @@ make build
 |---|---|
 | [CHANGELOG.md](CHANGELOG.md) | what changed in each version |
 | [docs/AUTH.md](docs/AUTH.md) | accounts, registration, SSO, email, bot protection, the database, security notes |
+| [docs/WORKFLOW.md](docs/WORKFLOW.md) | saved templates, import, notifications, baselines and CI gates |
 | [docs/PRIVACY.md](docs/PRIVACY.md) | cookies, consent, the privacy page and people's data rights (admin settings) |
 | [docs/ANALYTICS.md](docs/ANALYTICS.md) | counting visits with Google Analytics, Plausible, Matomo and others (admin setting) |
 | [docs/PROXY.md](docs/PROXY.md) | reverse proxies (Pangolin, Traefik, nginx) and running under a path |
@@ -246,6 +250,9 @@ means for a single-instance tool are in [docs/KUBERNETES.md](docs/KUBERNETES.md)
 blasta serve [flags]      start the web UI
 blasta run <job.json>     run a job headlessly (job SLO or --max-error-rate/--max-p95/--max-p99: exit 2 on a miss; --time-scale for dry runs)
 scripts/run-plan.sh <preset> ...   run a template's enterprise plan in order
+blasta run <job.json> --save-report base.json            save a run's summary as a baseline
+blasta run <job.json> --baseline base.json --max-latency-regression 15   fail (exit 2) if p95/p99 are >15% slower
+blasta import <file|->    make a job from a curl command, HAR, Postman or OpenAPI file (--list, --index, --out)
 blasta check <job.json>   validate a job
 blasta presets            list built-in presets
 blasta preset show <id>   print a preset as JSON

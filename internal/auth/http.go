@@ -129,7 +129,7 @@ func publicPath(p string) bool {
 	}
 	// The template catalogue is read-only and the same for everyone: visitors may browse it
 	// (using a job is a different matter, and needs an account).
-	return strings.HasPrefix(p, "/api/auth/oidc/") || p == "/api/presets" || strings.HasPrefix(p, "/api/presets/")
+	return strings.HasPrefix(p, "/api/auth/oidc/") || p == "/api/presets" || strings.HasPrefix(p, "/api/presets/") || p == "/api/import"
 }
 
 // Gate authenticates an API request. It returns the request to serve (carrying

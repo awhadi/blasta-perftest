@@ -21,9 +21,11 @@ import (
 	"github.com/awhadi/blasta-perftest/internal/auth"
 	"github.com/awhadi/blasta-perftest/internal/bootstrap"
 	"github.com/awhadi/blasta-perftest/internal/collector"
+	"github.com/awhadi/blasta-perftest/internal/compare"
 	"github.com/awhadi/blasta-perftest/internal/config"
 	"github.com/awhadi/blasta-perftest/internal/db"
 	"github.com/awhadi/blasta-perftest/internal/engine"
+	"github.com/awhadi/blasta-perftest/internal/notify"
 	"github.com/awhadi/blasta-perftest/internal/server"
 	"github.com/awhadi/blasta-perftest/internal/settings"
 	"github.com/awhadi/blasta-perftest/internal/ui"
@@ -64,6 +66,8 @@ func run() error {
 		return cmdPresets(os.Args[2:])
 	case "preset":
 		return cmdPreset(os.Args[2:])
+	case "import":
+		return cmdImport(os.Args[2:])
 	case "help", "-h", "--help":
 		usage()
 		return nil
@@ -88,11 +92,12 @@ func usage() {
 
 Usage:
   blasta serve [flags]       start the web UI
-  blasta run <job.json>      run a job headlessly
+  blasta run <job.json>      run a job headlessly (--save-report / --baseline compare with an earlier run)
   blasta check <job.json>    validate a job
   blasta presets             list built-in job presets
   blasta preset show <id>    print a preset as JSON
   blasta preset new <id>     generate runnable job files from a preset
+  blasta import <file|->     make a job from a curl command, HAR, Postman or OpenAPI file
 
 Preset flags:
   --url URL     value for the "url" variable
@@ -135,6 +140,7 @@ func cmdServe(args []string, log *slog.Logger) error {
 		"basePath", os.Getenv("BLASTA_BASE_PATH"), "trustedProxies", os.Getenv("BLASTA_TRUSTED_PROXIES"),
 		"registration", os.Getenv("BLASTA_REGISTRATION"), "guest", os.Getenv("BLASTA_GUEST"))
 	log.Debug("debug logging is on: every request is logged (method, path, status, time, client address); no bodies, headers, cookies or query strings")
+	notify.AllowPrivate = envBool("BLASTA_ALLOW_PRIVATE_WEBHOOKS", false)
 	var d *db.DB
 	if *dataDir != "" || *dbURL != "" {
 		var err error
@@ -288,7 +294,16 @@ func cmdRun(args []string, log *slog.Logger) error {
 	maxP99 := fs.Duration("max-p99", 0, "fail (exit 2) if p99 latency exceeds this, e.g. 1s; 0 = off")
 	timeScale := fs.Float64("time-scale", 1, "multiply the job's duration and ramp (0.1 = ten times shorter): dry-run a long plan quickly")
 	ignoreSLO := fs.Bool("ignore-slo", false, "ignore the slo block in the job file (flags still apply)")
+	saveTo := fs.String("save-report", "", "write the run's summary (JSON) to this file, to use as a baseline later")
+	baseline := fs.String("baseline", "", "compare the run with a summary saved earlier by --save-report")
+	maxLat := fs.Float64("max-latency-regression", -1, "with --baseline: fail (exit 2) if p95 or p99 is more than this percent slower; -1 = off")
+	maxErrUp := fs.Float64("max-error-increase", -1, "with --baseline: fail if the error rate rose by more than this many percentage points; -1 = off")
+	maxThru := fs.Float64("max-throughput-drop", -1, "with --baseline: fail if requests per second fell by more than this percent; -1 = off")
 	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	limits := compare.Limits{LatencyPct: *maxLat, ErrorPoints: *maxErrUp, ThroughputPct: *maxThru}
+	if err := baselineFlagsOK(*baseline, limits); err != nil {
 		return err
 	}
 	rest := fs.Args()
@@ -359,7 +374,21 @@ finished:
 		slo = job.SLO
 	}
 	errLimit, p95Limit, p99Limit := effectiveThresholds(slo, *maxErr, *maxP95, *maxP99)
-	if fails := checkThresholds(summary, errLimit, p95Limit, p99Limit); len(fails) > 0 {
+	fails := checkThresholds(summary, errLimit, p95Limit, p99Limit)
+	if *saveTo != "" {
+		if err := saveReport(*saveTo, summary); err != nil {
+			return fmt.Errorf("could not save the summary: %w", err)
+		}
+		fmt.Fprintf(os.Stderr, "summary saved to %s\n", *saveTo)
+	}
+	if *baseline != "" {
+		regress, err := checkBaseline(*baseline, summary, limits)
+		if err != nil {
+			return err
+		}
+		fails = append(fails, regress...)
+	}
+	if len(fails) > 0 {
 		return &thresholdError{failures: fails}
 	}
 	if errLimit >= 0 || p95Limit > 0 || p99Limit > 0 {

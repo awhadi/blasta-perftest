@@ -18,6 +18,28 @@ import (
 
 // siteWithSettings is the whole site (pages, headers, API) with sign-in and saved settings.
 func siteWithSettings(t *testing.T) *httptest.Server {
+	srv, _ := siteWithDB(t)
+	return srv
+}
+
+// dbRows runs a query that returns one text column and gives the values.
+func dbRows(d *db.DB, q string) []string {
+	rows, err := d.Query(q)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var s string
+		if rows.Scan(&s) == nil {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+func siteWithDB(t *testing.T) (*httptest.Server, *db.DB) {
 	t.Helper()
 	bootstrap.Register()
 	d, _ := db.OpenMemory()
@@ -31,9 +53,13 @@ func siteWithSettings(t *testing.T) *httptest.Server {
 		t.Fatal(err)
 	}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	srv := httptest.NewServer(NewServer("127.0.0.1:0", NewManager(log), ui.Assets(), log, WithAuth(svc)).http.Handler)
+	mgr := NewManager(log)
+	if err := mgr.EnableHistory(d, "", "", nil); err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(NewServer("127.0.0.1:0", mgr, ui.Assets(), log, WithAuth(svc)).http.Handler)
 	t.Cleanup(srv.Close)
-	return srv
+	return srv, d
 }
 
 type visitor struct {

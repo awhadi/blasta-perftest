@@ -248,6 +248,7 @@ function go(hash) {
 }
 
 function route() {
+  syncMineUI();
   const parts = routeStr().replace(/^#\/?/, '').split('/');
   const seg = parts[0].split('?')[0];
   let view = ['reset', 'confirm', 'confirm-email'].includes(seg) ? 'login' : VIEWS.includes(seg) ? seg : 'test';   // emailed links open on the sign-in page
@@ -283,7 +284,9 @@ function route() {
   if (view === 'templates' && !parts[1]) document.title = 'Load Testing Templates: Websites, APIs, Databases | BLASTA';
   if (view === 'templates') {
     document.querySelectorAll('.tpl-guest-note').forEach((n) => { n.hidden = !guestMode; });
-    if (parts[1]) openTemplate(decodeURIComponent(parts[1])); else showTemplateList();
+    const mine = !parts[1] && !!me && /[?&]mine\b/.test(routeStr());
+    syncTplTabs(mine);
+    if (parts[1]) openTemplate(decodeURIComponent(parts[1])); else if (mine) showMyTemplates(); else showTemplateList();
   }
   // Move focus to the new page's heading so keyboard and screen-reader users land in context.
   const focusHeading = () => { const h = document.querySelector('#view-' + view + ' h1, #view-' + view + ' h2.pt'); if (h && lastNav) h.focus({ preventScroll: true }); };
@@ -766,6 +769,7 @@ function render(s, o) {
   o = o || {};
   const sfx = o.sfx || '';              // '' = the live results, 'H' = a saved run in History
   const el = (n) => $(n + sfx);
+  if (!sfx) $('runAgain').hidden = !!s.running;        // a finished test can be run again
   const slo = 'slo' in o ? o.slo : activeSLO;
   const p = s.latency.percentiles || {};
   const errRate = s.total ? (s.errors / s.total) * 100 : 0;
@@ -1009,7 +1013,7 @@ async function loadRuns() {
       const res = s.resources;
       return '<tr class="runrow" tabindex="0" role="link" data-id="' + esc(r.id) + '" aria-label="Open run ' + esc(r.jobName) + '">' +
         '<td title="' + esc(new Date(r.startedAt).toLocaleString()) + '">' + ago(r.startedAt) + '</td>' +
-        '<td class="jobcell" title="' + esc(r.jobName) + '">' + esc(r.jobName) + '</td>' +
+        '<td class="jobcell" title="' + esc(r.jobName) + '">' + esc(r.jobName) + (r.baseline ? ' <span class="tag gate" title="The run later runs of this test are compared with">baseline</span>' : '') + '</td>' +
         '<td class="target c-target" title="' + esc(r.target || '') + '">' + esc(r.target || '') + '</td>' +
         '<td class="num c-req">' + fmtInt(s.total) + '</td><td class="num c-rps">' + (s.avgRps || 0).toFixed(1) + '</td>' +
         '<td class="num c-p95">' + fmtLat(p95) + '</td><td class="num c-err">' + fmtInt(s.errors) + '</td>' +
@@ -1121,6 +1125,7 @@ async function showRunDetail(id) {
       { sfx: 'H', slo: plan && plan.slo, rps: ser.map((p) => p.rps), p95: ser.map((p) => p.p95) });
   }
   if (s.resources) paintFinalResources(s.resources, 'H'); else $('resBlockH').hidden = true;
+  setupCompare(run);
 }
 
 // Fill the Test form with a past run's target and load settings. Headers and
@@ -1303,6 +1308,7 @@ function renderTemplateList() {
 }
 
 async function showTemplateList() {
+  $('myTplView').hidden = true;
   $('tplListView').hidden = false;
   $('tplDetailView').hidden = true;
   renderTemplateList();   // shows loading skeletons until the catalogue arrives
@@ -1336,6 +1342,7 @@ function wireTemplateSearch() {
 /* ---- Template detail -------------------------------------------------- */
 
 async function openTemplate(id) {
+  $('myTplView').hidden = true;
   $('tplListView').hidden = true;
   $('tplDetailView').hidden = false;
   await tplReady;
@@ -1747,7 +1754,9 @@ function showBanner() {
     ? '<span class="tag ' + esc(loadedFrom.safety) + '">' + esc(loadedFrom.safety) + '</span> ' : '') +
     (loadedFrom.gate ? '<span class="tag gate">SLO</span>' : '');
   $('tplBannerNotes').textContent = loadedFrom.notes;
-  $('tplChange').href = 'templates/' + encodeURIComponent(loadedFrom.id);
+  $('tplChange').href = loadedFrom.mine ? 'templates?mine' : 'templates/' + encodeURIComponent(loadedFrom.id);
+  $('tplEdit').hidden = !!loadedFrom.mine;       // built-in templates have details to fill in; yours are already filled
+  $('tplSave').hidden = !loadedFrom.mine;
 }
 wireTemplateSearch();
 
@@ -2478,8 +2487,10 @@ async function loadAccount() {
     '</div></div>' +
     '<div class="settings-subcard account-card"><h3>Your data</h3><p class="modal-subtitle">See what is held about you, or remove it. <a href="privacy">Privacy and cookies</a></p>' +
     '<div class="modal-form-actions"><a class="btn small" href="api/me/export" download="blasta-my-data.json">Download my data</a>' +
-    (authCfg && authCfg.selfDelete ? '<button type="button" class="btn danger inline" id="acDelete">Delete my account</button>' : '') + '</div></div></div>';
+    (authCfg && authCfg.selfDelete ? '<button type="button" class="btn danger inline" id="acDelete">Delete my account</button>' : '') + '</div></div>' +
+    '<div class="settings-subcard account-card" id="acNotify"></div></div>';
   paintAvatar($('acAvatar'), me);
+  renderNotifyCard();
   if ($('acDelete')) $('acDelete').onclick = () => {
     $('delPasswordRow').hidden = !me.hasPassword;
     $('delConfirmRow').hidden = me.hasPassword;
@@ -3066,6 +3077,402 @@ function syncRegistrationLinks() {
   const closed = !!(authCfg && authCfg.registration === 'closed' && !authCfg.needsSetup);
   document.querySelectorAll('a[href="login?register"]').forEach((a) => { a.hidden = closed; });
 }
+
+/* ---- My templates, import, notifications and baselines -------------------------------- */
+
+const JSON_HEADERS = { 'Content-Type': 'application/json' };
+// Manual runs are named with the time of day; that is not part of what the test is.
+const testName = (n) => String(n || '').replace(/\s\u00b7\s\d{1,2}:\d{2}(\s?[AaPp][Mm])?$/, '');
+const sameTest = (a, b) => a.executor === b.executor && a.target === b.target && testName(a.jobName) === testName(b.jobName);
+const SECRET_HEADER = /authorization|cookie|token|secret|key|password|passwd|auth|session|signature|credential/i;
+
+/* My templates: setups people save to run again. Private to them; credentials are stored encrypted. */
+
+let myTpl = { list: [], max: 100 };
+
+async function loadMyTemplates() {
+  if (!me) { myTpl = { list: [], max: 100 }; return; }
+  try { const r = await api('/my-templates'); myTpl = { list: r.templates || [], max: r.max || 100 }; } catch (e) { myTpl.list = []; }
+  $('myCount').textContent = myTpl.list.length || '';
+}
+
+function syncMineUI() {
+  $('tplTabs').hidden = !me;
+  $('saveTpl').hidden = !me;
+  $('histSaveTpl').hidden = !me;
+}
+
+function syncTplTabs(mine) {
+  syncMineUI();
+  $('tabMine').classList.toggle('on', mine);
+  $('tabBuiltin').classList.toggle('on', !mine);
+  if (me) loadMyTemplates();
+}
+
+async function showMyTemplates() {
+  $('tplListView').hidden = true;
+  $('tplDetailView').hidden = true;
+  $('myTplView').hidden = false;
+  document.title = 'Your templates | BLASTA';
+  await loadMyTemplates();
+  renderMyTemplates();
+}
+
+function mineCard(t) {
+  return '<div class="tcard mine" data-id="' + esc(t.id) + '">' +
+    '<div class="tcard-head"><span class="ticon">' + catIcon('Generic') + '</span><h3>' + esc(t.name) + '</h3></div>' +
+    '<div><span class="tag">' + esc(t.executor || 'http') + '</span></div>' +
+    (t.description ? '<p class="tsum">' + esc(t.description) + '</p>' : '') +
+    (t.summary ? '<div class="tstack">' + esc(t.summary) + '</div>' : '') +
+    '<div class="mine-meta muted">Saved ' + esc(ago(t.updatedAt)) + '</div>' +
+    '<div class="mine-actions">' +
+    '<button type="button" class="btn small primary-sm" data-act="use">Use</button>' +
+    '<button type="button" class="btn small" data-act="edit">Rename</button>' +
+    '<button type="button" class="btn small" data-act="dup">Duplicate</button>' +
+    '<a class="btn small" href="api/my-templates/' + encodeURIComponent(t.id) + '/export" download>Export</a>' +
+    '<button type="button" class="btn danger inline small" data-act="del">Delete</button></div></div>';
+}
+
+function renderMyTemplates() {
+  const L = myTpl.list;
+  $('myCount2').textContent = L.length + ' of ' + myTpl.max + ' saved';
+  $('myEmpty').hidden = L.length > 0;
+  $('myGrid').innerHTML = L.map(mineCard).join('');
+}
+
+async function useMyTemplate(id) {
+  let t;
+  try { t = await api('/my-templates/' + encodeURIComponent(id)); } catch (e) { toast(e.message, 'error'); return; }
+  usePresetJob({ jobId: t.id, name: t.name, notes: t.description || '', safety: 'read', job: t.job });
+  loadedFrom = { id: t.id, title: 'My templates', job: t.name, notes: t.description || '', safety: 'read', gate: !!(t.job && t.job.slo), mine: true };
+  showBanner();
+  go('#/test');
+}
+
+function wireMine() {
+  $('myGrid').onclick = async (e) => {
+    const b = e.target.closest('[data-act]');
+    if (!b) return;
+    const card = b.closest('.tcard');
+    const t = myTpl.list.find((x) => x.id === card.dataset.id);
+    if (!t) return;
+    try {
+      if (b.dataset.act === 'use') await useMyTemplate(t.id);
+      else if (b.dataset.act === 'edit') openSaveDialog(t);
+      else if (b.dataset.act === 'dup') {
+        await api('/my-templates/' + encodeURIComponent(t.id) + '/duplicate', { method: 'POST' });
+        toast('Duplicated “' + t.name + '”', 'ok');
+        await loadMyTemplates(); renderMyTemplates();
+      } else if (b.dataset.act === 'del') {
+        if (!confirm('Delete “' + t.name + '”? This cannot be undone.')) return;
+        await api('/my-templates/' + encodeURIComponent(t.id), { method: 'DELETE' });
+        if (loadedFrom && loadedFrom.mine && loadedFrom.id === t.id) { loadedFrom = null; showBanner(); }
+        toast('Deleted “' + t.name + '”', 'ok');
+        await loadMyTemplates(); renderMyTemplates();
+      }
+    } catch (err) { toast(err.message, 'error'); }
+  };
+  $('myImport').onclick = () => openImport('');
+  $('saveTpl').onclick = () => openSaveDialog(null);
+  $('tplSave').onclick = updateLoadedTemplate;
+  $('dlJob').onclick = downloadJobFile;
+  $('importBtn').onclick = () => openImport('');
+  $('runAgain').onclick = () => { if (!$('start').disabled) start(); };
+
+  $('stCancel').onclick = () => $('saveTplDlg').close();
+  $('stForm').onsubmit = async (e) => {
+    e.preventDefault();
+    const err = (m) => { $('stErr').textContent = m; $('stErr').hidden = false; };
+    $('stErr').hidden = true;
+    const name = $('stName').value.trim();
+    const description = $('stDesc').value.trim();
+    if (!name) { err('Give the template a name.'); return; }
+    $('stOk').disabled = true;
+    try {
+      if (stEdit) {
+        await api('/my-templates/' + encodeURIComponent(stEdit.id), { method: 'PUT', headers: JSON_HEADERS, body: JSON.stringify({ name, description }) });
+        if (loadedFrom && loadedFrom.mine && loadedFrom.id === stEdit.id) { loadedFrom.job = name; loadedFrom.notes = description; showBanner(); }
+        toast('Template updated', 'ok');
+      } else {
+        const problem = validate();
+        if (problem) { $('saveTplDlg').close(); showFormError(problem[0], problem[1]); return; }
+        const job = buildJob();
+        const update = $('stUpdate').checked && loadedFrom && loadedFrom.mine;
+        const t = await api(update ? '/my-templates/' + encodeURIComponent(loadedFrom.id) : '/my-templates', {
+          method: update ? 'PUT' : 'POST', headers: JSON_HEADERS, body: JSON.stringify({ name, description, job }) });
+        loadedFrom = { id: t.id, title: 'My templates', job: t.name, notes: t.description || '', safety: 'read', gate: !!job.slo, mine: true };
+        showBanner();
+        toast('Saved “' + t.name + '” to My templates', 'ok');
+      }
+      $('saveTplDlg').close();
+      await loadMyTemplates();
+      if (!$('myTplView').hidden) renderMyTemplates();
+    } catch (ex) { err(ex.message); } finally { $('stOk').disabled = false; }
+  };
+}
+
+let stEdit = null;
+function openSaveDialog(edit) {
+  stEdit = edit || null;
+  $('stTitle').textContent = edit ? 'Edit template' : 'Save as template';
+  $('stNote').hidden = !!edit;
+  $('stName').value = edit ? edit.name : (loadedFrom && loadedFrom.mine ? loadedFrom.job : 'Test of ' + manualTestHost());
+  $('stDesc').value = edit ? (edit.description || '') : (loadedFrom && loadedFrom.mine ? loadedFrom.notes : '');
+  const canUpdate = !edit && loadedFrom && loadedFrom.mine;
+  $('stUpdateRow').hidden = !canUpdate;
+  $('stUpdate').checked = false;
+  if (canUpdate) $('stUpdateText').textContent = 'Update “' + loadedFrom.job + '” instead of making a new one';
+  $('stErr').hidden = true;
+  $('stOk').textContent = edit ? 'Save' : 'Save template';
+  $('saveTplDlg').showModal();
+  $('stName').select();
+}
+
+// The banner's "Save changes": put what is in the form into the template it came from.
+async function updateLoadedTemplate() {
+  if (!loadedFrom || !loadedFrom.mine) return;
+  const problem = validate();
+  showFormError(problem && problem[0], problem && problem[1]);
+  if (problem) return;
+  try {
+    await api('/my-templates/' + encodeURIComponent(loadedFrom.id), { method: 'PUT', headers: JSON_HEADERS,
+      body: JSON.stringify({ name: loadedFrom.job, description: loadedFrom.notes, job: buildJob() }) });
+    toast('Saved the changes to “' + loadedFrom.job + '”', 'ok');
+    loadMyTemplates();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+// A job file for the command line (blasta run). Values of credential-like headers are left empty.
+function downloadJobFile() {
+  const problem = validate();
+  showFormError(problem && problem[0], problem && problem[1]);
+  if (problem) return;
+  const job = buildJob();
+  job.headers = Object.fromEntries(Object.entries(job.headers || {}).map(([k, v]) => [k, SECRET_HEADER.test(k) ? '' : v]));
+  const blob = new Blob([JSON.stringify(job, null, 2) + '\n'], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'blasta-' + manualTestHost().replace(/[^a-z0-9.-]+/gi, '-') + '.json';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  toast('Downloaded a job file. Credentials were left out: add them as ${ENV} references.', 'ok');
+}
+
+/* Import: a curl command, a HAR file, a Postman collection or an OpenAPI document. */
+
+let impResult = null;
+
+function asJobFile(text) {
+  try {
+    const j = JSON.parse(text);
+    if (j && typeof j === 'object' && !Array.isArray(j) && j.executor && j.target && !j.log && !j.openapi && !j.swagger && !j.info) return j;
+  } catch (e) { /* not JSON */ }
+  return null;
+}
+
+function openImport(text) {
+  impResult = null;
+  $('impText').value = text || '';
+  $('impErr').hidden = true;
+  $('impList').hidden = true;
+  $('impUse').hidden = $('impSaveAll').hidden = true;
+  $('impFormat').textContent = '';
+  $('importDlg').showModal();
+  if (text) readImport();
+  else $('impText').focus();
+}
+
+async function readImport() {
+  const text = $('impText').value.trim();
+  const fail = (m) => { $('impErr').textContent = m; $('impErr').hidden = false; $('impList').hidden = true; $('impUse').hidden = $('impSaveAll').hidden = true; };
+  $('impErr').hidden = true;
+  if (!text) { fail('Paste something to read, or choose a file.'); return; }
+  const job = asJobFile(text);
+  if (job) {
+    impResult = { format: 'job file', requests: [{ name: job.name || 'Imported job', method: job.method || 'GET', url: (job.target && job.target.url) || '', notes: ['A BLASTA job file: its load settings come with it.'], _job: job }] };
+  } else {
+    try { impResult = await api('/import', { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ text }) }); } catch (e) { fail(e.message); return; }
+  }
+  const rs = impResult.requests || [];
+  $('impFormat').textContent = impResult.format + ': ' + rs.length + (rs.length === 1 ? ' request' : ' requests') +
+    (impResult.skipped ? ' (' + impResult.skipped + ' images, scripts and similar left out)' : '');
+  $('impList').innerHTML = rs.map((r, i) =>
+    '<label class="imp-item"><input type="radio" name="impPick" value="' + i + '"' + (i === 0 ? ' checked' : '') + '>' +
+    '<span><strong>' + esc(r.method) + '</strong> ' + esc(r.name) + '<small class="mono">' + esc(r.url) + '</small>' +
+    (r.notes || []).map((n) => '<small class="imp-note">' + esc(n) + '</small>').join('') + '</span></label>').join('') +
+    (impResult.warnings || []).map((w) => '<p class="note">' + esc(w) + '</p>').join('');
+  $('impList').hidden = false;
+  $('impUse').hidden = false;
+  $('impSaveAll').hidden = !me || rs.length < 1;
+  $('impSaveAll').textContent = rs.length > 1 ? 'Save all ' + rs.length + ' as templates' : 'Save as a template';
+}
+
+const importedJob = (r) => r._job || { executor: 'http', method: r.method, target: { url: r.url }, headers: r.headers || {}, body: r.body || '' };
+
+function wireImport() {
+  $('impRead').onclick = readImport;
+  $('impClose').onclick = () => $('importDlg').close();
+  $('impFile').onchange = () => {
+    const f = $('impFile').files[0];
+    if (!f) return;
+    if (f.size > 4 * 1024 * 1024) { $('impErr').textContent = 'That file is too large to import.'; $('impErr').hidden = false; return; }
+    const rd = new FileReader();
+    rd.onload = () => { $('impText').value = String(rd.result || ''); readImport(); };
+    rd.readAsText(f);
+    $('impFile').value = '';
+  };
+  $('impUse').onclick = () => {
+    const i = parseInt((document.querySelector('input[name=impPick]:checked') || {}).value, 10);
+    const r = impResult && impResult.requests[i];
+    if (!r) return;
+    $('importDlg').close();
+    usePresetJob({ jobId: 'import', name: r.name, notes: '', safety: 'read', job: importedJob(r) });
+    loadedFrom = null;
+    showBanner();
+    go('#/test');
+  };
+  $('impSaveAll').onclick = async () => {
+    if (!impResult) return;
+    $('impSaveAll').disabled = true;
+    let saved = 0, last = '';
+    for (const r of impResult.requests) {
+      try {
+        await api('/my-templates', { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ name: r.name.slice(0, 120), description: (r.notes || []).join(' ').slice(0, 500), job: importedJob(r) }) });
+        saved++;
+      } catch (e) { last = e.message; if (e.status === 409) break; }
+    }
+    $('impSaveAll').disabled = false;
+    if (!saved) { $('impErr').textContent = last || 'Nothing could be saved.'; $('impErr').hidden = false; return; }
+    $('importDlg').close();
+    toast('Saved ' + saved + (saved === 1 ? ' template' : ' templates') + (last ? ' (some could not be saved: ' + last + ')' : ''), 'ok');
+    go('#/templates?mine');
+  };
+}
+
+/* Notifications: hear about finished tests by email, Slack, Teams or a webhook. */
+
+async function renderNotifyCard() {
+  const box = $('acNotify');
+  if (!box) return;
+  let n;
+  try { n = await api('/me/notifications'); } catch (e) { box.hidden = true; return; }
+  const cleared = {};
+  const hookField = (id, label, h, ph, help) =>
+    '<label for="' + id + '">' + label + '<input id="' + id + '" type="text" autocomplete="off" spellcheck="false" placeholder="' +
+    esc(h.set ? 'Saved (' + h.host + '). Type a new address to replace it.' : ph) + '">' +
+    '<span class="help">' + help + (h.set ? ' <button type="button" class="link-btn" data-clear="' + id + '">Remove the saved address</button>' : '') + '</span></label>';
+  box.innerHTML = '<h3>Notifications</h3><p class="modal-subtitle">Hear about your tests without watching them.</p>' +
+    '<form id="acNotifyForm" class="modal-form">' +
+    toggle('nEmail', 'Email me when a test finishes', n.email && n.emailAvailable, n.emailAvailable ? '' : 'Email is not set up on this site, so this is unavailable.') +
+    sel('nOn', 'Tell me', n.on, [['problems', 'Only when something needs attention'], ['always', 'Every time a test finishes']],
+      'Something needs attention when a pass/fail target is missed, 1% or more of requests fail (with no target), or the run does not complete.') +
+    hookField('nSlack', 'Slack webhook address', n.slack, 'https://hooks.slack.com/services/…', 'Create an incoming webhook in Slack (it also works with Mattermost). Treat the address like a password.') +
+    hookField('nTeams', 'Microsoft Teams webhook address', n.teams, 'https://….webhook.office.com/…', 'Use a Teams Workflows webhook (“Post to a channel when a webhook request is received”).') +
+    hookField('nHook', 'Any webhook address', n.webhook, 'https://example.com/hooks/blasta', 'BLASTA sends a JSON message with the headline numbers and a link.') +
+    '<p class="set-result" id="r-acNotify" role="status" hidden></p>' +
+    '<div class="modal-form-actions"><button type="submit" class="btn primary-sm">Save</button>' +
+    '<button type="button" class="btn small" id="nTest">Send a test</button></div>' +
+    (n.last && n.last.text ? '<p class="help">Last delivery ' + esc(ago(n.last.at)) + ': ' + esc(n.last.text) + '</p>' : '') + '</form>';
+  if (!n.emailAvailable) $('nEmail').disabled = true;
+  const say = (m, ok) => { const o = $('r-acNotify'); o.hidden = false; o.className = 'set-result ' + (ok ? 'ok' : 'bad'); o.textContent = m; };
+  box.querySelectorAll('[data-clear]').forEach((b) => { b.onclick = () => { cleared[b.dataset.clear] = true; $(b.dataset.clear).value = ''; $(b.dataset.clear).placeholder = 'Will be removed when you save'; b.remove(); }; });
+  const val = (id) => (cleared[id] ? '' : $(id).value.trim() || undefined);
+  $('acNotifyForm').onsubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await api('/me/notifications', { method: 'PUT', headers: JSON_HEADERS, body: JSON.stringify({
+        email: $('nEmail').checked, on: $('nOn').value, slack: val('nSlack'), teams: val('nTeams'), webhook: val('nHook') }) });
+      toast('Notification settings saved', 'ok');
+      renderNotifyCard();
+    } catch (err) { say(err.message, false); }
+  };
+  $('nTest').onclick = async () => {
+    say('Sending…', true);
+    try {
+      const r = await api('/me/notifications/test', { method: 'POST' });
+      const bad = r.results.filter((x) => !x.ok);
+      say(r.results.map((x) => x.channel + (x.ok ? ': sent' : ': failed (' + x.error + ')')).join(' · '), !bad.length);
+    } catch (err) { say(err.message, false); }
+  };
+}
+
+/* Baselines and comparing two runs of the same test. */
+
+function fmtMetric(m, v) {
+  if (m.unit === 'ms') return v >= 1000 ? (v / 1000).toFixed(2) + ' s' : v.toFixed(1) + ' ms';
+  if (m.unit === 'rps') return v.toFixed(1) + '/s';
+  if (m.unit === 'percent') return v.toFixed(2) + '%';
+  return fmtInt(v);
+}
+
+function renderCompare(r) {
+  const res = r.result;
+  const head = '<table class="cmp-table"><thead><tr><th>Measure</th><th>Baseline</th><th>This run</th><th>Change</th><th></th></tr></thead><tbody>';
+  const rows = res.metrics.map((m) => {
+    const ch = m.base !== 0 ? (m.deltaPct > 0 ? '+' : '') + m.deltaPct.toFixed(1) + '%' : (m.delta !== 0 ? 'new' : '-');
+    return '<tr><td>' + esc(m.name) + '</td><td class="num">' + fmtMetric(m, m.base) + '</td><td class="num">' + fmtMetric(m, m.now) + '</td>' +
+      '<td class="num">' + ch + '</td><td><span class="cmp-chip ' + esc(m.verdict) + '">' + (m.verdict === 'same' ? 'about the same' : esc(m.verdict)) + '</span></td></tr>';
+  }).join('');
+  let verdict = '';
+  if (res.judged) {
+    verdict = res.passed
+      ? '<p class="set-result ok">Within the limits you set.</p>'
+      : '<div class="set-result bad"><strong>Outside the limits you set:</strong><ul>' + res.regressions.map((x) => '<li>' + esc(x) + '</li>').join('') + '</ul></div>';
+  }
+  const notes = (res.notes || []).map((n) => '<p class="note">' + esc(n) + '</p>').join('');
+  return verdict + head + rows + '</tbody></table>' + notes;
+}
+
+async function runCompare(run) {
+  const to = $('cmpWith').value;
+  if (!to) return;
+  const q = new URLSearchParams({ to });
+  [['latency', 'cmpLat'], ['errors', 'cmpErr'], ['throughput', 'cmpThr']].forEach(([k, id]) => { if ($(id).value !== '') q.set(k, $(id).value); });
+  $('cmpOut').innerHTML = '<p class="muted">Comparing…</p>';
+  try { $('cmpOut').innerHTML = renderCompare(await api('/runs/' + encodeURIComponent(run.id) + '/compare?' + q)); }
+  catch (e) { $('cmpOut').innerHTML = '<p class="form-error">' + esc(e.message) + '</p>'; }
+}
+
+async function setupCompare(run) {
+  const done = run.state !== 'running';
+  const bb = $('histBaseline');
+  bb.hidden = !done || guestMode || !me && !!authCfg;
+  bb.textContent = run.baseline ? 'Remove baseline' : 'Set as baseline';
+  bb.onclick = async () => {
+    try {
+      const r = await api('/runs/' + encodeURIComponent(run.id) + '/baseline', { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ baseline: !run.baseline }) });
+      toast(r.baseline ? 'This run is now the baseline for “' + run.jobName + '”' : 'Baseline removed', 'ok');
+      loadRuns();
+      showRunDetail(run.id);
+    } catch (e) { toast(e.message, 'error'); }
+  };
+  $('histSaveTpl').onclick = () => { reuseRun(run); openSaveDialog(null); };
+  const box = $('histCompare');
+  box.hidden = true;
+  $('cmpOut').innerHTML = '';
+  if (!done) return;
+  let runs = [];
+  try { runs = (await api('/runs')).runs || []; } catch (e) { return; }
+  const same = runs.filter((r) => r.id !== run.id && r.state !== 'running' && sameTest(r, run))
+    .sort((a, b) => (b.baseline ? 1 : 0) - (a.baseline ? 1 : 0) || new Date(b.startedAt) - new Date(a.startedAt));
+  if (!same.length) return;
+  $('cmpWith').innerHTML = same.map((r) => {
+    const s = r.summary || {}, p95 = s.latency && s.latency.percentiles ? s.latency.percentiles.p95 : null;
+    return '<option value="' + esc(r.id) + '">' + (r.baseline ? '★ baseline · ' : '') + esc(new Date(r.startedAt).toLocaleString()) + ' · ' +
+      (s.avgRps || 0).toFixed(1) + '/s · p95 ' + fmtLat(p95) + '</option>';
+  }).join('');
+  $('cmpHint').textContent = same[0].baseline && !run.baseline
+    ? 'Compared with the baseline you set for this test. Add limits to turn it into a pass or fail.'
+    : 'Pick an earlier run of the same test. Add limits to turn it into a pass or fail.';
+  $('cmpGo').onclick = () => runCompare(run);
+  box.hidden = false;
+  if (same[0].baseline && !run.baseline) runCompare(run);
+}
+
+wireMine();
+wireImport();
 
 /* ---- Start ---------------------------------------------------------------- */
 

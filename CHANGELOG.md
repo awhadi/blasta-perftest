@@ -7,6 +7,35 @@ feature the middle one, a breaking change the first. The current version is the
 `Version` constant in `internal/version/version.go`; it is shown bottom right in the
 page for signed-in people, by `blasta version`, and in `/api/health`.
 
+## [2.10.0] - 2026-10-07
+
+### Added
+- **My templates**: save the whole setup of a test (target, headers, body, load settings, pass/fail
+  targets) and run it again later, from **Templates > My templates**. Private to each person; the
+  setup is stored encrypted with the site's key, so credentials in it are protected like the SMTP
+  password. Rename, duplicate, delete, export as a job file (credential-like header values are left
+  out), up to 100 each. Included in "Download my data" and removed with the account.
+- **Import** from a curl command (browsers' "Copy as cURL"), a HAR file, a Postman collection, an
+  OpenAPI / Swagger document (JSON or YAML) or a BLASTA job file: pick a request to fill the Test form
+  with, or save them all as templates. Also `blasta import <file>`.
+- **Notifications**: be told when your tests finish by email, Slack, Microsoft Teams or any webhook,
+  every time or only when something needs attention, with a "send a test" button. Webhook addresses
+  are stored encrypted and private-network addresses are refused (`BLASTA_ALLOW_PRIVATE_WEBHOOKS`).
+- **Baselines and comparing runs**: mark a run as the baseline for its test; later runs are compared
+  with it automatically, or compare any two runs, with limits that turn it into a pass or fail
+  (p95/p99 slower by N%, error rate up by N points, throughput down by N%).
+- **CI gates**: `blasta run --save-report` and `--baseline` with `--max-latency-regression`,
+  `--max-error-increase` and `--max-throughput-drop` (exit status 2 on a miss).
+- Small additions: **Run again** on the live results, **Download job file** on the Test page,
+  **Save as template** from a past run, a "baseline" tag in the run list.
+- See [docs/WORKFLOW.md](docs/WORKFLOW.md).
+
+### Changed
+- The database schema moves to version 7 (two new tables). A copy of the database from before is
+  not needed: the step only adds tables.
+- A curl import with a JSON body and no `Content-Type` is sent as `application/json`.
+- New dependency: `gopkg.in/yaml.v3` (for OpenAPI documents written as YAML).
+
 ## [2.9.0] - 2026-10-05
 
 ### Added

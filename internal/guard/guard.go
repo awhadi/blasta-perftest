@@ -144,6 +144,10 @@ func hostAllowed(host string, allowlist []string) bool {
 	return false
 }
 
+// BlockedIP reports whether an address is on a private or otherwise internal network
+// (loopback, link-local, private ranges, carrier-grade NAT, unique-local).
+func BlockedIP(ip net.IP) bool { return isBlockedIP(ip) }
+
 func isBlockedIP(ip net.IP) bool {
 	if ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() ||
 		ip.IsInterfaceLocalMulticast() || ip.IsUnspecified() || ip.IsPrivate() {

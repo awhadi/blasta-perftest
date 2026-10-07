@@ -25,9 +25,11 @@ func (a *API) handleExportMe(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Disposition", `attachment; filename="blasta-my-data.json"`)
 	writeJSON(w, 200, map[string]any{
-		"exportedAt": time.Now().UTC(),
-		"account":    a.auth.ExportAccount(u.ID),
-		"runs":       runs,
+		"exportedAt":    time.Now().UTC(),
+		"account":       a.auth.ExportAccount(u.ID),
+		"runs":          runs,
+		"templates":     a.exportTemplates(u.ID),
+		"notifications": a.exportNotifications(u.ID),
 	})
 }
 

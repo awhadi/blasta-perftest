@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/awhadi/blasta-perftest/internal/auth"
@@ -28,6 +29,8 @@ type API struct {
 	// basePath is a fixed path prefix BLASTA is mounted under ("/blasta"), for a
 	// reverse proxy that does not strip it. Empty: none configured.
 	basePath string
+	// runBase remembers the address each run was started from, for the link in a notification.
+	runBase sync.Map
 }
 
 // WithBasePath serves BLASTA under a path prefix such as "/blasta" as well as at
@@ -81,6 +84,7 @@ func NewAPI(mgr *Manager, log *slog.Logger, opts ...Option) *API {
 	a.routes()
 	if a.auth != nil {
 		a.auth.Routes(a.mux)
+		mgr.SetOnFinish(a.notifyRun)
 	}
 	return a
 }
@@ -166,6 +170,17 @@ func (a *API) routes() {
 	a.mux.HandleFunc("GET /api/presets", a.handleListPresets)
 	a.mux.HandleFunc("GET /api/presets/{id}", a.handleGetPreset)
 	a.mux.HandleFunc("POST /api/presets/{id}/render", a.handleRenderPreset)
+	a.mux.HandleFunc("GET /api/me/notifications", a.handleGetNotifications)
+	a.mux.HandleFunc("PUT /api/me/notifications", a.handlePutNotifications)
+	a.mux.HandleFunc("POST /api/me/notifications/test", a.handleTestNotifications)
+	a.mux.HandleFunc("POST /api/import", a.handleImport)
+	a.mux.HandleFunc("GET /api/my-templates", a.handleListMyTemplates)
+	a.mux.HandleFunc("POST /api/my-templates", a.handleCreateMyTemplate)
+	a.mux.HandleFunc("GET /api/my-templates/{id}", a.handleGetMyTemplate)
+	a.mux.HandleFunc("PUT /api/my-templates/{id}", a.handleUpdateMyTemplate)
+	a.mux.HandleFunc("DELETE /api/my-templates/{id}", a.handleDeleteMyTemplate)
+	a.mux.HandleFunc("POST /api/my-templates/{id}/duplicate", a.handleDuplicateMyTemplate)
+	a.mux.HandleFunc("GET /api/my-templates/{id}/export", a.handleExportMyTemplate)
 	a.mux.HandleFunc("GET /api/me/export", a.handleExportMe)
 	a.mux.HandleFunc("DELETE /api/me", a.handleDeleteMe)
 	a.mux.HandleFunc("GET /api/jobs", a.handleListJobs)
@@ -176,6 +191,8 @@ func (a *API) routes() {
 	a.mux.HandleFunc("GET /api/runs", a.handleListRuns)
 	a.mux.HandleFunc("DELETE /api/runs", a.handleClearRuns)
 	a.mux.HandleFunc("GET /api/runs/{id}", a.handleGetRun)
+	a.mux.HandleFunc("POST /api/runs/{id}/baseline", a.handleSetBaseline)
+	a.mux.HandleFunc("GET /api/runs/{id}/compare", a.handleCompare)
 	a.mux.HandleFunc("DELETE /api/runs/{id}", a.handleDeleteRun)
 	a.mux.HandleFunc("POST /api/runs/{id}/stop", a.handleStop)
 	a.mux.HandleFunc("GET /api/runs/{id}/metrics", a.handleMetrics)
@@ -298,6 +315,9 @@ func (a *API) handleStart(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeErr(w, 400, err.Error())
 		return
+	}
+	if a.auth != nil {
+		a.runBase.Store(run.ID, a.siteBase(r)) // where to link to from a notification
 	}
 	writeJSON(w, 202, run.view())
 }

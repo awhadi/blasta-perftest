@@ -94,6 +94,26 @@ var migrations = []string{
 		expires_at BIGINT NOT NULL,
 		attempts INTEGER NOT NULL DEFAULT 0
 	);`,
+
+	// 7: people's saved templates (the configuration is kept sealed) and their notification
+	// settings (sealed too: they hold webhook addresses).
+	`CREATE TABLE user_templates (
+		id VARCHAR(64) PRIMARY KEY,
+		owner VARCHAR(64) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		name VARCHAR(190) NOT NULL,
+		description VARCHAR(500) NOT NULL DEFAULT '',
+		executor VARCHAR(16) NOT NULL DEFAULT '',
+		summary VARCHAR(255) NOT NULL DEFAULT '',
+		data {{BIG}} NOT NULL,
+		created_at BIGINT NOT NULL,
+		updated_at BIGINT NOT NULL
+	);
+	CREATE INDEX user_templates_owner ON user_templates(owner, updated_at);
+	CREATE TABLE user_prefs (
+		user_id VARCHAR(64) PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+		data {{BIG}} NOT NULL,
+		updated_at BIGINT NOT NULL
+	);`,
 }
 
 func (d *DB) bigText() string {
