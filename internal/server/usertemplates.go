@@ -105,7 +105,7 @@ func (a *API) templatesReady(w http.ResponseWriter, r *http.Request) (string, *d
 	u := auth.UserFrom(r.Context())
 	d := a.mgr.DB()
 	if a.auth == nil || u == nil || d == nil {
-		writeErr(w, http.StatusUnauthorized, "sign in to save templates")
+		writeErr(w, http.StatusUnauthorized, "sign in to save favorites")
 		return "", nil, false
 	}
 	return u.ID, d, true
@@ -123,14 +123,14 @@ func rowFrom(sc interface{ Scan(...any) error }) (templateRow, error) {
 
 const templateCols = `id, name, description, executor, summary, created_at, updated_at`
 
-func (a *API) handleListMyTemplates(w http.ResponseWriter, r *http.Request) {
+func (a *API) handleListMyFavorites(w http.ResponseWriter, r *http.Request) {
 	owner, d, ok := a.templatesReady(w, r)
 	if !ok {
 		return
 	}
 	rows, err := d.Query(`SELECT `+templateCols+` FROM user_templates WHERE owner = ? ORDER BY updated_at DESC`, owner)
 	if err != nil {
-		writeErr(w, 500, "could not read your templates")
+		writeErr(w, 500, "could not read your favorites")
 		return
 	}
 	defer rows.Close()
@@ -140,7 +140,7 @@ func (a *API) handleListMyTemplates(w http.ResponseWriter, r *http.Request) {
 			out = append(out, t)
 		}
 	}
-	writeJSON(w, 200, map[string]any{"templates": out, "max": maxUserTemplates})
+	writeJSON(w, 200, map[string]any{"favorites": out, "max": maxUserTemplates})
 }
 
 // cleanBody checks a template's name, description and job, and returns the job normalised and
@@ -149,7 +149,7 @@ func cleanBody(in templateBody, needJob bool) (string, string, *config.Job, erro
 	name := strings.TrimSpace(in.Name)
 	desc := strings.TrimSpace(in.Description)
 	if name == "" {
-		return "", "", nil, errors.New("give the template a name")
+		return "", "", nil, errors.New("give the favorite a name")
 	}
 	if len([]rune(name)) > maxTemplateNameLen {
 		return "", "", nil, errors.New("the name is too long")
@@ -193,7 +193,7 @@ func (a *API) openJob(sealed string) (json.RawMessage, error) {
 	return json.RawMessage(plain), nil
 }
 
-func (a *API) handleCreateMyTemplate(w http.ResponseWriter, r *http.Request) {
+func (a *API) handleCreateMyFavorite(w http.ResponseWriter, r *http.Request) {
 	owner, d, ok := a.templatesReady(w, r)
 	if !ok {
 		return
@@ -212,19 +212,19 @@ func (a *API) handleCreateMyTemplate(w http.ResponseWriter, r *http.Request) {
 	var n int
 	_ = d.QueryRow(`SELECT COUNT(*) FROM user_templates WHERE owner = ?`, owner).Scan(&n)
 	if n >= maxUserTemplates {
-		writeErr(w, 409, "you have saved the most templates allowed; delete one first")
+		writeErr(w, 409, "you have saved the most favorites allowed; delete one first")
 		return
 	}
 	sealed, err := a.sealJob(*job)
 	if err != nil {
-		writeErr(w, 503, "templates cannot be saved on this site: "+err.Error())
+		writeErr(w, 503, "favorites cannot be saved on this site: "+err.Error())
 		return
 	}
 	now := time.Now().UTC()
 	t := templateRow{ID: newTemplateID(), Name: name, Description: desc, Executor: job.Executor, Summary: templateSummary(*job), CreatedAt: now, UpdatedAt: now}
 	if _, err := d.Exec(`INSERT INTO user_templates (id, owner, name, description, executor, summary, data, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?)`,
 		t.ID, owner, t.Name, t.Description, t.Executor, t.Summary, sealed, now.UnixMilli(), now.UnixMilli()); err != nil {
-		writeErr(w, 500, "could not save the template")
+		writeErr(w, 500, "could not save the favorite")
 		return
 	}
 	writeJSON(w, 201, t)
@@ -242,27 +242,27 @@ func (a *API) ownTemplate(w http.ResponseWriter, r *http.Request) (string, *db.D
 	err := d.QueryRow(`SELECT `+templateCols+`, data FROM user_templates WHERE id = ? AND owner = ?`, r.PathValue("id"), owner).
 		Scan(&t.ID, &t.Name, &t.Description, &t.Executor, &t.Summary, &c, &u, &sealed)
 	if errors.Is(err, sql.ErrNoRows) || err != nil {
-		writeErr(w, 404, "template not found")
+		writeErr(w, 404, "favorite not found")
 		return "", nil, templateRow{}, "", false
 	}
 	t.CreatedAt, t.UpdatedAt = time.UnixMilli(c).UTC(), time.UnixMilli(u).UTC()
 	return owner, d, t, sealed, true
 }
 
-func (a *API) handleGetMyTemplate(w http.ResponseWriter, r *http.Request) {
+func (a *API) handleGetMyFavorite(w http.ResponseWriter, r *http.Request) {
 	_, _, t, sealed, ok := a.ownTemplate(w, r)
 	if !ok {
 		return
 	}
 	job, err := a.openJob(sealed)
 	if err != nil {
-		writeErr(w, 500, "this template cannot be read (the site's key may have changed)")
+		writeErr(w, 500, "this favorite cannot be read (the site's key may have changed)")
 		return
 	}
 	writeJSON(w, 200, templateFull{templateRow: t, Job: job})
 }
 
-func (a *API) handleUpdateMyTemplate(w http.ResponseWriter, r *http.Request) {
+func (a *API) handleUpdateMyFavorite(w http.ResponseWriter, r *http.Request) {
 	owner, d, t, sealed, ok := a.ownTemplate(w, r)
 	if !ok {
 		return
@@ -281,32 +281,32 @@ func (a *API) handleUpdateMyTemplate(w http.ResponseWriter, r *http.Request) {
 	t.Name, t.Description, t.UpdatedAt = name, desc, time.Now().UTC()
 	if job != nil {
 		if sealed, err = a.sealJob(*job); err != nil {
-			writeErr(w, 503, "templates cannot be saved on this site: "+err.Error())
+			writeErr(w, 503, "favorites cannot be saved on this site: "+err.Error())
 			return
 		}
 		t.Executor, t.Summary = job.Executor, templateSummary(*job)
 	}
 	if _, err := d.Exec(`UPDATE user_templates SET name = ?, description = ?, executor = ?, summary = ?, data = ?, updated_at = ? WHERE id = ? AND owner = ?`,
 		t.Name, t.Description, t.Executor, t.Summary, sealed, t.UpdatedAt.UnixMilli(), t.ID, owner); err != nil {
-		writeErr(w, 500, "could not save the template")
+		writeErr(w, 500, "could not save the favorite")
 		return
 	}
 	writeJSON(w, 200, t)
 }
 
-func (a *API) handleDeleteMyTemplate(w http.ResponseWriter, r *http.Request) {
+func (a *API) handleDeleteMyFavorite(w http.ResponseWriter, r *http.Request) {
 	owner, d, t, _, ok := a.ownTemplate(w, r)
 	if !ok {
 		return
 	}
 	if _, err := d.Exec(`DELETE FROM user_templates WHERE id = ? AND owner = ?`, t.ID, owner); err != nil {
-		writeErr(w, 500, "could not delete the template")
+		writeErr(w, 500, "could not delete the favorite")
 		return
 	}
 	writeJSON(w, 200, map[string]string{"status": "deleted"})
 }
 
-func (a *API) handleDuplicateMyTemplate(w http.ResponseWriter, r *http.Request) {
+func (a *API) handleDuplicateMyFavorite(w http.ResponseWriter, r *http.Request) {
 	owner, d, t, sealed, ok := a.ownTemplate(w, r)
 	if !ok {
 		return
@@ -314,7 +314,7 @@ func (a *API) handleDuplicateMyTemplate(w http.ResponseWriter, r *http.Request) 
 	var n int
 	_ = d.QueryRow(`SELECT COUNT(*) FROM user_templates WHERE owner = ?`, owner).Scan(&n)
 	if n >= maxUserTemplates {
-		writeErr(w, 409, "you have saved the most templates allowed; delete one first")
+		writeErr(w, 409, "you have saved the most favorites allowed; delete one first")
 		return
 	}
 	now := time.Now().UTC()
@@ -325,7 +325,7 @@ func (a *API) handleDuplicateMyTemplate(w http.ResponseWriter, r *http.Request) 
 	t.ID, t.Name, t.CreatedAt, t.UpdatedAt = newTemplateID(), name+" (copy)", now, now
 	if _, err := d.Exec(`INSERT INTO user_templates (id, owner, name, description, executor, summary, data, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?)`,
 		t.ID, owner, t.Name, t.Description, t.Executor, t.Summary, sealed, now.UnixMilli(), now.UnixMilli()); err != nil {
-		writeErr(w, 500, "could not duplicate the template")
+		writeErr(w, 500, "could not duplicate the favorite")
 		return
 	}
 	writeJSON(w, 201, t)
@@ -333,35 +333,35 @@ func (a *API) handleDuplicateMyTemplate(w http.ResponseWriter, r *http.Request) 
 
 var nonFile = regexp.MustCompile(`[^a-zA-Z0-9._-]+`)
 
-// handleExportMyTemplate sends a template as a job file (it also runs with `blasta run`). Values of
+// handleExportMyFavorite sends a template as a job file (it also runs with `blasta run`). Values of
 // credential-like headers are left empty: a file travels, the secrets stay on the site.
-func (a *API) handleExportMyTemplate(w http.ResponseWriter, r *http.Request) {
+func (a *API) handleExportMyFavorite(w http.ResponseWriter, r *http.Request) {
 	_, _, t, sealed, ok := a.ownTemplate(w, r)
 	if !ok {
 		return
 	}
 	raw, err := a.openJob(sealed)
 	if err != nil {
-		writeErr(w, 500, "this template cannot be read")
+		writeErr(w, 500, "this favorite cannot be read")
 		return
 	}
 	job, err := config.Decode(raw)
 	if err != nil {
-		writeErr(w, 500, "this template cannot be read")
+		writeErr(w, 500, "this favorite cannot be read")
 		return
 	}
 	job = scrubbed(job)
 	job.Name, job.Description = t.Name, t.Description
 	file := strings.Trim(nonFile.ReplaceAllString(t.Name, "-"), "-")
 	if file == "" {
-		file = "template"
+		file = "job"
 	}
 	w.Header().Set("Content-Disposition", `attachment; filename="`+file+`.json"`)
 	writeJSON(w, 200, job)
 }
 
-// exportTemplates is the people's-data download: their templates, without credential values.
-func (a *API) exportTemplates(owner string) []map[string]any {
+// exportFavorites is the people's-data download: their templates, without credential values.
+func (a *API) exportFavorites(owner string) []map[string]any {
 	d := a.mgr.DB()
 	out := []map[string]any{}
 	if d == nil || a.auth == nil {

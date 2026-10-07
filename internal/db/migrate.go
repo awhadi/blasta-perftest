@@ -114,6 +114,20 @@ var migrations = []string{
 		data {{BIG}} NOT NULL,
 		updated_at BIGINT NOT NULL
 	);`,
+
+	// 8: people's own copies of built-in templates: which template, what they called it, and the
+	// settings they filled in (kept sealed).
+	`CREATE TABLE user_presets (
+		id VARCHAR(64) PRIMARY KEY,
+		owner VARCHAR(64) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		preset_id VARCHAR(64) NOT NULL,
+		name VARCHAR(190) NOT NULL,
+		description VARCHAR(500) NOT NULL DEFAULT '',
+		data {{BIG}} NOT NULL,
+		created_at BIGINT NOT NULL,
+		updated_at BIGINT NOT NULL
+	);
+	CREATE INDEX user_presets_owner ON user_presets(owner, updated_at);`,
 }
 
 func (d *DB) bigText() string {

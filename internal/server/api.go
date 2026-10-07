@@ -171,13 +171,19 @@ func (a *API) routes() {
 	a.mux.HandleFunc("GET /api/presets/{id}", a.handleGetPreset)
 	a.mux.HandleFunc("POST /api/presets/{id}/render", a.handleRenderPreset)
 	a.mux.HandleFunc("POST /api/import", a.handleImport)
-	a.mux.HandleFunc("GET /api/my-templates", a.handleListMyTemplates)
-	a.mux.HandleFunc("POST /api/my-templates", a.handleCreateMyTemplate)
-	a.mux.HandleFunc("GET /api/my-templates/{id}", a.handleGetMyTemplate)
-	a.mux.HandleFunc("PUT /api/my-templates/{id}", a.handleUpdateMyTemplate)
-	a.mux.HandleFunc("DELETE /api/my-templates/{id}", a.handleDeleteMyTemplate)
-	a.mux.HandleFunc("POST /api/my-templates/{id}/duplicate", a.handleDuplicateMyTemplate)
-	a.mux.HandleFunc("GET /api/my-templates/{id}/export", a.handleExportMyTemplate)
+	a.mux.HandleFunc("GET /api/my-templates", a.handleListMySets)
+	a.mux.HandleFunc("POST /api/my-templates", a.handleCreateMySet)
+	a.mux.HandleFunc("GET /api/my-templates/{id}", a.handleGetMySet)
+	a.mux.HandleFunc("PUT /api/my-templates/{id}", a.handleUpdateMySet)
+	a.mux.HandleFunc("DELETE /api/my-templates/{id}", a.handleDeleteMySet)
+	a.mux.HandleFunc("POST /api/my-templates/{id}/duplicate", a.handleDuplicateMySet)
+	a.mux.HandleFunc("GET /api/my-favorites", a.handleListMyFavorites)
+	a.mux.HandleFunc("POST /api/my-favorites", a.handleCreateMyFavorite)
+	a.mux.HandleFunc("GET /api/my-favorites/{id}", a.handleGetMyFavorite)
+	a.mux.HandleFunc("PUT /api/my-favorites/{id}", a.handleUpdateMyFavorite)
+	a.mux.HandleFunc("DELETE /api/my-favorites/{id}", a.handleDeleteMyFavorite)
+	a.mux.HandleFunc("POST /api/my-favorites/{id}/duplicate", a.handleDuplicateMyFavorite)
+	a.mux.HandleFunc("GET /api/my-favorites/{id}/export", a.handleExportMyFavorite)
 	a.mux.HandleFunc("GET /api/me/export", a.handleExportMe)
 	a.mux.HandleFunc("DELETE /api/me", a.handleDeleteMe)
 	a.mux.HandleFunc("GET /api/jobs", a.handleListJobs)
@@ -321,8 +327,9 @@ func (a *API) handleStart(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) handleListRuns(w http.ResponseWriter, r *http.Request) {
 	runs := []RunView{}
+	state := r.URL.Query().Get("state") // ?state=running: only what is running now (small, cheap to poll)
 	for _, v := range a.mgr.Runs() {
-		if a.may(r, v.Owner) {
+		if a.may(r, v.Owner) && (state == "" || v.State == state) {
 			runs = append(runs, v)
 		}
 	}

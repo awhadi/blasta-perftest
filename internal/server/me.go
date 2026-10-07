@@ -28,7 +28,8 @@ func (a *API) handleExportMe(w http.ResponseWriter, r *http.Request) {
 		"exportedAt": time.Now().UTC(),
 		"account":    a.auth.ExportAccount(u.ID),
 		"runs":       runs,
-		"templates":  a.exportTemplates(u.ID),
+		"favorites":  a.exportFavorites(u.ID),
+		"templates":  a.exportSets(u.ID),
 	})
 }
 

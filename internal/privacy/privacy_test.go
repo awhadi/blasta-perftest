@@ -65,7 +65,7 @@ func TestPageSaysWhatTheSiteDoes(t *testing.T) {
 			t.Errorf("page lacks %q", want)
 		}
 	}
-	for _, want := range []string{"Templates you save"} {
+	for _, want := range []string{"Favorites and templates you save"} {
 		if !strings.Contains(off, want) {
 			t.Errorf("page lacks %q", want)
 		}

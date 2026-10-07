@@ -104,3 +104,37 @@ func TestBaselinesAndComparison(t *testing.T) {
 		t.Errorf("comparing someone else's runs = %d, want 404", code)
 	}
 }
+
+func TestOnlyRunningJobsCanBeListed(t *testing.T) {
+	srv, _ := siteWithDB(t)
+	admin := newVisitor(t, srv.URL)
+	if code, _, b := admin.do("POST", "/api/auth/register", `{"email":"admin@example.test","name":"A","password":"correct horse battery"}`); code != 201 {
+		t.Fatalf("register: %d %s", code, b)
+	}
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(200) }))
+	defer target.Close()
+	_, _, jb := admin.do("POST", "/api/jobs", `{"name":"Slow","executor":"http","target":{"url":"`+target.URL+`/"},"concurrency":1,"rps":5,"duration":3000000000,"timeout":300000000,"blockPrivate":false}`)
+	job := idOf(t, jb)
+	if _, _, l := admin.do("GET", "/api/runs?state=running", ""); strings.Contains(l, `"id":"run_`) {
+		t.Errorf("nothing is running yet: %s", l)
+	}
+	code, _, rb := admin.do("POST", "/api/jobs/"+job+"/start", "")
+	if code != 202 {
+		t.Fatalf("start: %d %s", code, rb)
+	}
+	id := idOf(t, rb)
+	if _, _, l := admin.do("GET", "/api/runs?state=running", ""); !strings.Contains(l, id) {
+		t.Errorf("a running job must be listed: %s", l)
+	}
+	if _, _, l := admin.do("GET", "/api/runs?state=finished", ""); strings.Contains(l, id) {
+		t.Errorf("and not as finished: %s", l)
+	}
+	other := newVisitor(t, srv.URL)
+	if code, _, b := other.do("POST", "/api/auth/register", `{"email":"o@example.test","name":"O","password":"correct horse battery"}`); code != 201 {
+		t.Fatalf("register: %d %s", code, b)
+	}
+	if _, _, l := other.do("GET", "/api/runs?state=running", ""); strings.Contains(l, id) {
+		t.Error("someone else's running job must not be listed")
+	}
+	admin.do("POST", "/api/runs/"+id+"/stop", "")
+}

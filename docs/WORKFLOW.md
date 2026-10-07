@@ -3,13 +3,13 @@
 How to get from "I have a request" to a repeatable test, and to hearing about it without
 watching.
 
-## My templates
+## My favorites
 
-On the **Test** page, press **Save as template** to keep the whole setup: target, headers, body,
-load settings and pass/fail targets. Next time open **Templates > My templates**, press **Use**
-and then **Start**.
+On the **Test** page, press **Save as favorite** to keep the whole setup: target, headers, body,
+load settings and pass/fail targets. Next time open **Templates > My favorites** (or **My favorites** in
+your user menu), press **Use** and then **Start**.
 
-- Templates are **private** to the person who saved them. Nobody else sees them, not even an
+- Favorites are **private** to the person who saved them. Nobody else sees them, not even an
   administrator through the app.
 - The setup (which may hold an `Authorization` header or a login body) is **stored encrypted** with
   the site's key, the same protection as the SMTP password. Only the name, description, protocol and
@@ -17,19 +17,33 @@ and then **Start**.
 - **Rename**, **Duplicate** and **Delete** are on each card. **Export** gives a job file you can run
   with `blasta run`; values of credential-like headers (Authorization, Cookie, anything with token,
   key, secret or password in its name) are left empty in the file.
-- **Keeping a built-in job:** open any job under **Templates > Built-in** and press **Save a copy**.
-  BLASTA asks for the details it needs (your address, credentials), fills the Test form, and offers to
-  save it under a name of your own. Your copy stays exactly as you left it; it does not change when
-  the built-in templates do. On the Test page the banner of a built-in job also has **Save to My
-  templates**.
-- Changing a template: **Use** it, change the form, press **Save changes** in the banner (or **Save as
-  template** to make a new one).
-- Up to 100 templates each. They are included in **My account > Download my data** (without
+- Changing a favorite: **Use** it, change the form, press **Save changes** in the banner (or **Save as
+  favorite** to make a new one).
+- Up to 100 favorites each. They are included in **My account > Download my data** (without
   credential values) and are removed with the account.
+
+## My templates
+
+Your own copies of the built-in templates, with your settings (your address, ports, paths) already
+filled in. Open a built-in template under **Templates > Built-in**, fill in its settings and press
+**Add to My templates**. Next time open it from **Templates > My templates** (or your user menu): it
+opens with your settings in place, and the jobs are ready to use.
+
+- **Save settings**, **Rename** and **Remove** are in the bar at the top of an opened template of yours.
+- Credential settings are never kept (those stay environment-variable references).
+- Private to you, up to 100, included in **Download my data** and removed with the account. If a
+  built-in template is ever removed from BLASTA, your copy says so and can be removed.
+
+## Running
+
+While a test is running, a **Running** item appears next to History (with a count when there are
+several). It lists the running tests with their progress; **Watch live** opens the live view on the
+Test page and **Stop** ends the test. When nothing is running the item goes away. People see their own
+tests; an administrator sees everyone's.
 
 ## Import
 
-**Import...** on the Test page (or on My templates) reads, without sending anything:
+**Import...** on the Test page (or on My favorites) reads, without sending anything:
 
 | From | How to get it |
 |---|---|
@@ -109,5 +123,5 @@ in the repository, and refresh it when you accept a new normal.
 
 - **Run again** on the live results repeats the test with the same settings.
 - **Download job file** (Test page) saves the current form as a job file for the command line.
-- **Save as template** on a past run fills the form from it first (history keeps no headers or
+- **Save as favorite** on a past run fills the form from it first (history keeps no headers or
   bodies, so add those before saving).

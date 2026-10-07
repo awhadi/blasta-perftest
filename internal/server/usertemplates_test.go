@@ -22,12 +22,12 @@ func TestPeopleKeepTheirOwnTemplates(t *testing.T) {
 		t.Fatalf("register: %d %s", code, b)
 	}
 	anon := newVisitor(t, srv.URL)
-	if code, _, _ := anon.do("GET", "/api/my-templates", ""); code != 401 {
+	if code, _, _ := anon.do("GET", "/api/my-favorites", ""); code != 401 {
 		t.Errorf("anonymous list = %d, want 401", code)
 	}
 
 	// Save one.
-	code, _, b := pat.do("POST", "/api/my-templates", `{"name":"Orders API","description":"nightly check","job":`+tplJob+`}`)
+	code, _, b := pat.do("POST", "/api/my-favorites", `{"name":"Orders API","description":"nightly check","job":`+tplJob+`}`)
 	if code != 201 {
 		t.Fatalf("create: %d %s", code, b)
 	}
@@ -50,36 +50,36 @@ func TestPeopleKeepTheirOwnTemplates(t *testing.T) {
 	}
 
 	// The owner can list it and load it back whole, secrets included (to run it).
-	if code, _, l := pat.do("GET", "/api/my-templates", ""); code != 200 || !strings.Contains(l, "Orders API") || strings.Contains(l, "SECRETVALUE123") {
+	if code, _, l := pat.do("GET", "/api/my-favorites", ""); code != 200 || !strings.Contains(l, "Orders API") || strings.Contains(l, "SECRETVALUE123") {
 		t.Errorf("list: %d %s", code, l)
 	}
-	if code, _, g := pat.do("GET", "/api/my-templates/"+id, ""); code != 200 || !strings.Contains(g, "SECRETVALUE123") || !strings.Contains(g, "BODYSECRET789") {
+	if code, _, g := pat.do("GET", "/api/my-favorites/"+id, ""); code != 200 || !strings.Contains(g, "SECRETVALUE123") || !strings.Contains(g, "BODYSECRET789") {
 		t.Errorf("get: %d %s", code, g)
 	}
 
 	// Nobody else can see, change, copy or delete it.
-	for _, req := range [][3]string{{"GET", "/api/my-templates/" + id, ""}, {"PUT", "/api/my-templates/" + id, `{"name":"mine now"}`}, {"DELETE", "/api/my-templates/" + id, ""}, {"POST", "/api/my-templates/" + id + "/duplicate", ""}, {"GET", "/api/my-templates/" + id + "/export", ""}} {
+	for _, req := range [][3]string{{"GET", "/api/my-favorites/" + id, ""}, {"PUT", "/api/my-favorites/" + id, `{"name":"mine now"}`}, {"DELETE", "/api/my-favorites/" + id, ""}, {"POST", "/api/my-favorites/" + id + "/duplicate", ""}, {"GET", "/api/my-favorites/" + id + "/export", ""}} {
 		if code, _, _ := sam.do(req[0], req[1], req[2]); code != 404 {
 			t.Errorf("another person's %s %s = %d, want 404", req[0], req[1], code)
 		}
 	}
-	if _, _, l := sam.do("GET", "/api/my-templates", ""); strings.Contains(l, "Orders API") {
+	if _, _, l := sam.do("GET", "/api/my-favorites", ""); strings.Contains(l, "Orders API") {
 		t.Error("another person's list must not show it")
 	}
 
 	// Rename, replace the setup, duplicate.
-	if code, _, u := pat.do("PUT", "/api/my-templates/"+id, `{"name":"Orders API v2","description":"changed"}`); code != 200 || !strings.Contains(u, "Orders API v2") {
+	if code, _, u := pat.do("PUT", "/api/my-favorites/"+id, `{"name":"Orders API v2","description":"changed"}`); code != 200 || !strings.Contains(u, "Orders API v2") {
 		t.Errorf("rename: %d %s", code, u)
 	}
-	if _, _, g := pat.do("GET", "/api/my-templates/"+id, ""); !strings.Contains(g, "SECRETVALUE123") {
+	if _, _, g := pat.do("GET", "/api/my-favorites/"+id, ""); !strings.Contains(g, "SECRETVALUE123") {
 		t.Error("renaming must keep the saved setup")
 	}
-	if code, _, d := pat.do("POST", "/api/my-templates/"+id+"/duplicate", ""); code != 201 || !strings.Contains(d, "Orders API v2 (copy)") {
+	if code, _, d := pat.do("POST", "/api/my-favorites/"+id+"/duplicate", ""); code != 201 || !strings.Contains(d, "Orders API v2 (copy)") {
 		t.Errorf("duplicate: %d %s", code, d)
 	}
 
 	// An exported file carries no credential values.
-	code, hdr, ex := pat.do("GET", "/api/my-templates/"+id+"/export", "")
+	code, hdr, ex := pat.do("GET", "/api/my-favorites/"+id+"/export", "")
 	if code != 200 || !strings.Contains(hdr.Get("Content-Disposition"), ".json") {
 		t.Fatalf("export: %d", code)
 	}
@@ -98,16 +98,16 @@ func TestPeopleKeepTheirOwnTemplates(t *testing.T) {
 
 	// Bad input.
 	for name, body := range map[string]string{"no name": `{"name":"","job":` + tplJob + `}`, "no job": `{"name":"x"}`, "bad job": `{"name":"x","job":{"executor":"http"}}`, "long name": `{"name":"` + strings.Repeat("a", 200) + `","job":` + tplJob + `}`} {
-		if code, _, _ := pat.do("POST", "/api/my-templates", body); code != 400 {
+		if code, _, _ := pat.do("POST", "/api/my-favorites", body); code != 400 {
 			t.Errorf("%s = %d, want 400", name, code)
 		}
 	}
 
 	// Delete, and the account's deletion removes the rest.
-	if code, _, _ := pat.do("DELETE", "/api/my-templates/"+id, ""); code != 200 {
+	if code, _, _ := pat.do("DELETE", "/api/my-favorites/"+id, ""); code != 200 {
 		t.Errorf("delete = %d", code)
 	}
-	if code, _, _ := pat.do("GET", "/api/my-templates/"+id, ""); code != 404 {
+	if code, _, _ := pat.do("GET", "/api/my-favorites/"+id, ""); code != 404 {
 		t.Errorf("after delete = %d, want 404", code)
 	}
 	if code, _, b := pat.do("DELETE", "/api/me", `{"password":"correct horse battery"}`); code != 200 {

@@ -45,7 +45,7 @@ make build
 |---|---|
 | [CHANGELOG.md](CHANGELOG.md) | what changed in each version |
 | [docs/AUTH.md](docs/AUTH.md) | accounts, registration, SSO, email, bot protection, the database, security notes |
-| [docs/WORKFLOW.md](docs/WORKFLOW.md) | saved templates, import, notifications, baselines and CI gates |
+| [docs/WORKFLOW.md](docs/WORKFLOW.md) | favorites, your own templates, running tests, import, notifications, baselines and CI gates |
 | [docs/PRIVACY.md](docs/PRIVACY.md) | cookies, consent, the privacy page and people's data rights (admin settings) |
 | [docs/ANALYTICS.md](docs/ANALYTICS.md) | counting visits with Google Analytics, Plausible, Matomo and others (admin setting) |
 | [docs/PROXY.md](docs/PROXY.md) | reverse proxies (Pangolin, Traefik, nginx) and running under a path |

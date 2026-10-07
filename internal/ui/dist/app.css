@@ -850,3 +850,12 @@ a.chip { text-decoration: none; display: inline-flex; align-items: center; gap: 
 .mine-panel .tpl-toolbar { align-items: center; padding-bottom: 14px; margin-bottom: 16px; border-bottom: 1px solid var(--border); }
 .mine-panel .tgrid { margin: 0; }
 .mine-panel .empty { padding: 36px 16px 28px; }
+
+/* My templates bar on an opened template; Running page */
+.set-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--accent-soft); }
+.set-bar .spacer { flex: 1; }
+.set-bar .btn { margin: 0; }
+.tpl-own { margin: 12px 0 0; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.tpl-own .btn { margin: 0; }
+.run-bar { height: 6px; border-radius: 3px; background: var(--border); overflow: hidden; margin: 6px 0; }
+.run-bar span { display: block; height: 100%; background: var(--accent); transition: width .4s linear; }

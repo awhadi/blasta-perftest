@@ -7,6 +7,27 @@ feature the middle one, a breaking change the first. The current version is the
 `Version` constant in `internal/version/version.go`; it is shown bottom right in the
 page for signed-in people, by `blasta version`, and in `/api/health`.
 
+## [2.12.0] - 2026-10-07
+
+### Added
+- **My templates** are now what the name says: your own copies of built-in templates. Open a built-in
+  template, fill in its settings and press **Add to My templates**. It opens later with your settings in
+  place (Save settings, Rename and Remove are in a bar on the page). Credential settings are never kept.
+- **Running** menu item, shown only while a test is running (with a count when several are). It lists the
+  running tests with their progress, with **Watch live** and **Stop**. `GET /api/runs?state=running`
+  lists only what is running.
+
+### Changed
+- What used to be called My templates (the setups you save from the Test page, from History or from an
+  import) is now **My favorites**: "Save as favorite", "Save all as favorites", a **My favorites** tab and
+  user-menu item. Your saved setups are all still there. The API moved from `/api/my-templates` to
+  `/api/my-favorites`; `/api/my-templates` now serves the template copies.
+- "Download my data" lists both, as `favorites` and `templates`.
+
+### Removed
+- The **Save a copy** button on each job and **Save to My templates** in the Test page banner. Add the
+  whole template to My templates instead.
+
 ## [2.11.1] - 2026-10-07
 
 ### Changed

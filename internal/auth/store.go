@@ -238,7 +238,7 @@ func (s *Store) DeleteUser(id string) error {
 		}
 		// Saved templates and notification settings go with the account by cascade; the
 		// explicit deletes keep this true on a database that does not enforce foreign keys.
-		for _, q := range []string{`DELETE FROM user_templates WHERE owner = ?`, `DELETE FROM user_prefs WHERE user_id = ?`, `DELETE FROM runs WHERE owner = ?`} {
+		for _, q := range []string{`DELETE FROM user_templates WHERE owner = ?`, `DELETE FROM user_presets WHERE owner = ?`, `DELETE FROM user_prefs WHERE user_id = ?`, `DELETE FROM runs WHERE owner = ?`} {
 			if _, err = t.Exec(q, id); err != nil {
 				return err
 			}

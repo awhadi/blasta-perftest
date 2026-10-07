@@ -14,7 +14,7 @@ const BLASTA_UA = 'BLASTA' + (APP_VERSION ? '/' + APP_VERSION : '');
 // A template may bring its own agent (the crawler test sends a Googlebot one): keep it, tagged.
 const taggedAgent = (ua) => !ua ? BLASTA_UA : /blasta/i.test(ua) ? ua : ua + ' ' + BLASTA_UA;
 const isAgentHeader = (k) => String(k).trim().toLowerCase() === 'user-agent';
-const ROUTE_RE = /^(test|templates|history|login|admin|account|reset|confirm|confirm-email)(\/|$)/;
+const ROUTE_RE = /^(test|templates|history|running|login|admin|account|reset|confirm|confirm-email)(\/|$)/;
 // Addresses from before pages had paths (/#/templates/auth0, and links in emails) still work.
 if (/^#\/./.test(location.hash)) history.replaceState(null, '', toUrl(location.hash));
 const api = async (path, opts = {}) => {
@@ -243,7 +243,7 @@ function readHeaders() {
 
 // Routes: /test, /templates, /templates/<id>, /history. They use the history API, so the
 // browser's back button works and every template has an address of its own.
-const VIEWS = ['test', 'templates', 'history', 'login', 'admin', 'account'];
+const VIEWS = ['test', 'templates', 'history', 'running', 'login', 'admin', 'account'];
 function go(hash) {
   if (routeStr() === hash) route();
   else { history.pushState(null, '', toUrl(hash)); route(); }
@@ -278,6 +278,7 @@ function route() {
   if (view === 'history') {
     if (parts[1]) showRunDetail(decodeURIComponent(parts[1])); else showRunList();
   }
+  if (view === 'running') { document.title = 'Running | BLASTA'; pollRunning(); renderRunning(); }
   if (view === 'login') showLogin();
   if (view === 'account') loadAccount();
   if (view === 'admin') showAdmin(parts[1]);
@@ -286,9 +287,15 @@ function route() {
   if (view === 'templates' && !parts[1]) document.title = 'Load Testing Templates: Websites, APIs, Databases | BLASTA';
   if (view === 'templates') {
     document.querySelectorAll('.tpl-guest-note').forEach((n) => { n.hidden = !guestMode; });
-    const mine = !parts[1] && !!me && /[?&]mine\b/.test(routeStr());
-    syncTplTabs(mine);
-    if (parts[1]) openTemplate(decodeURIComponent(parts[1])); else if (mine) showMyTemplates(); else showTemplateList();
+    const tab = parts[1] || !me ? 'built' : /[?&]mine\b/.test(routeStr()) ? 'sets' : /[?&]favorites\b/.test(routeStr()) ? 'favs' : 'built';
+    syncTplTabs(tab);
+    if (parts[1]) {
+      const [pid, q] = parts[1].split('?');
+      const m = /(?:^|&)my=([^&]+)/.exec(q || '');
+      openTemplate(decodeURIComponent(pid), m ? decodeURIComponent(m[1]) : '');
+    } else if (tab === 'sets') showMySets();
+    else if (tab === 'favs') showFavorites();
+    else showTemplateList();
   }
   // Move focus to the new page's heading so keyboard and screen-reader users land in context.
   const focusHeading = () => { const h = document.querySelector('#view-' + view + ' h1, #view-' + view + ' h2.pt'); if (h && lastNav) h.focus({ preventScroll: true }); };
@@ -371,8 +378,8 @@ const fmtBytes = (n) => (n >= 1073741824 ? (n / 1073741824).toFixed(1) + ' GB' :
 // becomes unreachable or comes back.
 // Reconnect to the test that was running (or show the last result) after a
 // reload or a return visit.
-async function restoreSession() {
-  const s = loadSession();
+async function restoreSession(only) {
+  const s = only ? { runId: only } : loadSession();
   if (!s || !s.runId) return;
   let run;
   try { run = await api('/runs/' + s.runId); } catch (e) { saveSession(null); return; }   // the server forgot it
@@ -392,7 +399,7 @@ async function restoreSession() {
     $('stop').disabled = false;
     markRunning(true);
     listen(runId);
-    toast('Reconnected to your running test', 'ok');
+    if (!only) toast('Reconnected to your running test', 'ok');
   } else {
     const m = run.summary || {};
     lastSnap = Object.assign({}, m, { running: false, progressPct: 100 });
@@ -672,6 +679,7 @@ async function start() {
     $('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
     listen(runId);
     loadRuns();
+    pollRunning();
     if (guestMode) refreshGuest();
   } catch (e) {
     if (e.code === 'captcha_required') {          // the server wants the bot check first
@@ -702,6 +710,7 @@ function listen(id) {
       $('stop').disabled = true;
       markRunning(false);
       loadRuns();
+      pollRunning();
       showFinalResources(id);
       toast('Test finished', 'ok');
     }
@@ -1310,7 +1319,7 @@ function renderTemplateList() {
 }
 
 async function showTemplateList() {
-  $('myTplView').hidden = true;
+  hideMine();
   $('tplListView').hidden = false;
   $('tplDetailView').hidden = true;
   renderTemplateList();   // shows loading skeletons until the catalogue arrives
@@ -1343,8 +1352,8 @@ function wireTemplateSearch() {
 
 /* ---- Template detail -------------------------------------------------- */
 
-async function openTemplate(id) {
-  $('myTplView').hidden = true;
+async function openTemplate(id, setId) {
+  hideMine();
   $('tplListView').hidden = true;
   $('tplDetailView').hidden = false;
   await tplReady;
@@ -1361,8 +1370,29 @@ async function openTemplate(id) {
     jobFilter = 'all';
     $('jobSearch').value = '';
     buildTemplateHeader();
+    shownSet = '';
   }
+  // Your own copy of a template opens with your settings in place.
+  openedSet = null;
+  if ((setId || '') !== shownSet) { buildTemplateHeader(); shownSet = setId || ''; }
+  if (setId && me) {
+    try {
+      const r = await api('/my-templates/' + encodeURIComponent(setId));
+      if (r.template && r.template.presetId === id) {
+        openedSet = r.template;
+        Object.entries(r.values || {}).forEach(([k, v]) => { const i = settingInput(k); if (i && !i.readOnly) i.value = v; });
+      }
+    } catch (e) { toast('That template of yours was not found', 'error'); }
+  }
+  showSetBar();
   await refreshJobs();
+}
+let openedSet = null, shownSet = '';
+
+function showSetBar() {
+  $('setBar').hidden = !openedSet;
+  $('setAddRow').hidden = !!openedSet || !me || guestMode;
+  if (openedSet) $('setBarName').textContent = openedSet.name;
 }
 
 function buildTemplateHeader() {
@@ -1475,7 +1505,7 @@ function jobCard(j) {
   return '<div class="pjob"><div><div class="pjob-name">' + esc(j.name) + ' ' + tag + gate +
     '</div><div class="pjob-id">' + esc(j.jobId) + '</div></div>' +
     '<div class="pjob-actions"><button class="btn primary-sm" type="button" data-use="' + esc(j.jobId) + '">' + (guestMode ? 'Sign in to use' : 'Use this job') + '</button>' +
-    (me ? '<button class="btn small" type="button" data-save="' + esc(j.jobId) + '" title="Keep your own copy of this job under My templates, to change as you like">Save a copy</button>' : '') + '</div>' +
+    '</div>' +
     (j.notes ? '<div class="pjob-notes">' + esc(j.notes) + '</div>' : '') +
     (shown ? '<div class="pjob-target">' + esc(shown) + '</div>' : '') + '</div>';
 }
@@ -1503,12 +1533,6 @@ function renderJobList() {
       if (guestMode) { openGate('use'); return; }
       const job = renderedJobs.find((x) => x.jobId === b.dataset.use);
       if (job) useJob(job);
-    };
-  });
-  $('presetJobs').querySelectorAll('[data-save]').forEach((b) => {
-    b.onclick = () => {
-      const job = renderedJobs.find((x) => x.jobId === b.dataset.save);
-      if (job) saveJobCopy(job);
     };
   });
 }
@@ -1678,14 +1702,6 @@ async function useJob(j) {
   return true;
 }
 
-// Keep a copy of a built-in job in My templates: ask for the details it needs (your address,
-// credentials), fill the Test form like "Use this job", then offer to save it under a name of your
-// own. The copy is yours: it does not change when the built-in templates do.
-async function saveJobCopy(j) {
-  if (!me) { openGate('use'); return; }
-  if (await useJob(j)) openSaveDialog(null);
-}
-
 // Update only the target-related fields from a rendered job (address, headers,
 // body, query), leaving the load settings the user tuned untouched.
 function applyDetails(job) {
@@ -1767,15 +1783,15 @@ function showBanner() {
   $('tplBanner').hidden = !loadedFrom;
   if (!loadedFrom) return;
   const jobLabel = loadedFrom.job.startsWith(loadedFrom.title + ': ') ? loadedFrom.job.slice(loadedFrom.title.length + 2) : loadedFrom.job;
+  $('tplBannerTag').textContent = loadedFrom.mine ? 'My favorite' : 'From template';
   $('tplBannerName').textContent = loadedFrom.title + ' \u203a ' + jobLabel;
   $('tplBannerTags').innerHTML = (loadedFrom.safety !== 'read'
     ? '<span class="tag ' + esc(loadedFrom.safety) + '">' + esc(loadedFrom.safety) + '</span> ' : '') +
     (loadedFrom.gate ? '<span class="tag gate">SLO</span>' : '');
   $('tplBannerNotes').textContent = loadedFrom.notes;
-  $('tplChange').href = loadedFrom.mine ? 'templates?mine' : 'templates/' + encodeURIComponent(loadedFrom.id);
+  $('tplChange').href = loadedFrom.mine ? 'templates?favorites' : 'templates/' + encodeURIComponent(loadedFrom.id);
   $('tplEdit').hidden = !!loadedFrom.mine;       // built-in templates have details to fill in; yours are already filled
   $('tplSave').hidden = !loadedFrom.mine;
-  $('tplSaveCopy').hidden = !!loadedFrom.mine || !me;   // keep your own copy of a built-in job
 }
 wireTemplateSearch();
 
@@ -2085,6 +2101,7 @@ function paintAvatar(el, u) {
 
 function showUser() {
   paintVersion();
+  if (typeof pollRunning === 'function') pollRunning();
   $('userMenu').hidden = false;
   paintAvatar($('userAvatar'), me);
   $('userName').textContent = me.name || me.email;
@@ -3147,15 +3164,24 @@ const testName = (n) => String(n || '').replace(/\s\u00b7\s\d{1,2}:\d{2}(\s?[AaP
 const sameTest = (a, b) => a.executor === b.executor && a.target === b.target && testName(a.jobName) === testName(b.jobName);
 const SECRET_HEADER = /authorization|cookie|token|secret|key|password|passwd|auth|session|signature|credential/i;
 
-/* My templates: setups people save to run again. Private to them; credentials are stored encrypted. */
+/* My favorites: tests people save to run again. Private to them; credentials are stored encrypted.
+   My templates: their own copies of built-in templates, with their settings filled in. */
 
-let myTpl = { list: [], max: 100 };
+let favs = { list: [], max: 100 }, sets = { list: [], max: 100 };
 
-async function loadMyTemplates() {
-  if (!me) { myTpl = { list: [], max: 100 }; return; }
-  try { const r = await api('/my-templates'); myTpl = { list: r.templates || [], max: r.max || 100 }; } catch (e) { myTpl.list = []; }
-  $('myCount').textContent = myTpl.list.length || '';
+async function loadFavorites() {
+  if (!me) { favs = { list: [], max: 100 }; return; }
+  try { const r = await api('/my-favorites'); favs = { list: r.favorites || [], max: r.max || 100 }; } catch (e) { favs.list = []; }
+  $('favCount').textContent = favs.list.length || '';
 }
+
+async function loadSets() {
+  if (!me) { sets = { list: [], max: 100 }; return; }
+  try { const r = await api('/my-templates'); sets = { list: r.templates || [], max: r.max || 100 }; } catch (e) { sets.list = []; }
+  $('setCount').textContent = sets.list.length || '';
+}
+
+function hideMine() { $('setView').hidden = true; $('favView').hidden = true; }
 
 function syncMineUI() {
   $('tplTabs').hidden = !me;
@@ -3163,23 +3189,57 @@ function syncMineUI() {
   $('histSaveTpl').hidden = !me;
 }
 
-function syncTplTabs(mine) {
+function syncTplTabs(tab) {
   syncMineUI();
-  $('tabMine').classList.toggle('on', mine);
-  $('tabBuiltin').classList.toggle('on', !mine);
-  if (me) loadMyTemplates();
+  $('tabBuiltin').classList.toggle('on', tab === 'built');
+  $('tabSets').classList.toggle('on', tab === 'sets');
+  $('tabFavs').classList.toggle('on', tab === 'favs');
+  if (me) { loadFavorites(); loadSets(); }
 }
 
-async function showMyTemplates() {
+async function showMySets() {
   $('tplListView').hidden = true;
   $('tplDetailView').hidden = true;
-  $('myTplView').hidden = false;
-  document.title = 'Your templates | BLASTA';
-  await loadMyTemplates();
-  renderMyTemplates();
+  hideMine();
+  $('setView').hidden = false;
+  document.title = 'My templates | BLASTA';
+  await loadSets();
+  renderSets();
 }
 
-function mineCard(t) {
+async function showFavorites() {
+  $('tplListView').hidden = true;
+  $('tplDetailView').hidden = true;
+  hideMine();
+  $('favView').hidden = false;
+  document.title = 'My favorites | BLASTA';
+  await loadFavorites();
+  renderFavorites();
+}
+
+function setCard(t) {
+  const href = 'templates/' + encodeURIComponent(t.presetId) + '?my=' + encodeURIComponent(t.id);
+  return '<div class="tcard mine" data-id="' + esc(t.id) + '">' +
+    '<div class="tcard-head"><span class="ticon">' + catIcon(t.category) + '</span><h3>' + esc(t.name) + '</h3></div>' +
+    '<div><span class="tag">' + esc(t.category || 'Template') + '</span></div>' +
+    (t.description ? '<p class="tsum">' + esc(t.description) + '</p>' : '') +
+    '<div class="tstack">' + (t.missing ? 'The built-in template this came from is gone' : 'From ' + esc(t.title) + ' · ' + t.jobs + ' jobs') + '</div>' +
+    '<div class="mine-meta muted">Saved ' + esc(ago(t.updatedAt)) + '</div>' +
+    '<div class="mine-actions">' +
+    (t.missing ? '' : '<a class="btn small primary-sm" href="' + href + '">Open</a>') +
+    '<button type="button" class="btn small" data-act="edit">Rename</button>' +
+    '<button type="button" class="btn small" data-act="dup">Duplicate</button>' +
+    '<button type="button" class="btn danger inline small" data-act="del">Remove</button></div></div>';
+}
+
+function renderSets() {
+  const L = sets.list;
+  $('setCount2').textContent = L.length + ' of ' + sets.max + ' saved';
+  $('setEmpty').hidden = L.length > 0;
+  $('setGrid').innerHTML = L.map(setCard).join('');
+}
+
+function favCard(t) {
   return '<div class="tcard mine" data-id="' + esc(t.id) + '">' +
     '<div class="tcard-head"><span class="ticon">' + catIcon('Generic') + '</span><h3>' + esc(t.name) + '</h3></div>' +
     '<div><span class="tag">' + esc(t.executor || 'http') + '</span></div>' +
@@ -3190,53 +3250,87 @@ function mineCard(t) {
     '<button type="button" class="btn small primary-sm" data-act="use">Use</button>' +
     '<button type="button" class="btn small" data-act="edit">Rename</button>' +
     '<button type="button" class="btn small" data-act="dup">Duplicate</button>' +
-    '<a class="btn small" href="api/my-templates/' + encodeURIComponent(t.id) + '/export" download>Export</a>' +
+    '<a class="btn small" href="api/my-favorites/' + encodeURIComponent(t.id) + '/export" download>Export</a>' +
     '<button type="button" class="btn danger inline small" data-act="del">Delete</button></div></div>';
 }
 
-function renderMyTemplates() {
-  const L = myTpl.list;
-  $('myCount2').textContent = L.length + ' of ' + myTpl.max + ' saved';
-  $('myEmpty').hidden = L.length > 0;
-  $('myGrid').innerHTML = L.map(mineCard).join('');
+function renderFavorites() {
+  const L = favs.list;
+  $('favCount2').textContent = L.length + ' of ' + favs.max + ' saved';
+  $('favEmpty').hidden = L.length > 0;
+  $('favGrid').innerHTML = L.map(favCard).join('');
 }
 
-async function useMyTemplate(id) {
+async function useFavorite(id) {
   let t;
-  try { t = await api('/my-templates/' + encodeURIComponent(id)); } catch (e) { toast(e.message, 'error'); return; }
+  try { t = await api('/my-favorites/' + encodeURIComponent(id)); } catch (e) { toast(e.message, 'error'); return; }
   usePresetJob({ jobId: t.id, name: t.name, notes: t.description || '', safety: 'read', job: t.job });
-  loadedFrom = { id: t.id, title: 'My templates', job: t.name, notes: t.description || '', safety: 'read', gate: !!(t.job && t.job.slo), mine: true };
+  loadedFrom = { id: t.id, title: 'My favorites', job: t.name, notes: t.description || '', safety: 'read', gate: !!(t.job && t.job.slo), mine: true };
   showBanner();
   go('#/test');
 }
 
 function wireMine() {
-  $('myGrid').onclick = async (e) => {
+  $('favGrid').onclick = async (e) => {
     const b = e.target.closest('[data-act]');
     if (!b) return;
-    const card = b.closest('.tcard');
-    const t = myTpl.list.find((x) => x.id === card.dataset.id);
+    const t = favs.list.find((x) => x.id === b.closest('.tcard').dataset.id);
     if (!t) return;
     try {
-      if (b.dataset.act === 'use') await useMyTemplate(t.id);
-      else if (b.dataset.act === 'edit') openSaveDialog(t);
+      if (b.dataset.act === 'use') await useFavorite(t.id);
+      else if (b.dataset.act === 'edit') openSaveDialog({ kind: 'fav', edit: t });
       else if (b.dataset.act === 'dup') {
-        await api('/my-templates/' + encodeURIComponent(t.id) + '/duplicate', { method: 'POST' });
+        await api('/my-favorites/' + encodeURIComponent(t.id) + '/duplicate', { method: 'POST' });
         toast('Duplicated “' + t.name + '”', 'ok');
-        await loadMyTemplates(); renderMyTemplates();
+        await loadFavorites(); renderFavorites();
       } else if (b.dataset.act === 'del') {
         if (!confirm('Delete “' + t.name + '”? This cannot be undone.')) return;
-        await api('/my-templates/' + encodeURIComponent(t.id), { method: 'DELETE' });
+        await api('/my-favorites/' + encodeURIComponent(t.id), { method: 'DELETE' });
         if (loadedFrom && loadedFrom.mine && loadedFrom.id === t.id) { loadedFrom = null; showBanner(); }
         toast('Deleted “' + t.name + '”', 'ok');
-        await loadMyTemplates(); renderMyTemplates();
+        await loadFavorites(); renderFavorites();
       }
     } catch (err) { toast(err.message, 'error'); }
   };
-  $('myImport').onclick = () => openImport('');
-  $('saveTpl').onclick = () => openSaveDialog(null);
-  $('tplSave').onclick = updateLoadedTemplate;
-  $('tplSaveCopy').onclick = () => openSaveDialog(null);
+  $('setGrid').onclick = async (e) => {
+    const b = e.target.closest('[data-act]');
+    if (!b) return;
+    const t = sets.list.find((x) => x.id === b.closest('.tcard').dataset.id);
+    if (!t) return;
+    try {
+      if (b.dataset.act === 'edit') openSaveDialog({ kind: 'set', edit: t });
+      else if (b.dataset.act === 'dup') {
+        await api('/my-templates/' + encodeURIComponent(t.id) + '/duplicate', { method: 'POST' });
+        toast('Duplicated “' + t.name + '”', 'ok');
+        await loadSets(); renderSets();
+      } else if (b.dataset.act === 'del') {
+        if (!confirm('Remove “' + t.name + '” from My templates? The built-in template stays.')) return;
+        await api('/my-templates/' + encodeURIComponent(t.id), { method: 'DELETE' });
+        toast('Removed “' + t.name + '”', 'ok');
+        await loadSets(); renderSets();
+      }
+    } catch (err) { toast(err.message, 'error'); }
+  };
+  $('favImport').onclick = () => openImport('');
+  $('saveTpl').onclick = () => openSaveDialog({ kind: 'fav' });
+  $('tplSave').onclick = updateLoadedFavorite;
+  $('setAdd').onclick = () => openSaveDialog({ kind: 'newset' });
+  $('setRename').onclick = () => openedSet && openSaveDialog({ kind: 'set', edit: openedSet, stay: true });
+  $('setSave').onclick = async () => {
+    if (!openedSet) return;
+    try {
+      await api('/my-templates/' + encodeURIComponent(openedSet.id), { method: 'PUT', headers: JSON_HEADERS, body: JSON.stringify({ values: presetValues() }) });
+      toast('Saved your settings in “' + openedSet.name + '”', 'ok');
+    } catch (e) { toast(e.message, 'error'); }
+  };
+  $('setRemove').onclick = async () => {
+    if (!openedSet || !confirm('Remove “' + openedSet.name + '” from My templates? The built-in template stays.')) return;
+    try {
+      await api('/my-templates/' + encodeURIComponent(openedSet.id), { method: 'DELETE' });
+      toast('Removed “' + openedSet.name + '”', 'ok');
+      go('#/templates?mine');
+    } catch (e) { toast(e.message, 'error'); }
+  };
   $('dlJob').onclick = downloadJobFile;
   $('importBtn').onclick = () => openImport('');
   $('runAgain').onclick = () => { if (!$('start').disabled) start(); };
@@ -3248,60 +3342,83 @@ function wireMine() {
     $('stErr').hidden = true;
     const name = $('stName').value.trim();
     const description = $('stDesc').value.trim();
-    if (!name) { err('Give the template a name.'); return; }
+    const kind = stMode.kind, edit = stMode.edit;
+    if (!name) { err('Give it a name.'); return; }
     $('stOk').disabled = true;
     try {
-      if (stEdit) {
-        await api('/my-templates/' + encodeURIComponent(stEdit.id), { method: 'PUT', headers: JSON_HEADERS, body: JSON.stringify({ name, description }) });
-        if (loadedFrom && loadedFrom.mine && loadedFrom.id === stEdit.id) { loadedFrom.job = name; loadedFrom.notes = description; showBanner(); }
+      if (kind === 'newset') {
+        const t = await api('/my-templates', { method: 'POST', headers: JSON_HEADERS,
+          body: JSON.stringify({ presetId: presetDef.id, name, description, values: presetValues() }) });
+        $('saveTplDlg').close();
+        toast('Added “' + t.name + '” to My templates', 'ok');
+        go('#/templates/' + encodeURIComponent(presetDef.id) + '?my=' + encodeURIComponent(t.id));
+        return;
+      }
+      if (kind === 'set') {
+        await api('/my-templates/' + encodeURIComponent(edit.id), { method: 'PUT', headers: JSON_HEADERS, body: JSON.stringify({ name, description }) });
+        if (openedSet && openedSet.id === edit.id) { openedSet.name = name; showSetBar(); }
         toast('Template updated', 'ok');
+        $('saveTplDlg').close();
+        await loadSets();
+        if (!$('setView').hidden) renderSets();
+        return;
+      }
+      if (edit) {
+        await api('/my-favorites/' + encodeURIComponent(edit.id), { method: 'PUT', headers: JSON_HEADERS, body: JSON.stringify({ name, description }) });
+        if (loadedFrom && loadedFrom.mine && loadedFrom.id === edit.id) { loadedFrom.job = name; loadedFrom.notes = description; showBanner(); }
+        toast('Favorite updated', 'ok');
       } else {
         const problem = validate();
         if (problem) { $('saveTplDlg').close(); showFormError(problem[0], problem[1]); return; }
         const job = buildJob();
         const update = $('stUpdate').checked && loadedFrom && loadedFrom.mine;
-        const t = await api(update ? '/my-templates/' + encodeURIComponent(loadedFrom.id) : '/my-templates', {
+        const t = await api(update ? '/my-favorites/' + encodeURIComponent(loadedFrom.id) : '/my-favorites', {
           method: update ? 'PUT' : 'POST', headers: JSON_HEADERS, body: JSON.stringify({ name, description, job }) });
-        loadedFrom = { id: t.id, title: 'My templates', job: t.name, notes: t.description || '', safety: 'read', gate: !!job.slo, mine: true };
+        loadedFrom = { id: t.id, title: 'My favorites', job: t.name, notes: t.description || '', safety: 'read', gate: !!job.slo, mine: true };
         showBanner();
-        toast('Saved “' + t.name + '” to My templates', 'ok');
+        toast('Saved “' + t.name + '” to My favorites', 'ok');
       }
       $('saveTplDlg').close();
-      await loadMyTemplates();
-      if (!$('myTplView').hidden) renderMyTemplates();
+      await loadFavorites();
+      if (!$('favView').hidden) renderFavorites();
     } catch (ex) { err(ex.message); } finally { $('stOk').disabled = false; }
   };
 }
 
-let stEdit = null;
-function openSaveDialog(edit) {
-  stEdit = edit || null;
-  $('stTitle').textContent = edit ? 'Edit template' : 'Save as template';
+let stMode = { kind: 'fav' };
+function openSaveDialog(mode) {
+  stMode = mode || { kind: 'fav' };
+  const { kind, edit } = stMode;
+  const fav = kind === 'fav';
+  $('stTitle').textContent = kind === 'newset' ? 'Add to My templates' : kind === 'set' ? 'Rename template' : edit ? 'Edit favorite' : 'Save as favorite';
+  $('stNote').textContent = kind === 'newset'
+    ? 'Keeps this template with the settings you filled in, so it opens ready next time. Credentials are never kept.'
+    : 'Keeps this whole setup: the target, headers, body, load settings and pass/fail targets. Credentials in it are stored encrypted and are only visible to you.';
   $('stNote').hidden = !!edit;
   // A job loaded from a built-in template is offered under its own name and notes.
-  $('stName').value = edit ? edit.name : (loadedFrom ? loadedFrom.job : 'Test of ' + manualTestHost());
-  $('stDesc').value = edit ? (edit.description || '') : (loadedFrom ? loadedFrom.notes || '' : '');
-  const canUpdate = !edit && loadedFrom && loadedFrom.mine;
+  $('stName').value = edit ? edit.name : kind === 'newset' ? presetDef.title : (loadedFrom ? loadedFrom.job : 'Test of ' + manualTestHost());
+  $('stDesc').value = edit ? (edit.description || '') : (fav && loadedFrom ? loadedFrom.notes || '' : '');
+  const canUpdate = fav && !edit && loadedFrom && loadedFrom.mine;
   $('stUpdateRow').hidden = !canUpdate;
   $('stUpdate').checked = false;
   if (canUpdate) $('stUpdateText').textContent = 'Update “' + loadedFrom.job + '” instead of making a new one';
   $('stErr').hidden = true;
-  $('stOk').textContent = edit ? 'Save' : 'Save template';
+  $('stOk').textContent = edit ? 'Save' : kind === 'newset' ? 'Add' : 'Save favorite';
   $('saveTplDlg').showModal();
   $('stName').select();
 }
 
-// The banner's "Save changes": put what is in the form into the template it came from.
-async function updateLoadedTemplate() {
+// The banner's "Save changes": put what is in the form into the favorite it came from.
+async function updateLoadedFavorite() {
   if (!loadedFrom || !loadedFrom.mine) return;
   const problem = validate();
   showFormError(problem && problem[0], problem && problem[1]);
   if (problem) return;
   try {
-    await api('/my-templates/' + encodeURIComponent(loadedFrom.id), { method: 'PUT', headers: JSON_HEADERS,
+    await api('/my-favorites/' + encodeURIComponent(loadedFrom.id), { method: 'PUT', headers: JSON_HEADERS,
       body: JSON.stringify({ name: loadedFrom.job, description: loadedFrom.notes, job: buildJob() }) });
     toast('Saved the changes to “' + loadedFrom.job + '”', 'ok');
-    loadMyTemplates();
+    loadFavorites();
   } catch (e) { toast(e.message, 'error'); }
 }
 
@@ -3369,7 +3486,7 @@ async function readImport() {
   $('impList').hidden = false;
   $('impUse').hidden = false;
   $('impSaveAll').hidden = !me || rs.length < 1;
-  $('impSaveAll').textContent = rs.length > 1 ? 'Save all ' + rs.length + ' as templates' : 'Save as a template';
+  $('impSaveAll').textContent = rs.length > 1 ? 'Save all ' + rs.length + ' as favorites' : 'Save as a favorite';
 }
 
 const importedJob = (r) => r._job || { executor: 'http', method: r.method, target: { url: r.url }, headers: r.headers || {}, body: r.body || '' };
@@ -3402,14 +3519,14 @@ function wireImport() {
     let saved = 0, last = '';
     for (const r of impResult.requests) {
       try {
-        await api('/my-templates', { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ name: r.name.slice(0, 120), description: (r.notes || []).join(' ').slice(0, 500), job: importedJob(r) }) });
+        await api('/my-favorites', { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ name: r.name.slice(0, 120), description: (r.notes || []).join(' ').slice(0, 500), job: importedJob(r) }) });
         saved++;
       } catch (e) { last = e.message; if (e.status === 409) break; }
     }
     $('impSaveAll').disabled = false;
     if (!saved) { $('impErr').textContent = last || 'Nothing could be saved.'; $('impErr').hidden = false; return; }
     $('importDlg').close();
-    toast('Saved ' + saved + (saved === 1 ? ' template' : ' templates') + (last ? ' (some could not be saved: ' + last + ')' : ''), 'ok');
+    toast('Saved ' + saved + (saved === 1 ? ' favorite' : ' favorites') + (last ? ' (some could not be saved: ' + last + ')' : ''), 'ok');
     go('#/templates?mine');
   };
 }
@@ -3464,7 +3581,7 @@ async function setupCompare(run) {
       showRunDetail(run.id);
     } catch (e) { toast(e.message, 'error'); }
   };
-  $('histSaveTpl').onclick = () => { reuseRun(run); openSaveDialog(null); };
+  $('histSaveTpl').onclick = () => { reuseRun(run); openSaveDialog({ kind: 'fav' }); };
   const box = $('histCompare');
   box.hidden = true;
   $('cmpOut').innerHTML = '';
@@ -3488,6 +3605,70 @@ async function setupCompare(run) {
 }
 
 wireMine();
+
+/* ---- Running: shown in the menu only while a test is running ------------------------------ */
+
+let runningNow = [], runningTimer = null;
+
+async function pollRunning() {
+  if (!me && authCfg) { runningNow = []; paintRunning(); return; }
+  try { runningNow = (await api('/runs?state=running')).runs || []; } catch (e) { return; }
+  paintRunning();
+}
+
+function paintRunning() {
+  const n = runningNow.length;
+  $('navRunning').hidden = n === 0 || guestMode;
+  $('runCount').textContent = n > 1 ? n : '';
+  if (!$('view-running').hidden) renderRunning();
+}
+
+function runCard(r) {
+  const secs = r.plan && r.plan.duration ? r.plan.duration / 1e9 : 0;
+  const el = Math.max(0, (Date.now() - new Date(r.startedAt).getTime()) / 1000);
+  const pct = secs ? Math.min(100, Math.round(el / secs * 100)) : 0;
+  const s = r.summary || {};
+  return '<div class="tcard run-card" data-id="' + esc(r.id) + '">' +
+    '<div class="tcard-head"><span class="ticon">' + catIcon('Generic') + '</span><h3>' + esc(testName(r.jobName)) + '</h3></div>' +
+    '<div><span class="tag">' + esc(r.executor || 'http') + '</span> <span class="state running">running</span></div>' +
+    '<div class="tstack">' + esc(r.target || '') + '</div>' +
+    '<div class="run-bar" role="progressbar" aria-valuenow="' + pct + '" aria-valuemin="0" aria-valuemax="100"><span style="width:' + pct + '%"></span></div>' +
+    '<div class="mine-meta muted">' + Math.round(el) + (secs ? ' of ' + Math.round(secs) : '') + ' s' + (s.total ? ' · ' + s.total + ' requests' : '') +
+    (r.ownerName && me && r.owner !== me.id ? ' · ' + esc(r.ownerName) : '') + '</div>' +
+    '<div class="mine-actions">' +
+    '<button type="button" class="btn small primary-sm" data-act="watch">Watch live</button>' +
+    '<button type="button" class="btn danger inline small" data-act="stop">Stop</button></div></div>';
+}
+
+function renderRunning() {
+  $('runGrid').innerHTML = runningNow.map(runCard).join('');
+  $('runEmpty').hidden = runningNow.length > 0;
+  $('runCount2').textContent = runningNow.length ? runningNow.length + ' running' : '';
+}
+
+function wireRunning() {
+  $('runGrid').onclick = async (e) => {
+    const b = e.target.closest('[data-act]');
+    if (!b) return;
+    const id = b.closest('.tcard').dataset.id;
+    try {
+      if (b.dataset.act === 'watch') {
+        saveSession({ runId: id, slo: null });
+        await restoreSession(id);
+        go('#/test');
+      } else if (!b.disabled) {
+        b.disabled = true;
+        await api('/runs/' + encodeURIComponent(id) + '/stop', { method: 'POST' });
+        toast('Stopping test…');
+        setTimeout(pollRunning, 800);
+      }
+    } catch (err) { toast(err.message, 'error'); }
+  };
+  clearInterval(runningTimer);
+  runningTimer = setInterval(() => { if (!document.hidden && (me || !authCfg)) pollRunning(); }, 4000);
+  pollRunning();
+}
+wireRunning();
 wireImport();
 
 /* ---- Start ---------------------------------------------------------------- */
