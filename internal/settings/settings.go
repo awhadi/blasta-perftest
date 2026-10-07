@@ -11,13 +11,14 @@ import (
 
 // Section names in the settings table.
 const (
-	KeyGeneral   = "general"
-	KeySSO       = "sso"
-	KeySMTP      = "smtp"
-	KeyGuest     = "guest"
-	KeyCaptcha   = "captcha"
-	KeyAnalytics = "analytics"
-	KeyPrivacy   = "privacy"
+	KeyGeneral       = "general"
+	KeySSO           = "sso"
+	KeySMTP          = "smtp"
+	KeyGuest         = "guest"
+	KeyCaptcha       = "captcha"
+	KeyAnalytics     = "analytics"
+	KeyPrivacy       = "privacy"
+	KeyNotifications = "notifications"
 )
 
 // General is how people sign up and where BLASTA is reached.
@@ -114,6 +115,26 @@ type Privacy struct {
 	// NoSelfDelete stops people deleting their own account and test history (off by default:
 	// they can, as most data protection laws expect).
 	NoSelfDelete bool `json:"noSelfDelete"`
+}
+
+// Notifications is how the site tells people that a test has finished: set once by an
+// administrator, for everyone. The webhook addresses are secrets (whoever has one can post to
+// that channel), so they are stored sealed.
+type Notifications struct {
+	Enabled     bool     `json:"enabled"`
+	On          string   `json:"on"`          // always | problems
+	EmailRunner bool     `json:"emailRunner"` // email the person who started the test
+	EmailTo     []string `json:"emailTo"`     // more people to email (a team address)
+	Slack       string   `json:"-"`
+	Teams       string   `json:"-"`
+	Webhook     string   `json:"-"`
+	// Sealed holds the three addresses, encrypted.
+	Sealed string `json:"sealed"`
+}
+
+// Any reports whether there is anywhere to send a notification.
+func (n Notifications) Any() bool {
+	return n.Enabled && (n.EmailRunner || len(n.EmailTo) > 0 || n.Slack != "" || n.Teams != "" || n.Webhook != "")
 }
 
 // Store reads and writes settings.
@@ -216,4 +237,37 @@ func (s *Store) PutCaptcha(v Captcha) error {
 		return err
 	}
 	return s.Put(KeyCaptcha, v)
+}
+
+// GetNotifications loads the notification section with its addresses opened.
+func (s *Store) GetNotifications() (Notifications, bool, error) {
+	var v Notifications
+	ok, err := s.Get(KeyNotifications, &v)
+	if err != nil || !ok {
+		return v, ok, err
+	}
+	plain, err := s.box.Open(v.Sealed)
+	if err != nil {
+		return v, true, err
+	}
+	var hooks struct{ Slack, Teams, Webhook string }
+	if plain != "" {
+		if err := json.Unmarshal([]byte(plain), &hooks); err != nil {
+			return v, true, err
+		}
+	}
+	v.Slack, v.Teams, v.Webhook = hooks.Slack, hooks.Teams, hooks.Webhook
+	return v, true, nil
+}
+
+// PutNotifications saves the notification section, sealing the webhook addresses.
+func (s *Store) PutNotifications(v Notifications) error {
+	b, err := json.Marshal(struct{ Slack, Teams, Webhook string }{v.Slack, v.Teams, v.Webhook})
+	if err != nil {
+		return err
+	}
+	if v.Sealed, err = s.box.Seal(string(b)); err != nil {
+		return err
+	}
+	return s.Put(KeyNotifications, v)
 }

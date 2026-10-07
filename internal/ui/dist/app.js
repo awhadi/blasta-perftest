@@ -106,7 +106,7 @@ function toast(msg, kind, lines) {
 
 /* ---- Short, specific messages for what a save did ---- */
 
-const SETTINGS_TITLE = { general: 'General settings', guest: 'Free trial', smtp: 'SMTP connection', sso: 'Single sign-on', captcha: 'Bot protection', analytics: 'Analytics', privacy: 'Privacy settings' };
+const SETTINGS_TITLE = { general: 'General settings', guest: 'Free trial', smtp: 'SMTP connection', sso: 'Single sign-on', captcha: 'Bot protection', analytics: 'Analytics', privacy: 'Privacy settings', notifications: 'Notifications' };
 
 // Which fields of a settings section differ from what was saved before.
 function changedKeys(before, after) {
@@ -144,6 +144,8 @@ function savedMessage(key, before, after) {
       return 'SMTP connection saved';
     case 'captcha':
       return has('enabled') ? turned('Bot protection', after.enabled) : 'Bot protection settings saved';
+    case 'notifications':
+      return ch.length === 1 && has('enabled') ? turned('Notifications', after.enabled) : 'Notification settings saved';
     case 'privacy':
       return has('mode') && ch.length === 1 ? 'Cookie consent set to \u201c' + after.mode + '\u201d' : 'Privacy settings saved';
     case 'analytics':
@@ -1472,7 +1474,8 @@ function jobCard(j) {
   const gate = j.job.slo ? '<span class="tag gate" title="Has pass/fail targets (SLO)">SLO</span>' : '';
   return '<div class="pjob"><div><div class="pjob-name">' + esc(j.name) + ' ' + tag + gate +
     '</div><div class="pjob-id">' + esc(j.jobId) + '</div></div>' +
-    '<button class="btn primary-sm" type="button" data-use="' + esc(j.jobId) + '">' + (guestMode ? 'Sign in to use' : 'Use this job') + '</button>' +
+    '<div class="pjob-actions"><button class="btn primary-sm" type="button" data-use="' + esc(j.jobId) + '">' + (guestMode ? 'Sign in to use' : 'Use this job') + '</button>' +
+    (me ? '<button class="btn small" type="button" data-save="' + esc(j.jobId) + '" title="Keep your own copy of this job under My templates, to change as you like">Save a copy</button>' : '') + '</div>' +
     (j.notes ? '<div class="pjob-notes">' + esc(j.notes) + '</div>' : '') +
     (shown ? '<div class="pjob-target">' + esc(shown) + '</div>' : '') + '</div>';
 }
@@ -1500,6 +1503,12 @@ function renderJobList() {
       if (guestMode) { openGate('use'); return; }
       const job = renderedJobs.find((x) => x.jobId === b.dataset.use);
       if (job) useJob(job);
+    };
+  });
+  $('presetJobs').querySelectorAll('[data-save]').forEach((b) => {
+    b.onclick = () => {
+      const job = renderedJobs.find((x) => x.jobId === b.dataset.save);
+      if (job) saveJobCopy(job);
     };
   });
 }
@@ -1646,7 +1655,7 @@ async function useJob(j) {
   let answers = null;
   if (d.vars.length || d.path || d.creds.length) {
     answers = await askForDetails(j, d);
-    if (!answers) return;
+    if (!answers) return false;
     Object.entries(answers.vars).forEach(([k, v]) => { const i = settingInput(k); if (i) i.value = v; });
     await refreshJobs();                       // rebuild every job with the new settings
     j = renderedJobs.find((x) => x.jobId === j.jobId) || j;
@@ -1666,6 +1675,15 @@ async function useJob(j) {
     vars: answers ? answers.vars : {}, path: answers ? answers.path : null, secrets: answers ? answers.secrets : {} };
   showBanner();
   go('#/test');
+  return true;
+}
+
+// Keep a copy of a built-in job in My templates: ask for the details it needs (your address,
+// credentials), fill the Test form like "Use this job", then offer to save it under a name of your
+// own. The copy is yours: it does not change when the built-in templates do.
+async function saveJobCopy(j) {
+  if (!me) { openGate('use'); return; }
+  if (await useJob(j)) openSaveDialog(null);
 }
 
 // Update only the target-related fields from a rendered job (address, headers,
@@ -1757,6 +1775,7 @@ function showBanner() {
   $('tplChange').href = loadedFrom.mine ? 'templates?mine' : 'templates/' + encodeURIComponent(loadedFrom.id);
   $('tplEdit').hidden = !!loadedFrom.mine;       // built-in templates have details to fill in; yours are already filled
   $('tplSave').hidden = !loadedFrom.mine;
+  $('tplSaveCopy').hidden = !!loadedFrom.mine || !me;   // keep your own copy of a built-in job
 }
 wireTemplateSearch();
 
@@ -2488,9 +2507,8 @@ async function loadAccount() {
     '<div class="settings-subcard account-card"><h3>Your data</h3><p class="modal-subtitle">See what is held about you, or remove it. <a href="privacy">Privacy and cookies</a></p>' +
     '<div class="modal-form-actions"><a class="btn small" href="api/me/export" download="blasta-my-data.json">Download my data</a>' +
     (authCfg && authCfg.selfDelete ? '<button type="button" class="btn danger inline" id="acDelete">Delete my account</button>' : '') + '</div></div>' +
-    '<div class="settings-subcard account-card" id="acNotify"></div></div>';
+    '</div>';
   paintAvatar($('acAvatar'), me);
-  renderNotifyCard();
   if ($('acDelete')) $('acDelete').onclick = () => {
     $('delPasswordRow').hidden = !me.hasPassword;
     $('delConfirmRow').hidden = me.hasPassword;
@@ -2570,7 +2588,7 @@ async function loadAccount() {
 
 /* ---- Administration: a sidebar of sections, one page each ---- */
 
-const ADMIN_SECTIONS = ['general', 'users', 'trial', 'sso', 'smtp', 'bots', 'analytics', 'privacy'];
+const ADMIN_SECTIONS = ['general', 'users', 'trial', 'sso', 'smtp', 'bots', 'analytics', 'privacy', 'notifications'];
 const num = (id) => parseInt($(id).value, 10) || 0;
 const list = (a) => (a || []).join(', ');
 const unlist = (v) => String(v || '').split(/[,\n]/).map((x) => x.trim()).filter(Boolean);
@@ -2579,7 +2597,7 @@ function showAdmin(section) {
   if (section === 'settings') section = 'general';             // the old address
   if (!ADMIN_SECTIONS.includes(section)) section = 'general';       // the Settings menu lands on General Settings
   document.querySelectorAll('.admin-side a').forEach((a) => a.classList.toggle('active', a.dataset.section === section));
-  const render = { general: renderGeneral, users: renderUsers, trial: renderTrialSettings, sso: renderSso, smtp: renderSmtp, bots: renderBots, analytics: renderAnalytics, privacy: renderPrivacy }[section];
+  const render = { general: renderGeneral, users: renderUsers, trial: renderTrialSettings, sso: renderSso, smtp: renderSmtp, bots: renderBots, analytics: renderAnalytics, privacy: renderPrivacy, notifications: renderNotifications }[section];
   render().catch((e) => { $('adminSection').innerHTML = '<p class="form-error">' + esc(e.message) + '</p>'; });
 }
 
@@ -2911,6 +2929,49 @@ async function renderPrivacy() {
   wireSection('privacy', 'f-privacy', body, renderPrivacy, p);
 }
 
+async function renderNotifications() {
+  const d = await getSettings(), n = d.notifications;
+  const cleared = {};
+  const hookField = (id, label, h, ph, help) =>
+    '<label for="' + id + '">' + label + '<input id="' + id + '" type="text" autocomplete="off" spellcheck="false" placeholder="' +
+    esc(h.set ? 'Saved (' + h.host + '). Type a new address to replace it.' : ph) + '">' +
+    '<span class="help">' + help + (h.set ? ' <button type="button" class="link-btn" data-clear="' + id + '">Remove the saved address</button>' : '') + '</span></label>';
+  $('adminSection').innerHTML = pageHead('Notifications', 'Notifications',
+    'Tell people when a test finishes. Set it up once here: nobody else has to do anything.', saveBtn('f-notify')) +
+    '<form id="f-notify" class="modal-form">' +
+    subcard('Announcements', 'Applies to every test run by anyone with an account. Visitors on the free trial are not announced.', pill(n.enabled, 'On', 'Off'),
+      toggle('n-on', 'Announce finished tests', n.enabled, 'Turn it off to stop all announcements at once. What you entered stays saved.') +
+      sel('n-when', 'Announce', n.on, [['problems', 'Only when something needs attention'], ['always', 'Every finished test']],
+        'Something needs attention when a pass/fail target is missed, 1% or more of requests fail (when the test has no error target), or the test does not complete.')) +
+    subcard('Email', 'Sent from your Email Delivery settings.', n.emailAvailable ? '' : pill(false, '', 'Email not set up'),
+      toggle('n-runner', 'Email the person who ran the test', n.emailRunner, n.emailAvailable ? 'They hear about their own tests without setting anything up.' : 'Set up Email Delivery first, then this works.') +
+      fld('n-to', 'Also email', (n.emailTo || []).join(', '), { ph: 'team@example.com, lead@example.com', hint: 'optional', help: 'Separate with commas (up to 10). These addresses hear about every announced test.' })) +
+    subcard('Chat and webhooks', 'Posted to a shared channel. Treat each address like a password: anyone who has it can post to that channel.', '',
+      hookField('n-slack', 'Slack webhook address', n.slack, 'https://hooks.slack.com/services/\u2026', 'Create an incoming webhook in Slack (it also works with Mattermost).') +
+      hookField('n-teams', 'Microsoft Teams webhook address', n.teams, 'https://\u2026.webhook.office.com/\u2026', 'Use a Teams Workflows webhook (\u201cPost to a channel when a webhook request is received\u201d).') +
+      hookField('n-hook', 'Any webhook address', n.webhook, 'https://example.com/hooks/blasta', 'BLASTA sends a JSON message with the headline numbers, who started the test and a link.') +
+      '<p class="set-result" id="r-notify" role="status" hidden></p>' +
+      '<div class="modal-form-actions"><button type="button" class="btn small" id="n-test">Send a test</button>' + resetBtn(d.saved.notifications, 'f-notify') + '</div>' +
+      (n.last && n.last.text ? '<p class="help">Last announcement ' + esc(ago(n.last.at)) + ': ' + esc(n.last.text) + '</p>' : '')) +
+    '</form>';
+  if (!n.emailAvailable) $('n-runner').disabled = true;
+  $('adminSection').querySelectorAll('[data-clear]').forEach((b) => { b.onclick = () => { cleared[b.dataset.clear] = true; $(b.dataset.clear).value = ''; $(b.dataset.clear).placeholder = 'Will be removed when you save'; b.remove(); }; });
+  const val = (id) => (cleared[id] ? '' : $(id).value.trim() || undefined);
+  const body = () => ({ enabled: $('n-on').checked, on: $('n-when').value, emailRunner: $('n-runner').checked,
+    emailTo: $('n-to').value.split(',').map((x) => x.trim()).filter(Boolean), slack: val('n-slack'), teams: val('n-teams'), webhook: val('n-hook') });
+  wireSection('notifications', 'f-notify', body, renderNotifications, n);
+  $('n-test').onclick = async () => {
+    const o = $('r-notify');
+    o.hidden = false; o.className = 'set-result'; o.textContent = 'Sending\u2026';
+    try {
+      const r = await adminCall('POST', 'settings/notifications/test', {});
+      const bad = r.results.filter((x) => !x.ok);
+      o.className = 'set-result ' + (bad.length ? 'bad' : 'ok');
+      o.textContent = r.results.map((x) => x.channel + (x.ok ? ': sent' : ': failed (' + x.error + ')')).join(' \u00b7 ');
+    } catch (err) { o.className = 'set-result bad'; o.textContent = err.message; }
+  };
+}
+
 async function renderSmtp() {
   const d = await getSettings(), m = d.smtp;
   $('adminSection').innerHTML = pageHead('Email', 'Email Delivery',
@@ -3175,6 +3236,7 @@ function wireMine() {
   $('myImport').onclick = () => openImport('');
   $('saveTpl').onclick = () => openSaveDialog(null);
   $('tplSave').onclick = updateLoadedTemplate;
+  $('tplSaveCopy').onclick = () => openSaveDialog(null);
   $('dlJob').onclick = downloadJobFile;
   $('importBtn').onclick = () => openImport('');
   $('runAgain').onclick = () => { if (!$('start').disabled) start(); };
@@ -3216,8 +3278,9 @@ function openSaveDialog(edit) {
   stEdit = edit || null;
   $('stTitle').textContent = edit ? 'Edit template' : 'Save as template';
   $('stNote').hidden = !!edit;
-  $('stName').value = edit ? edit.name : (loadedFrom && loadedFrom.mine ? loadedFrom.job : 'Test of ' + manualTestHost());
-  $('stDesc').value = edit ? (edit.description || '') : (loadedFrom && loadedFrom.mine ? loadedFrom.notes : '');
+  // A job loaded from a built-in template is offered under its own name and notes.
+  $('stName').value = edit ? edit.name : (loadedFrom ? loadedFrom.job : 'Test of ' + manualTestHost());
+  $('stDesc').value = edit ? (edit.description || '') : (loadedFrom ? loadedFrom.notes || '' : '');
   const canUpdate = !edit && loadedFrom && loadedFrom.mine;
   $('stUpdateRow').hidden = !canUpdate;
   $('stUpdate').checked = false;
@@ -3348,53 +3411,6 @@ function wireImport() {
     $('importDlg').close();
     toast('Saved ' + saved + (saved === 1 ? ' template' : ' templates') + (last ? ' (some could not be saved: ' + last + ')' : ''), 'ok');
     go('#/templates?mine');
-  };
-}
-
-/* Notifications: hear about finished tests by email, Slack, Teams or a webhook. */
-
-async function renderNotifyCard() {
-  const box = $('acNotify');
-  if (!box) return;
-  let n;
-  try { n = await api('/me/notifications'); } catch (e) { box.hidden = true; return; }
-  const cleared = {};
-  const hookField = (id, label, h, ph, help) =>
-    '<label for="' + id + '">' + label + '<input id="' + id + '" type="text" autocomplete="off" spellcheck="false" placeholder="' +
-    esc(h.set ? 'Saved (' + h.host + '). Type a new address to replace it.' : ph) + '">' +
-    '<span class="help">' + help + (h.set ? ' <button type="button" class="link-btn" data-clear="' + id + '">Remove the saved address</button>' : '') + '</span></label>';
-  box.innerHTML = '<h3>Notifications</h3><p class="modal-subtitle">Hear about your tests without watching them.</p>' +
-    '<form id="acNotifyForm" class="modal-form">' +
-    toggle('nEmail', 'Email me when a test finishes', n.email && n.emailAvailable, n.emailAvailable ? '' : 'Email is not set up on this site, so this is unavailable.') +
-    sel('nOn', 'Tell me', n.on, [['problems', 'Only when something needs attention'], ['always', 'Every time a test finishes']],
-      'Something needs attention when a pass/fail target is missed, 1% or more of requests fail (with no target), or the run does not complete.') +
-    hookField('nSlack', 'Slack webhook address', n.slack, 'https://hooks.slack.com/services/…', 'Create an incoming webhook in Slack (it also works with Mattermost). Treat the address like a password.') +
-    hookField('nTeams', 'Microsoft Teams webhook address', n.teams, 'https://….webhook.office.com/…', 'Use a Teams Workflows webhook (“Post to a channel when a webhook request is received”).') +
-    hookField('nHook', 'Any webhook address', n.webhook, 'https://example.com/hooks/blasta', 'BLASTA sends a JSON message with the headline numbers and a link.') +
-    '<p class="set-result" id="r-acNotify" role="status" hidden></p>' +
-    '<div class="modal-form-actions"><button type="submit" class="btn primary-sm">Save</button>' +
-    '<button type="button" class="btn small" id="nTest">Send a test</button></div>' +
-    (n.last && n.last.text ? '<p class="help">Last delivery ' + esc(ago(n.last.at)) + ': ' + esc(n.last.text) + '</p>' : '') + '</form>';
-  if (!n.emailAvailable) $('nEmail').disabled = true;
-  const say = (m, ok) => { const o = $('r-acNotify'); o.hidden = false; o.className = 'set-result ' + (ok ? 'ok' : 'bad'); o.textContent = m; };
-  box.querySelectorAll('[data-clear]').forEach((b) => { b.onclick = () => { cleared[b.dataset.clear] = true; $(b.dataset.clear).value = ''; $(b.dataset.clear).placeholder = 'Will be removed when you save'; b.remove(); }; });
-  const val = (id) => (cleared[id] ? '' : $(id).value.trim() || undefined);
-  $('acNotifyForm').onsubmit = async (e) => {
-    e.preventDefault();
-    try {
-      await api('/me/notifications', { method: 'PUT', headers: JSON_HEADERS, body: JSON.stringify({
-        email: $('nEmail').checked, on: $('nOn').value, slack: val('nSlack'), teams: val('nTeams'), webhook: val('nHook') }) });
-      toast('Notification settings saved', 'ok');
-      renderNotifyCard();
-    } catch (err) { say(err.message, false); }
-  };
-  $('nTest').onclick = async () => {
-    say('Sending…', true);
-    try {
-      const r = await api('/me/notifications/test', { method: 'POST' });
-      const bad = r.results.filter((x) => !x.ok);
-      say(r.results.map((x) => x.channel + (x.ok ? ': sent' : ': failed (' + x.error + ')')).join(' · '), !bad.length);
-    } catch (err) { say(err.message, false); }
   };
 }
 

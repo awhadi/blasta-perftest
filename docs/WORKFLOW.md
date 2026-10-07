@@ -17,6 +17,11 @@ and then **Start**.
 - **Rename**, **Duplicate** and **Delete** are on each card. **Export** gives a job file you can run
   with `blasta run`; values of credential-like headers (Authorization, Cookie, anything with token,
   key, secret or password in its name) are left empty in the file.
+- **Keeping a built-in job:** open any job under **Templates > Built-in** and press **Save a copy**.
+  BLASTA asks for the details it needs (your address, credentials), fills the Test form, and offers to
+  save it under a name of your own. Your copy stays exactly as you left it; it does not change when
+  the built-in templates do. On the Test page the banner of a built-in job also has **Save to My
+  templates**.
 - Changing a template: **Use** it, change the form, press **Save changes** in the banner (or **Save as
   template** to make a new one).
 - Up to 100 templates each. They are included in **My account > Download my data** (without
@@ -39,28 +44,36 @@ what to check first (placeholders to fill, authentication to add, cookies that m
 The same works on the command line: `blasta import file.har --list`, then
 `blasta import file.har --index 3 --out job.json`.
 
-## Notifications
+## Notifications (an administrator's setting)
 
-**My account > Notifications**: be told when a test you started finishes, by **email** (if the site
-has email set up), **Slack** (an incoming webhook; also Mattermost), **Microsoft Teams** (a Workflows
-webhook) or any **webhook** (BLASTA posts JSON). Choose *only when something needs attention* or
-*every time*. **Send a test** checks the channels.
+**Settings > Notifications** (`/admin/notifications`): an administrator decides once how finished
+tests are announced. People do not have to set anything up.
 
-Something needs attention when a pass/fail target is missed, when 1% or more of requests fail and
-the job has no error target, or when the run does not complete (a run you stop yourself is not a
-problem). Messages carry the headline numbers and a link, never headers, bodies or credentials.
+- **Announce finished tests**: one switch for the whole site. Tests run by anyone with an account
+  are announced; visitors on the free trial are not.
+- **Announce**: *only when something needs attention* (the default) or *every finished test*.
+  Something needs attention when a pass/fail target is missed, when 1% or more of requests fail and the
+  test has no error target, or when the test does not complete (a test its owner stops is not a
+  problem).
+- **Email the person who ran the test** (on by default, works once Email Delivery is set up), plus
+  up to 10 extra addresses (a team address) that hear about every announced test.
+- **Slack** (an incoming webhook; also Mattermost), **Microsoft Teams** (a Workflows webhook) and
+  **any webhook** (BLASTA posts JSON): one shared channel each. The message says who started the test.
+- **Send a test** posts a sample to everything that is saved.
 
-Webhook addresses are secrets (anyone with one can post to that channel), so they are stored
+Messages carry the headline numbers, who started the test and a link, never headers, bodies or
+credentials. The channel addresses are secrets (anyone with one can post there), so they are stored
 encrypted and shown only as a host. They must be `https://`, and addresses on private networks are
-refused so a webhook cannot be aimed at internal services. To allow them (an internal Mattermost,
-say) set `BLASTA_ALLOW_PRIVATE_WEBHOOKS=true`.
+refused so a webhook cannot be aimed at internal services; to allow them (an internal Mattermost, say)
+set `BLASTA_ALLOW_PRIVATE_WEBHOOKS=true`. The privacy page mentions the emails and the shared channel
+when they are on.
 
 The JSON a webhook receives:
 
 ```json
 {"event": "run.finished", "url": "https://blasta.example.com/history/run_...",
- "run": {"id": "run_...", "job": "Orders API", "target": "https://...", "state": "finished",
-         "needsAttention": true, "problems": ["p95 340 ms is over the 250 ms target"],
+ "run": {"id": "run_...", "job": "Orders API", "startedBy": "pat@example.com", "target": "https://...",
+         "state": "finished", "needsAttention": true, "problems": ["p95 340 ms is over the 250 ms target"],
          "total": 1200, "errors": 30, "errorRatePercent": 2.5, "avgRps": 40,
          "p50Ms": 12, "p95Ms": 340, "p99Ms": 1250, "durationSeconds": 30}}
 ```

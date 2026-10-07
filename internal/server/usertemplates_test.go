@@ -96,10 +96,6 @@ func TestPeopleKeepTheirOwnTemplates(t *testing.T) {
 		t.Errorf("the data download: %s", me)
 	}
 
-	if _, _, me := pat.do("GET", "/api/me/export", ""); !strings.Contains(me, `"notifications"`) {
-		t.Errorf("the data download should say how they are notified: %s", me)
-	}
-
 	// Bad input.
 	for name, body := range map[string]string{"no name": `{"name":"","job":` + tplJob + `}`, "no job": `{"name":"x"}`, "bad job": `{"name":"x","job":{"executor":"http"}}`, "long name": `{"name":"` + strings.Repeat("a", 200) + `","job":` + tplJob + `}`} {
 		if code, _, _ := pat.do("POST", "/api/my-templates", body); code != 400 {

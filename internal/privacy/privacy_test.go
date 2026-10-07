@@ -65,7 +65,7 @@ func TestPageSaysWhatTheSiteDoes(t *testing.T) {
 			t.Errorf("page lacks %q", want)
 		}
 	}
-	for _, want := range []string{"Templates you save", "Notification settings"} {
+	for _, want := range []string{"Templates you save"} {
 		if !strings.Contains(off, want) {
 			t.Errorf("page lacks %q", want)
 		}
@@ -73,6 +73,14 @@ func TestPageSaysWhatTheSiteDoes(t *testing.T) {
 	if strings.Contains(off, "Counting visits") || strings.Contains(off, "blasta_oidc_state") || strings.Contains(off, "Cookie settings") {
 		t.Error("the page must not mention what is switched off")
 	}
+	if strings.Contains(off, "tell you when a test") || strings.Contains(off, "posted to the team") {
+		t.Error("notifications are off: the page must not mention them")
+	}
+	base.NotifyEmail, base.NotifyShared = true, true
+	if p := string(Page(base)); !strings.Contains(p, "tell you when a test you started has finished") || !strings.Contains(p, "posted to the team") {
+		t.Error("when notifications are on the page should say so")
+	}
+	base.NotifyEmail, base.NotifyShared = false, false
 	base.AnalyticsName, base.SSO, base.Captcha = "Plausible", "Okta", "Cloudflare Turnstile"
 	on := string(Page(base))
 	for _, want := range []string{"Set by Plausible", "only if you accept", "blasta_oidc_state", "Set by Cloudflare Turnstile", "Cookie settings", "blasta_consent"} {

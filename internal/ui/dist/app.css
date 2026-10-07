@@ -837,4 +837,12 @@ a.chip { text-decoration: none; display: inline-flex; align-items: center; gap: 
 .cmp-chip { padding: 1px 9px; border-radius: 999px; font-size: 12px; border: 1px solid var(--border); color: var(--dim); }
 .cmp-chip.better { color: var(--ok); border-color: var(--ok); }
 .cmp-chip.worse { color: var(--danger); border-color: var(--danger); }
-#acNotify .help .link-btn { margin-left: 6px; }
+#adminSection .help .link-btn { margin-left: 6px; }
+.note a { color: var(--accent); }
+
+/* Alignment fixes: the generic ".empty p" margin was overriding the centring of the hint under an
+   empty state, and labels used as buttons carried a form field's bottom margin. */
+.empty .muted-p { margin: 0 auto 6px; }
+.imp-row .btn, .imp-row label.btn { margin: 0; align-self: center; }
+.pjob-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.empty-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 14px; }

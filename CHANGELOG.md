@@ -7,6 +7,27 @@ feature the middle one, a breaking change the first. The current version is the
 `Version` constant in `internal/version/version.go`; it is shown bottom right in the
 page for signed-in people, by `blasta version`, and in `/api/health`.
 
+## [2.11.0] - 2026-10-07
+
+### Added
+- **Save a copy** on every job of a built-in template, and **Save to My templates** in the Test page
+  banner of a loaded built-in job: keep your own copy under a name you choose, to change as you like.
+  It stays as you left it when the built-in templates change. The empty My templates page now says how
+  to get things in.
+
+### Changed
+- **Notifications are now an administrator's setting** (Settings > Notifications), not something each
+  person sets up: one switch, when to announce (only problems, or every finished test), whether to email
+  the person who ran the test (and extra addresses), and shared Slack, Teams and webhook channels.
+  People have nothing to do. The message names who started the test. The personal card in My account
+  and its API are gone (nobody had used them; the database table they used stays unused). With email
+  not set up, the default "email the person who ran it" is skipped quietly.
+- The privacy page mentions the emails and the shared channel when they are on.
+
+### Fixed
+- Alignment: the hint under an empty state (it was pushed left of its heading) and the "Choose a file"
+  and "Read" buttons in the Import dialog now line up.
+
 ## [2.10.1] - 2026-10-07
 
 ### Changed

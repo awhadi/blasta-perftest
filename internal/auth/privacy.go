@@ -71,6 +71,9 @@ func (s *Service) PrivacyPage(baseHref, canonical string) []byte {
 	if d.SessionDays < 1 {
 		d.SessionDays = 1
 	}
+	n := cfg.Notifications
+	d.NotifyEmail = n.Enabled && n.EmailRunner
+	d.NotifyShared = n.Enabled && (n.Slack != "" || n.Teams != "" || n.Webhook != "")
 	if analytics.Ready(cfg.Analytics) {
 		d.AnalyticsName = analytics.Name(cfg.Analytics.Provider)
 	}

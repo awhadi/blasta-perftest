@@ -31,6 +31,7 @@ type Event struct {
 	ErrorRatePct, AvgRPS                        float64
 	P50ms, P95ms, P99ms                         float64
 	DurationSec                                 float64
+	StartedBy                                   string   // who started the test (their email)
 	Problems                                    []string // targets missed, errors, a run that did not finish
 	HasTargets                                  bool     // the job had pass/fail targets
 	Link                                        string
@@ -59,13 +60,17 @@ func ms(v float64) string {
 
 // Facts are the numbers worth a glance, in order.
 func (e Event) Facts() [][2]string {
-	out := [][2]string{
+	out := [][2]string{}
+	if e.StartedBy != "" {
+		out = append(out, [2]string{"Started by", e.StartedBy})
+	}
+	out = append(out, [][2]string{
 		{"Target", e.Target},
 		{"Requests", fmt.Sprintf("%d (%d failed, %.2f%%)", e.Total, e.Errors, e.ErrorRatePct)},
 		{"Throughput", fmt.Sprintf("%.1f requests/s", e.AvgRPS)},
 		{"Latency", "p50 " + ms(e.P50ms) + ", p95 " + ms(e.P95ms) + ", p99 " + ms(e.P99ms)},
 		{"Duration", fmt.Sprintf("%.0f s", e.DurationSec)},
-	}
+	}...)
 	if len(e.Problems) > 0 {
 		out = append(out, [2]string{"Problems", strings.Join(e.Problems, "; ")})
 	}
@@ -190,7 +195,7 @@ func Webhook(ctx context.Context, raw string, e Event) error {
 	return post(ctx, raw, map[string]any{
 		"event": "run.finished",
 		"run": map[string]any{
-			"id": e.RunID, "job": e.Job, "target": e.Target, "executor": e.Executor, "state": e.State,
+			"id": e.RunID, "job": e.Job, "startedBy": e.StartedBy, "target": e.Target, "executor": e.Executor, "state": e.State,
 			"needsAttention": e.NeedsAttention(), "problems": e.Problems,
 			"total": e.Total, "errors": e.Errors, "errorRatePercent": e.ErrorRatePct, "avgRps": e.AvgRPS,
 			"p50Ms": e.P50ms, "p95Ms": e.P95ms, "p99Ms": e.P99ms, "durationSeconds": e.DurationSec,

@@ -50,6 +50,8 @@ type Config struct {
 	Analytics settings.Analytics
 	// Privacy is how consent is handled and what the privacy page says (Settings > Privacy & Cookies).
 	Privacy settings.Privacy
+	// Notifications is how finished tests are announced (Settings > Notifications).
+	Notifications settings.Notifications
 }
 
 func (c *Config) defaults() {
@@ -193,6 +195,12 @@ func (s *Service) compose() (Config, error) {
 	cfg.AllowedDomains = append([]string(nil), s.base.AllowedDomains...)
 	if s.settings == nil {
 		return cfg, nil
+	}
+	cfg.Notifications = settings.Notifications{On: "problems", EmailRunner: true}
+	if v, ok, err := s.settings.GetNotifications(); err != nil {
+		return cfg, err
+	} else if ok {
+		cfg.Notifications = v
 	}
 	cfg.Privacy = privacy.Default()
 	if ok, err := s.settings.Get(settings.KeyPrivacy, &cfg.Privacy); err != nil {

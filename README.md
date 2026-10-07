@@ -15,14 +15,14 @@ in the page when you are signed in, and in `blasta version`).
 - **Live results and history:** streaming charts, the CPU/RAM the test itself used,
   and every past run to reopen, download and compare with a baseline.
 - **Your own templates:** save a setup (credentials stored encrypted), run it again later,
-  export it as a job file; import from curl, HAR, Postman or OpenAPI; get told by email,
-  Slack, Teams or a webhook when a test finishes. See [docs/WORKFLOW.md](docs/WORKFLOW.md).
+  export it as a job file; import from curl, HAR, Postman or OpenAPI; and an administrator can
+  have finished tests announced by email, Slack, Teams or a webhook. See [docs/WORKFLOW.md](docs/WORKFLOW.md).
 - **Teams:** accounts with registration, single sign-on (OpenID Connect), email
   confirmation, one-time sign-in codes, password reset, bot protection, and a free
   trial for visitors. Everyone's history is private to them.
 - **Run it anywhere:** Docker Compose, Kubernetes, behind a reverse proxy, under a
   path; SQLite by default or PostgreSQL / MariaDB.
-- **Administered from the UI:** registration, SSO, email, bot protection, analytics, privacy and cookie consent and the
+- **Administered from the UI:** registration, SSO, email, notifications, bot protection, analytics, privacy and cookie consent and the
   free-trial limits are all settings pages; secrets are stored encrypted.
 
 ## Quick start

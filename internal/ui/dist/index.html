@@ -202,6 +202,7 @@ __SSR__
         <div class="side-group">
           <a href="admin/sso" data-section="sso">Single Sign-On</a>
           <a href="admin/smtp" data-section="smtp">Email Delivery</a>
+          <a href="admin/notifications" data-section="notifications">Notifications</a>
         </div>
         <div class="side-heading">Security</div>
         <div class="side-group">
@@ -247,6 +248,7 @@ __SSR__
       </div>
       <div class="tpl-banner-actions">
         <button class="btn small" id="tplEdit" type="button">Edit details</button>
+        <button class="btn small" id="tplSaveCopy" type="button" hidden title="Keep your own copy of this job under My templates">Save to My templates</button>
         <button class="btn small primary-sm" id="tplSave" type="button" hidden>Save changes</button>
         <a class="btn small" id="tplChange" href="templates">Change job</a>
         <button class="btn ghost small" id="tplDismiss" type="button" aria-label="Dismiss">&times;</button>
@@ -527,6 +529,7 @@ __SSR__
       <div class="intro">
         <h2 class="pt" role="heading" aria-level="1" tabindex="-1">Your <span class="grad">templates</span></h2>
         <p>Setups you saved from the Test page. Each one keeps the target, headers, body, load settings and pass/fail targets, so next time you open it and press Start. Credentials are stored encrypted and are only ever visible to you.</p>
+        <p class="note">To keep one of the built-in jobs, open it under <a href="templates">Built-in</a> and press <strong>Save a copy</strong>. Your copy is yours to change, and it stays as you left it.</p>
       </div>
       <div class="tpl-toolbar">
         <span class="muted" id="myCount2" role="status"></span>
@@ -537,8 +540,8 @@ __SSR__
       <div class="empty" id="myEmpty" hidden>
         <div class="empty-art" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 4h14v16l-7-4-7 4z"/></svg></div>
         <p><strong>Nothing saved yet</strong></p>
-        <p class="muted-p">Set up a test on the Test page and press <em>Save as template</em>, or import a curl command, a HAR file, a Postman collection or an OpenAPI document.</p>
-        <p><a class="btn small" href="test">Go to the Test page</a></p>
+        <p class="muted-p">Open any job under <em>Built-in</em> and press <em>Save a copy</em>, set up a test on the Test page and press <em>Save as template</em>, or import a curl command, a HAR file, a Postman collection or an OpenAPI document.</p>
+        <p class="empty-actions"><a class="btn small" href="templates">Browse built-in templates</a> <a class="btn small" href="test">Go to the Test page</a></p>
       </div>
     </div>
 

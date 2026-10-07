@@ -18,6 +18,8 @@ type PageData struct {
 	Captcha       string // the bot check's provider, "" when off
 	SSO           string // the single sign-on provider's name, "" when off
 	Guest         bool   // the free trial for visitors is on
+	NotifyEmail   bool   // people are emailed when their tests finish
+	NotifyShared  bool   // finished tests are posted to a Slack, Teams or webhook channel
 	SessionDays   int
 }
 
@@ -54,7 +56,8 @@ const tplSource = `<!doctype html>
 <tr><td>Sign-in sessions: a random token (kept hashed), when it was used, the network address and the browser</td><td>To keep you signed in, and to show and end your sessions</td><td>Until it expires (at most {{.SessionDays}} days) or you sign out</td></tr>
 <tr><td>Your test history: the address tested, the test settings and the results (not headers or request bodies)</td><td>So you can review and compare your tests</td><td>Until you delete it or your account</td></tr>
 <tr><td>Templates you save: the test setups (target, headers, body, load settings), kept encrypted</td><td>So you can run them again</td><td>Until you delete them or your account</td></tr>
-<tr><td>Notification settings: whether to email you, and any Slack, Teams or webhook addresses you add (kept encrypted)</td><td>To tell you when your tests finish</td><td>Until you remove them or delete your account</td></tr>
+{{if .NotifyEmail}}<tr><td>Your email address, used to tell you when a test you started has finished</td><td>The administrator chose to email people about their tests</td><td>One message per test</td></tr>{{end}}
+{{if .NotifyShared}}<tr><td>A summary of each finished test (its name, target, results and who started it) posted to the team's Slack, Teams or webhook</td><td>The administrator chose to announce finished tests</td><td>As that service keeps messages</td></tr>{{end}}
 {{if .Guest}}<tr><td>Free-trial use by visitors: a random id, the number of tests, and the network address per day</td><td>To apply the free-trial limits and stop abuse</td><td>About 3 days</td></tr>{{end}}
 <tr><td>Network addresses of requests</td><td>To limit sign-in attempts and abuse, and in the server's log with the page, time and result of each request</td><td>Briefly in memory; the log as the operator keeps it</td></tr>
 </tbody>
