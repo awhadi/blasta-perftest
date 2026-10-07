@@ -7,6 +7,12 @@ feature the middle one, a breaking change the first. The current version is the
 `Version` constant in `internal/version/version.go`; it is shown bottom right in the
 page for signed-in people, by `blasta version`, and in `/api/health`.
 
+## [2.14.3] - 2026-10-07
+
+### Fixed
+- `sitemap.xml` is now plain sitemap XML, with no style-sheet line in front of the `urlset`, so Google Search
+  Console and other crawlers read it the strict, standard way. (People opening it in a browser see the XML.)
+
 ## [2.14.2] - 2026-10-07
 
 ### Changed

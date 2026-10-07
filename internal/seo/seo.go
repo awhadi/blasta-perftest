@@ -40,7 +40,7 @@ func Robots(base string) string {
 // catalogue so a new template appears by itself.
 func Sitemap(base string) string {
 	var b strings.Builder
-	b.WriteString(`<?xml version="1.0" encoding="UTF-8"?>` + "\n" + `<?xml-stylesheet type="text/xsl" href="sitemap.xsl"?>` + "\n" +
+	b.WriteString(`<?xml version="1.0" encoding="UTF-8"?>` + "\n" +
 		`<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">` + "\n")
 	add := func(loc, prio string) {
 		fmt.Fprintf(&b, "  <url><loc>%s</loc><priority>%s</priority></url>\n", template.HTMLEscapeString(loc), prio)
