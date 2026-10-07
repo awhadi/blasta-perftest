@@ -97,6 +97,10 @@ __ANALYTICS__
 </header>
 
 __SSR__
+<aside class="run-dock" id="runDock" aria-label="Running jobs" hidden>
+  <h2>Running jobs <span class="count" id="dockCount"></span></h2>
+  <div class="dock-list" id="dockList"></div>
+</aside>
 <main id="main">
   <section id="view-login" class="view" hidden>
     <div class="auth-card">
@@ -228,11 +232,6 @@ __SSR__
       <h1 tabindex="-1">Run a <span class="grad">load test</span></h1>
       <p>Point BLASTA at something <strong>you own</strong>, choose how hard to hit it, and press <em>Start job</em>.
          Results stream in live.</p>
-    </div>
-
-    <div class="panel run-strip" id="runStrip" hidden>
-      <div class="tpl-toolbar"><strong>Running now</strong><span class="muted" id="stripCount" role="status"></span></div>
-      <div class="tgrid" id="stripGrid"></div>
     </div>
 
     <div class="trial" id="trialBar" hidden>
@@ -454,7 +453,6 @@ __SSR__
           <div id="formError" class="form-error" role="alert" hidden></div>
           <button id="start" class="btn primary" type="button">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>Start job</button>
-          <button id="stop" class="btn danger" type="button" disabled>Stop</button>
           <p class="kbd-hint">or press <kbd>Ctrl</kbd>/<kbd>&#8984;</kbd> + <kbd>Enter</kbd></p>
           <div class="run-extras">
             <button class="btn small" id="saveTpl" type="button" title="Keep this setup to run again later" hidden>Save as favorite with current configurations</button>
@@ -462,64 +460,6 @@ __SSR__
           <div id="safety" class="safety"></div>
         </div>
       </aside>
-    </div>
-
-    <div class="panel results" id="results" aria-live="polite" hidden>
-      <div class="results-head">
-        <h2>Live results</h2>
-        <span class="muted" id="runmeta"></span>
-        <div class="spacer"></div>
-        <button class="btn ghost small" id="runAgain" type="button" title="Run the same test again" hidden>Run again</button>
-        <a class="btn ghost small" id="dl-json" href="#" download>Download JSON</a>
-        <a class="btn ghost small" id="dl-csv" href="#" download>Download CSV</a>
-      </div>
-
-      <div class="empty" id="resultsEmpty">
-        <div class="empty-art" aria-hidden="true">
-          <svg viewBox="0 0 24 24"><path d="M3 17l5-6 4 4 8-9"/><path d="M3 21h18"/></svg>
-        </div>
-        <p><strong>No results yet</strong></p>
-        <p class="muted-p">Set up a target above and press <em>Start job</em>. Charts and numbers appear here as the job runs.</p>
-      </div>
-
-      <div id="resultsBody" hidden>
-        <div class="verdict" id="verdict"></div>
-        <div class="progress-wrap">
-          <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" id="progress"><div id="bar"></div></div>
-          <span class="muted" id="progressText"></span>
-        </div>
-        <div class="stats" id="stats"></div>
-        <div class="res-block" id="resBlock" hidden>
-          <div class="res-head">
-            <h3>Load generator resources</h3>
-            <span class="hint" id="resScope"></span>
-          </div>
-          <div class="stats" id="resStats"></div>
-          <p class="res-note" id="resNote" hidden></p>
-          <div class="charts">
-            <div class="chart"><span class="chart-label">CPU used by BLASTA <span class="hint">% of capacity</span></span><canvas id="c-cpu" height="110"></canvas></div>
-            <div class="chart"><span class="chart-label">RAM used by BLASTA</span><canvas id="c-mem" height="110"></canvas></div>
-          </div>
-        </div>
-        <div class="charts">
-          <div class="chart"><span class="chart-label">Requests per second</span><canvas id="c-rps" height="120"></canvas></div>
-          <div class="chart"><span class="chart-label">Latency p95 <span class="hint">lower is better</span></span><canvas id="c-lat" height="120"></canvas></div>
-        </div>
-        <div class="dist">
-          <div class="dist-block">
-            <h3>Response time</h3>
-            <div id="pcts" class="pcts"></div>
-          </div>
-          <div class="dist-block">
-            <h3>Status codes</h3>
-            <div id="codes" class="codes"></div>
-          </div>
-          <div class="dist-block">
-            <h3>Errors</h3>
-            <div id="errs" class="codes"></div>
-          </div>
-        </div>
-      </div>
     </div>
   </section>
 
@@ -611,15 +551,69 @@ __SSR__
   <section id="view-running" class="view" hidden>
     <div class="intro">
       <h2 class="pt" role="heading" aria-level="1" tabindex="-1">Running <span class="grad">jobs</span></h2>
-      <p>Jobs that are running at the moment. Watch one live, or stop it.</p>
+      <p>The live view of the job you picked in the panel on the left. Start more jobs from the Jobs page; they keep running while you look at another.</p>
     </div>
-    <div class="panel mine-panel">
-      <div class="tpl-toolbar"><span class="muted" id="runCount2" role="status"></span></div>
-      <div class="tgrid" id="runGrid"></div>
-      <div class="empty" id="runEmpty" hidden>
-        <p><strong>Nothing is running</strong></p>
-        <p class="muted-p">Finished jobs are in History.</p>
-        <p class="empty-actions"><a class="btn small" href="history">Open History</a> <a class="btn small" href="jobs">Start a job</a></p>
+    <div class="empty panel" id="runEmpty" hidden>
+      <p><strong>Nothing is running</strong></p>
+      <p class="muted-p">Finished jobs are in History.</p>
+      <p class="empty-actions"><a class="btn small" href="history">Open History</a> <a class="btn small" href="jobs">Start a job</a></p>
+    </div>
+    <div class="panel results" id="results" aria-live="polite" hidden>
+      <div class="results-head">
+        <h2>Live results</h2>
+        <span class="muted" id="runmeta"></span>
+        <div class="spacer"></div>
+        <button class="btn danger small" id="stop" type="button" disabled>Stop job</button>
+        <button class="btn ghost small" id="runAgain" type="button" title="Run the same test again" hidden>Run again</button>
+        <a class="btn ghost small" id="dl-json" href="#" download>Download JSON</a>
+        <a class="btn ghost small" id="dl-csv" href="#" download>Download CSV</a>
+      </div>
+
+      <div class="empty" id="resultsEmpty">
+        <div class="empty-art" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M3 17l5-6 4 4 8-9"/><path d="M3 21h18"/></svg>
+        </div>
+        <p><strong>Nothing to show</strong></p>
+        <p class="muted-p">Pick a running job in the panel on the left.</p>
+      </div>
+
+      <div id="resultsBody" hidden>
+        <div class="verdict" id="verdict"></div>
+        <div class="progress-wrap">
+          <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" id="progress"><div id="bar"></div></div>
+          <span class="muted" id="progressText"></span>
+        </div>
+        <div class="stats" id="stats"></div>
+        <div class="res-block" id="resBlock" hidden>
+          <div class="res-head">
+            <h3>Load generator resources</h3>
+            <span class="hint" id="resScope"></span>
+          </div>
+          <div class="stats" id="resStats"></div>
+          <p class="res-note" id="resNote" hidden></p>
+          <div class="charts">
+            <div class="chart"><span class="chart-label">CPU used by BLASTA <span class="hint">% of capacity</span></span><canvas id="c-cpu" height="110"></canvas></div>
+            <div class="chart"><span class="chart-label">RAM used by BLASTA</span><canvas id="c-mem" height="110"></canvas></div>
+          </div>
+        </div>
+        <div class="charts">
+          <div class="chart"><span class="chart-label">Requests per second</span><canvas id="c-rps" height="120"></canvas></div>
+          <div class="chart"><span class="chart-label">Latency p95 <span class="hint">lower is better</span></span><canvas id="c-lat" height="120"></canvas></div>
+        </div>
+        <div class="dist">
+          <div class="dist-block">
+            <h3>Response time</h3>
+            <div id="pcts" class="pcts"></div>
+          </div>
+          <div class="dist-block">
+            <h3>Status codes</h3>
+            <div id="codes" class="codes"></div>
+          </div>
+          <div class="dist-block">
+            <h3>Errors</h3>
+            <div id="errs" class="codes"></div>
+          </div>
+        </div>
       </div>
     </div>
   </section>

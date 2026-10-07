@@ -26,11 +26,14 @@ favorite** to make a new one).
 
 ## Running several jobs
 
-You can start more than one job: press **Start job** again after changing the form. **Running now**
-at the top of the Jobs page (and the **Running jobs** item next to History, with a count) lists them with
-their progress; **Watch live** opens one's live view and **Stop** ends it. One person may have 5 running at
-once (set `BLASTA_MAX_RUNNING` to change this). The item goes away when nothing is running. People see
-only their own jobs.
+Press **Start job** as often as you like: each press starts another job and you stay on the Jobs page, so
+you can change the form and start the next one. While anything is running, a **Running jobs** panel
+appears on the left of every page, with each job's name, target and progress and a **×** to stop it.
+Click a job there to watch it live under **Running jobs** in the menu (charts, numbers, **Stop job**, the
+JSON and CSV downloads). The panel and the menu item go away when nothing is running; finished jobs are
+in History. A job that finishes while you are elsewhere is announced. One person may have 5 running at
+once (set `BLASTA_MAX_RUNNING` to change this). People see only their own jobs. A visitor on a free
+trial has no panel: the job opens straight in Running jobs.
 
 ## Import
 

@@ -59,7 +59,7 @@ const store = {
 const SESSION_KEY = 'blasta.session';
 const saveSession = (s) => store.set(SESSION_KEY, JSON.stringify(s));
 const loadSession = () => { try { return JSON.parse(store.get(SESSION_KEY) || 'null'); } catch (e) { return null; } };
-const markRunning = (on) => document.querySelector('.nav-btn[data-view=test]').classList.toggle('running', on);
+const markRunning = () => {};   // running jobs are shown in the left panel now
 
 let authCfg = null, me = null, appStarted = false, endingSession = false;   // sign-in state
 let resendFor = '', appVersion = '';
@@ -279,7 +279,7 @@ function route() {
   if (view === 'history') {
     if (parts[1]) showRunDetail(decodeURIComponent(parts[1])); else showRunList();
   }
-  if (view === 'running') { document.title = 'Running | BLASTA'; pollRunning(); renderRunning(); }
+  if (view === 'running') { document.title = 'Running jobs | BLASTA'; pollRunning(); }
   if (view === 'login') showLogin();
   if (view === 'account') loadAccount();
   if (view === 'admin') showAdmin(parts[1]);
@@ -379,8 +379,29 @@ const fmtBytes = (n) => (n >= 1073741824 ? (n / 1073741824).toFixed(1) + ' GB' :
 // becomes unreachable or comes back.
 // Reconnect to the test that was running (or show the last result) after a
 // reload or a return visit.
+// Each started job's pass/fail targets, kept by run id (never its headers or credentials), so the
+// live view can judge the run against them.
+const SLO_KEY = 'blasta.slos';
+function rememberSLO(id, slo) {
+  try {
+    const m = JSON.parse(store.get(SLO_KEY) || '{}');
+    m[id] = slo || null;
+    const keep = Object.keys(m).slice(-12);
+    store.set(SLO_KEY, JSON.stringify(Object.fromEntries(keep.map((k) => [k, m[k]]))));
+  } catch (e) { /* the live view still works without the targets */ }
+}
+const recallSLO = (id) => { try { return (JSON.parse(store.get(SLO_KEY) || '{}'))[id] || null; } catch (e) { return null; } };
+
+async function watchRun(id) {
+  if (!(runId === id && es)) {
+    saveSession({ runId: id, slo: recallSLO(id) });
+    await restoreSession(id);
+  }
+  go('#/running');
+}
+
 async function restoreSession(only) {
-  const s = only ? { runId: only } : loadSession();
+  const s = only ? { runId: only, slo: recallSLO(only) } : loadSession();
   if (!s || !s.runId) return;
   let run;
   try { run = await api('/runs/' + s.runId); } catch (e) { saveSession(null); return; }   // the server forgot it
@@ -658,29 +679,11 @@ async function start() {
       body: JSON.stringify(buildJob()),
     });
     const run = await api('/jobs/' + job.id + '/start', { method: 'POST' });
-    runId = run.id;
-    activeSLO = readSLO();
-    saveSession({ runId: run.id, slo: activeSLO });
-    markRunning(true);
-    series = [];
-    resSeries = [];
-    $('resBlock').hidden = true;
-    lastSnap = null;
-    $('results').hidden = false;
-    $('resultsEmpty').hidden = true;
-    $('resultsBody').hidden = false;
-    $('verdict').className = 'verdict live';
-    $('verdict').innerHTML = '<span class="v-dot"></span><div><div class="v-title">Starting&hellip;</div>' +
-      '<div class="v-text">Waiting for the first numbers.</div></div>';
-    $('stats').innerHTML = '';
-    $('runmeta').textContent = runId;
-    $('dl-json').href = 'api/runs/' + runId + '/report';
-    $('dl-csv').href = 'api/runs/' + runId + '/report?format=csv';
-    $('stop').disabled = false;
-    $('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
-    listen(runId);
+    rememberSLO(run.id, readSLO());
     loadRuns();
-    pollRunning();
+    toast('Started \u201c' + testName(job.name) + '\u201d. It runs under Running jobs; you can start another.', 'ok');
+    await pollRunning();
+    if (guestMode) await watchRun(run.id);   // a visitor has no side panel: show it
     if (guestMode) refreshGuest();
   } catch (e) {
     if (e.code === 'captcha_required') {          // the server wants the bot check first
@@ -713,7 +716,7 @@ function listen(id) {
       loadRuns();
       pollRunning();
       showFinalResources(id);
-      toast('Test finished', 'ok');
+      toast('Job finished', 'ok');
     }
   };
 }
@@ -1347,7 +1350,7 @@ function wireTemplateSearch() {
       (!$('tplListView').hidden ? $('tplSearch') : $('jobSearch')).focus();
     }
   });
-  $('tplDismiss').onclick = () => { loadedFrom = null; showBanner(); closeResults(); };
+  $('tplDismiss').onclick = () => { loadedFrom = null; showBanner(); };
   $('tplEdit').onclick = editLoadedJob;
 }
 
@@ -1810,18 +1813,6 @@ async function editLoadedJob() {
   showFormError('');
   loadedFrom = Object.assign({}, lf, { vars: answers.vars, path: answers.path, secrets: answers.secrets });
   toast('Details updated \u2014 your load settings were not changed', 'ok');
-}
-
-// Closing the template takes its live results away too. A test that is still running keeps
-// running (Stop is not in this panel); only the panel is put away.
-function closeResults() {
-  $('results').hidden = true;
-  if (document.querySelector('.nav-btn[data-view=test]').classList.contains('running')) return;
-  $('resultsEmpty').hidden = false;
-  $('resultsBody').hidden = true;
-  $('verdict').innerHTML = '';
-  $('stats').innerHTML = '';
-  $('runmeta').textContent = '';
 }
 
 function showBanner() {
@@ -3604,68 +3595,65 @@ wireMine();
 
 /* ---- Running: shown in the menu only while a test is running ------------------------------ */
 
-let runningNow = [], runningTimer = null;
+let runningNow = [], runningTimer = null, runningSeen = null;
 
 async function pollRunning() {
-  if (!me && authCfg) { runningNow = []; paintRunning(); return; }
+  if (!me && authCfg && !guestMode) { runningNow = []; runningSeen = null; paintRunning(); return; }
   try { runningNow = (await api('/runs?state=running')).runs || []; } catch (e) { return; }
+  // Tell people about jobs that ended while they were looking elsewhere.
+  const ids = new Set(runningNow.map((r) => r.id));
+  if (runningSeen) runningSeen.forEach((r, id) => { if (!ids.has(id) && id !== runId) toast('“' + testName(r.jobName) + '” finished. The result is in History.', 'ok'); });
+  runningSeen = new Map(runningNow.map((r) => [r.id, r]));
   paintRunning();
+  if (!$('view-running').hidden) ensureWatching();
+}
+
+// The Running jobs page shows one job live; with nothing picked yet, the first running one.
+async function ensureWatching() {
+  if ((!es || !runId) && runningNow.length && $('results').hidden) await watchRun(runningNow[0].id);
 }
 
 function paintRunning() {
   const n = runningNow.length;
-  $('navRunning').hidden = n === 0 || guestMode;
+  $('navRunning').hidden = n === 0;
   $('runCount').textContent = n > 1 ? n : '';
-  renderStrip();
-  if (!$('view-running').hidden) renderRunning();
+  const dock = $('runDock');
+  dock.hidden = n === 0 || guestMode;
+  document.body.classList.toggle('has-dock', !dock.hidden);
+  $('dockCount').textContent = n;
+  if (n) {
+    $('dockList').innerHTML = runningNow.map(dockItem).join('');
+    $('dockList').querySelectorAll('.run-bar span[data-pct]').forEach((s) => { s.style.width = s.dataset.pct + '%'; });
+  }
+  if (!$('view-running').hidden) $('runEmpty').hidden = n > 0 || !$('results').hidden;
+  const h = document.querySelector('header.bar');
+  if (h) document.documentElement.style.setProperty('--hdr', h.offsetHeight + 'px');
 }
 
-// The page's security policy forbids style attributes in markup, so bar widths are set here.
-function paintBars(root) { root.querySelectorAll('.run-bar span[data-pct]').forEach((s) => { s.style.width = s.dataset.pct + '%'; }); }
-
-function renderStrip() {
-  const n = runningNow.length;
-  $('runStrip').hidden = n === 0 || guestMode;
-  $('stripCount').textContent = n === 1 ? '1 job' : n + ' jobs';
-  if (n) { $('stripGrid').innerHTML = runningNow.map(runCard).join(''); paintBars($('stripGrid')); }
-}
-
-function runCard(r) {
+function dockItem(r) {
   const secs = r.plan && r.plan.duration ? r.plan.duration / 1e9 : 0;
   const el = Math.max(0, (Date.now() - new Date(r.startedAt).getTime()) / 1000);
   const pct = secs ? Math.min(100, Math.round(el / secs * 100)) : 0;
-  const s = r.summary || {};
-  return '<div class="tcard run-card" data-id="' + esc(r.id) + '">' +
-    '<div class="tcard-head"><span class="ticon">' + catIcon('Generic') + '</span><h3>' + esc(testName(r.jobName)) + '</h3></div>' +
-    '<div><span class="tag">' + esc(r.executor || 'http') + '</span> <span class="state running">running</span></div>' +
-    '<div class="tstack">' + esc(r.target || '') + '</div>' +
-    '<div class="run-bar" role="progressbar" aria-valuenow="' + pct + '" aria-valuemin="0" aria-valuemax="100"><span data-pct="' + pct + '"></span></div>' +
-    '<div class="mine-meta muted">' + Math.round(el) + (secs ? ' of ' + Math.round(secs) : '') + ' s' + (s.total ? ' · ' + s.total + ' requests' : '') +
-    (r.ownerName && me && r.owner !== me.id ? ' · ' + esc(r.ownerName) : '') + '</div>' +
-    '<div class="mine-actions">' +
-    '<button type="button" class="btn small primary-sm" data-act="watch">Watch live</button>' +
-    '<button type="button" class="btn danger inline small" data-act="stop">Stop</button></div></div>';
-}
-
-function renderRunning() {
-  $('runGrid').innerHTML = runningNow.map(runCard).join('');
-  paintBars($('runGrid'));
-  $('runEmpty').hidden = runningNow.length > 0;
-  $('runCount2').textContent = runningNow.length ? runningNow.length + ' running' : '';
+  let host = r.target || '';
+  try { host = new URL(r.target).host; } catch (e) { /* not a URL: show as is */ }
+  return '<div class="dock-item' + (r.id === runId && !$('view-running').hidden ? ' on' : '') + '" data-id="' + esc(r.id) + '">' +
+    '<button type="button" class="dock-open" data-act="watch" title="Watch live">' +
+    '<span class="dock-name">' + esc(testName(r.jobName)) + '</span>' +
+    '<span class="dock-host">' + esc(host) + '</span>' +
+    '<span class="run-bar"><span data-pct="' + pct + '"></span></span>' +
+    '<span class="dock-time">' + Math.round(el) + (secs ? ' of ' + Math.round(secs) : '') + ' s</span></button>' +
+    '<button type="button" class="card-x" data-act="stop" aria-label="Stop this job" title="Stop this job">&times;</button></div>';
 }
 
 function wireRunning() {
-  $('stripGrid').onclick = $('runGrid').onclick = async (e) => {
+  $('dockList').onclick = async (e) => {
     const b = e.target.closest('[data-act]');
     if (!b) return;
-    const id = b.closest('.tcard').dataset.id;
+    const id = b.closest('.dock-item').dataset.id;
     try {
-      if (b.dataset.act === 'watch') {
-        saveSession({ runId: id, slo: null });
-        await restoreSession(id);
-        go('#/jobs');
-        $('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
-      } else if (!b.disabled) {
+      if (b.dataset.act === 'watch') await watchRun(id);
+      else if (!b.disabled) {
+        if (!confirm('Stop this job?')) return;
         b.disabled = true;
         await api('/runs/' + encodeURIComponent(id) + '/stop', { method: 'POST' });
         toast('Stopping job…');
@@ -3674,7 +3662,8 @@ function wireRunning() {
     } catch (err) { toast(err.message, 'error'); }
   };
   clearInterval(runningTimer);
-  runningTimer = setInterval(() => { if (!document.hidden && (me || !authCfg)) pollRunning(); }, 4000);
+  runningTimer = setInterval(() => { if (!document.hidden && (me || !authCfg || guestMode)) pollRunning(); }, 3000);
+  window.addEventListener('resize', paintRunning);
   pollRunning();
 }
 wireRunning();

@@ -7,6 +7,16 @@ feature the middle one, a breaking change the first. The current version is the
 `Version` constant in `internal/version/version.go`; it is shown bottom right in the
 page for signed-in people, by `blasta version`, and in `/api/health`.
 
+## [2.14.0] - 2026-10-07
+
+### Changed
+- **Running jobs are in a panel on the left**, shown only while something is running. Each job has its
+  name, target, progress and a **×** to stop it. Click one to watch it live.
+- **The live view moved from the Jobs page to Running jobs.** Start job now just starts the job and leaves you
+  on the Jobs page, so you can start several in a row. The "Running now" box and the Stop button on the Jobs
+  page are gone (Stop job is in the live view).
+- A job that finishes while you are on another page is announced; its result is in History.
+
 ## [2.13.3] - 2026-10-07
 
 ### Changed
