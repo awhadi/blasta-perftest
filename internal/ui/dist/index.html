@@ -531,17 +531,19 @@ __SSR__
         <p>Setups you saved from the Test page. Each one keeps the target, headers, body, load settings and pass/fail targets, so next time you open it and press Start. Credentials are stored encrypted and are only ever visible to you.</p>
         <p class="note">To keep one of the built-in jobs, open it under <a href="templates">Built-in</a> and press <strong>Save a copy</strong>. Your copy is yours to change, and it stays as you left it.</p>
       </div>
-      <div class="tpl-toolbar">
-        <span class="muted" id="myCount2" role="status"></span>
-        <span class="spacer"></span>
-        <button class="btn small" id="myImport" type="button">Import a file&hellip;</button>
-      </div>
-      <div class="tgrid" id="myGrid"></div>
-      <div class="empty" id="myEmpty" hidden>
-        <div class="empty-art" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 4h14v16l-7-4-7 4z"/></svg></div>
-        <p><strong>Nothing saved yet</strong></p>
-        <p class="muted-p">Open any job under <em>Built-in</em> and press <em>Save a copy</em>, set up a test on the Test page and press <em>Save as template</em>, or import a curl command, a HAR file, a Postman collection or an OpenAPI document.</p>
-        <p class="empty-actions"><a class="btn small" href="templates">Browse built-in templates</a> <a class="btn small" href="test">Go to the Test page</a></p>
+      <div class="panel mine-panel">
+        <div class="tpl-toolbar">
+          <span class="muted" id="myCount2" role="status"></span>
+          <span class="spacer"></span>
+          <button class="btn small" id="myImport" type="button">Import a file&hellip;</button>
+        </div>
+        <div class="tgrid" id="myGrid"></div>
+        <div class="empty" id="myEmpty" hidden>
+          <div class="empty-art" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 4h14v16l-7-4-7 4z"/></svg></div>
+          <p><strong>Nothing saved yet</strong></p>
+          <p class="muted-p">Press <em>Save a copy</em> on a built-in job, <em>Save as template</em> on the Test page, or import a curl command, a HAR file, a Postman collection or an OpenAPI document.</p>
+          <p class="empty-actions"><a class="btn small" href="templates">Browse built-in templates</a> <a class="btn small" href="test">Go to the Test page</a></p>
+        </div>
       </div>
     </div>
 

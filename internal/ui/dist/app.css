@@ -807,7 +807,7 @@ a.chip { text-decoration: none; display: inline-flex; align-items: center; gap: 
 .tcard.mine { cursor: default; }
 .tcard.mine .tsum { -webkit-line-clamp: 3; }
 .mine-meta { font-size: 12.5px; }
-.mine-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.mine-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; padding-top: 6px; }
 .mine-actions .btn.danger.inline { margin-left: auto; }
 .run-extras { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .dlg-wide { width: min(720px, calc(100vw - 32px)); }
@@ -846,3 +846,7 @@ a.chip { text-decoration: none; display: inline-flex; align-items: center; gap: 
 .imp-row .btn, .imp-row label.btn { margin: 0; align-self: center; }
 .pjob-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
 .empty-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 14px; }
+
+.mine-panel .tpl-toolbar { align-items: center; padding-bottom: 14px; margin-bottom: 16px; border-bottom: 1px solid var(--border); }
+.mine-panel .tgrid { margin: 0; }
+.mine-panel .empty { padding: 36px 16px 28px; }
