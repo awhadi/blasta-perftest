@@ -333,33 +333,6 @@ func (a *API) handleDuplicateMyFavorite(w http.ResponseWriter, r *http.Request) 
 
 var nonFile = regexp.MustCompile(`[^a-zA-Z0-9._-]+`)
 
-// handleExportMyFavorite sends a template as a job file (it also runs with `blasta run`). Values of
-// credential-like headers are left empty: a file travels, the secrets stay on the site.
-func (a *API) handleExportMyFavorite(w http.ResponseWriter, r *http.Request) {
-	_, _, t, sealed, ok := a.ownTemplate(w, r)
-	if !ok {
-		return
-	}
-	raw, err := a.openJob(sealed)
-	if err != nil {
-		writeErr(w, 500, "this favorite cannot be read")
-		return
-	}
-	job, err := config.Decode(raw)
-	if err != nil {
-		writeErr(w, 500, "this favorite cannot be read")
-		return
-	}
-	job = scrubbed(job)
-	job.Name, job.Description = t.Name, t.Description
-	file := strings.Trim(nonFile.ReplaceAllString(t.Name, "-"), "-")
-	if file == "" {
-		file = "job"
-	}
-	w.Header().Set("Content-Disposition", `attachment; filename="`+file+`.json"`)
-	writeJSON(w, 200, job)
-}
-
 // exportFavorites is the people's-data download: their templates, without credential values.
 func (a *API) exportFavorites(owner string) []map[string]any {
 	d := a.mgr.DB()

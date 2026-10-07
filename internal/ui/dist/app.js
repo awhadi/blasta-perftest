@@ -1393,12 +1393,18 @@ let openedSet = null, shownSet = '';
 
 // The star on a template: keep it, with the settings filled in, in My favorites; again to remove it.
 async function starTemplate() {
-  if (!openedSet) { openSaveDialog({ kind: 'newset' }); return; }
-  if (!confirm('Remove \u201c' + openedSet.name + '\u201d from My favorites? The built-in template stays.')) return;
   try {
-    await api('/my-templates/' + encodeURIComponent(openedSet.id), { method: 'DELETE' });
-    toast('Removed \u201c' + openedSet.name + '\u201d', 'ok');
-    go('#/templates/' + encodeURIComponent(presetDef.id));
+    if (openedSet) {
+      await api('/my-templates/' + encodeURIComponent(openedSet.id), { method: 'DELETE' });
+      toast('Removed \u201c' + openedSet.name + '\u201d from My favorites', 'ok');
+      go('#/templates/' + encodeURIComponent(presetDef.id));
+    } else {
+      // Kept as it stands now, under the template's own name: nothing is asked.
+      const t = await api('/my-templates', { method: 'POST', headers: JSON_HEADERS,
+        body: JSON.stringify({ presetId: presetDef.id, name: presetDef.title, description: '', values: presetValues() }) });
+      toast('Added \u201c' + t.name + '\u201d to My favorites', 'ok');
+      go('#/templates/' + encodeURIComponent(presetDef.id) + '?my=' + encodeURIComponent(t.id));
+    }
   } catch (e) { toast(e.message, 'error'); }
 }
 
@@ -1554,10 +1560,17 @@ function renderJobList() {
       const job = renderedJobs.find((x) => x.jobId === b.dataset.star);
       if (!job) return;
       const have = favs.list.find((f) => f.name === job.name);
-      if (have) {
-        if (!confirm('Remove \u201c' + have.name + '\u201d from My favorites?')) return;
-        try { await api('/my-favorites/' + encodeURIComponent(have.id), { method: 'DELETE' }); await loadFavorites(); renderJobList(); } catch (e) { toast(e.message, 'error'); }
-      } else if (await useJob(job)) openSaveDialog({ kind: 'fav' });   // asks for your details first, then names it
+      try {
+        if (have) await api('/my-favorites/' + encodeURIComponent(have.id), { method: 'DELETE' });
+        else {
+          // Straight into My favorites with the template's own defaults: nothing is asked.
+          await api('/my-favorites', { method: 'POST', headers: JSON_HEADERS,
+            body: JSON.stringify({ name: job.name, description: (job.notes || '').slice(0, 500), job: job.job }) });
+          toast('Added \u201c' + job.name + '\u201d to My favorites', 'ok');
+        }
+        await loadFavorites();
+        renderJobList();
+      } catch (e) { toast(e.message, 'error'); }
     };
   });
   $('presetJobs').querySelectorAll('[data-use]').forEach((b) => {
@@ -3251,7 +3264,6 @@ function favCard(t) {
     '<button type="button" class="btn small primary-sm" data-act="use">Use</button>' +
     '<button type="button" class="btn small" data-act="edit">Rename</button>' +
     '<button type="button" class="btn small" data-act="dup">Duplicate</button>' +
-    '<a class="btn small" href="api/my-favorites/' + encodeURIComponent(t.id) + '/export" download>Export</a>' +
     '</div></div>';
 }
 

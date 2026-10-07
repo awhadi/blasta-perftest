@@ -7,6 +7,16 @@ feature the middle one, a breaking change the first. The current version is the
 `Version` constant in `internal/version/version.go`; it is shown bottom right in the
 page for signed-in people, by `blasta version`, and in `/api/health`.
 
+## [2.13.3] - 2026-10-07
+
+### Changed
+- The star on a job or template now saves it to My favorites at once, with the template's own defaults:
+  nothing is asked. Stars have rounded corners.
+- The save button under Start job is centred and reads "Save as favorite with current configurations".
+
+### Removed
+- **Export** on favorite jobs (and its job-file download): everything stays in the app.
+
 ## [2.13.2] - 2026-10-07
 
 ### Changed

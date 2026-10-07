@@ -58,7 +58,7 @@ func TestPeopleKeepTheirOwnTemplates(t *testing.T) {
 	}
 
 	// Nobody else can see, change, copy or delete it.
-	for _, req := range [][3]string{{"GET", "/api/my-favorites/" + id, ""}, {"PUT", "/api/my-favorites/" + id, `{"name":"mine now"}`}, {"DELETE", "/api/my-favorites/" + id, ""}, {"POST", "/api/my-favorites/" + id + "/duplicate", ""}, {"GET", "/api/my-favorites/" + id + "/export", ""}} {
+	for _, req := range [][3]string{{"GET", "/api/my-favorites/" + id, ""}, {"PUT", "/api/my-favorites/" + id, `{"name":"mine now"}`}, {"DELETE", "/api/my-favorites/" + id, ""}, {"POST", "/api/my-favorites/" + id + "/duplicate", ""}} {
 		if code, _, _ := sam.do(req[0], req[1], req[2]); code != 404 {
 			t.Errorf("another person's %s %s = %d, want 404", req[0], req[1], code)
 		}
@@ -78,19 +78,6 @@ func TestPeopleKeepTheirOwnTemplates(t *testing.T) {
 		t.Errorf("duplicate: %d %s", code, d)
 	}
 
-	// An exported file carries no credential values.
-	code, hdr, ex := pat.do("GET", "/api/my-favorites/"+id+"/export", "")
-	if code != 200 || !strings.Contains(hdr.Get("Content-Disposition"), ".json") {
-		t.Fatalf("export: %d", code)
-	}
-	for _, secret := range []string{"SECRETVALUE123", "KEYVALUE456"} {
-		if strings.Contains(ex, secret) {
-			t.Errorf("the exported file holds %s", secret)
-		}
-	}
-	if !strings.Contains(ex, "application/json") || !strings.Contains(ex, "api.example.test") {
-		t.Errorf("the exported file should keep the harmless parts: %s", ex)
-	}
 	// The data download holds them too, without credentials.
 	if _, _, me := pat.do("GET", "/api/me/export", ""); !strings.Contains(me, "Orders API v2") || strings.Contains(me, "SECRETVALUE123") {
 		t.Errorf("the data download: %s", me)

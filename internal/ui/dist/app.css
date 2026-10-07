@@ -809,7 +809,7 @@ a.chip { text-decoration: none; display: inline-flex; align-items: center; gap: 
 .mine-meta { font-size: 12.5px; }
 .mine-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; padding-top: 6px; }
 .mine-actions .btn.danger.inline { margin-left: auto; }
-.run-extras { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.run-extras { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 12px; }
 .dlg-wide { width: min(720px, calc(100vw - 32px)); }
 #impText { width: 100%; font: 13px/1.5 var(--mono); }
 .imp-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 10px 0; }
@@ -861,7 +861,7 @@ a.chip { text-decoration: none; display: inline-flex; align-items: center; gap: 
 .run-bar span { display: block; height: 100%; background: var(--accent); transition: width .4s linear; }
 
 /* Stars (add to My favorites) and the strip of running jobs */
-.star { flex: none; width: 30px; height: 30px; padding: 0; margin: 0 8px 0 0; display: inline-grid; place-items: center; font-size: 18px; line-height: 1; background: transparent; border: 1px solid var(--border); border-radius: 50%; color: var(--dim); cursor: pointer; vertical-align: middle; transition: color .15s, border-color .15s, background .15s; }
+.star { flex: none; width: 30px; height: 30px; padding: 0; margin: 0 8px 0 0; display: inline-grid; place-items: center; font-size: 18px; line-height: 1; background: transparent; border: 1px solid var(--border); border-radius: 8px; color: var(--dim); cursor: pointer; vertical-align: middle; transition: color .15s, border-color .15s, background .15s; }
 .star:hover { color: var(--accent); border-color: var(--accent); }
 .star.on { color: var(--accent); background: var(--accent-soft); border-color: var(--accent); }
 h2.pt .star { margin: 0 0 0 8px; }

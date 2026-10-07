@@ -184,7 +184,6 @@ func (a *API) routes() {
 	a.mux.HandleFunc("PUT /api/my-favorites/{id}", a.handleUpdateMyFavorite)
 	a.mux.HandleFunc("DELETE /api/my-favorites/{id}", a.handleDeleteMyFavorite)
 	a.mux.HandleFunc("POST /api/my-favorites/{id}/duplicate", a.handleDuplicateMyFavorite)
-	a.mux.HandleFunc("GET /api/my-favorites/{id}/export", a.handleExportMyFavorite)
 	a.mux.HandleFunc("GET /api/me/export", a.handleExportMe)
 	a.mux.HandleFunc("DELETE /api/me", a.handleDeleteMe)
 	a.mux.HandleFunc("GET /api/jobs", a.handleListJobs)
