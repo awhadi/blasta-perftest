@@ -18,7 +18,7 @@ Click a filled star again to remove it from the list. Everything here is **priva
 administrator sees it through the app); up to 100 of each kind. A job's setup (which may hold an
 `Authorization` header or a login body) is **stored encrypted** with the site's key, the same protection
 as the SMTP password; only the name, description, protocol and a "GET https://host/path" line (no query
-string) are readable in the database. **Rename**, **Duplicate** and **Remove** are on each card; **Export**
+string) are readable in the database. **Rename** and **Duplicate** are on each card, and the **×** in its top right corner removes it; **Export**
 (jobs) gives a job file for `blasta run`, with credential-like header values left empty. Favorites are in
 **My account > Download my data** (without credential values) and are removed with the account.
 

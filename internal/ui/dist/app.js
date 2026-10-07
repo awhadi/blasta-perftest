@@ -3241,6 +3241,7 @@ async function showFavorites() {
 
 function favCard(t) {
   return '<div class="tcard mine" data-id="' + esc(t.id) + '" data-kind="job">' +
+    '<button type="button" class="card-x" data-act="del" aria-label="Remove from My favorites" title="Remove from My favorites">&times;</button>' +
     '<div class="tcard-head"><span class="ticon">' + catIcon('Generic') + '</span><h3>' + esc(t.name) + '</h3></div>' +
     '<div><span class="tag">Job</span> <span class="tag">' + esc(t.executor || 'http') + '</span></div>' +
     (t.description ? '<p class="tsum">' + esc(t.description) + '</p>' : '') +
@@ -3251,12 +3252,13 @@ function favCard(t) {
     '<button type="button" class="btn small" data-act="edit">Rename</button>' +
     '<button type="button" class="btn small" data-act="dup">Duplicate</button>' +
     '<a class="btn small" href="api/my-favorites/' + encodeURIComponent(t.id) + '/export" download>Export</a>' +
-    '<button type="button" class="btn danger inline small" data-act="del">Remove</button></div></div>';
+    '</div></div>';
 }
 
 function setCard(t) {
   const href = 'templates/' + encodeURIComponent(t.presetId) + '?my=' + encodeURIComponent(t.id);
   return '<div class="tcard mine" data-id="' + esc(t.id) + '" data-kind="set">' +
+    '<button type="button" class="card-x" data-act="del" aria-label="Remove from My favorites" title="Remove from My favorites">&times;</button>' +
     '<div class="tcard-head"><span class="ticon">' + catIcon(t.category) + '</span><h3>' + esc(t.name) + '</h3></div>' +
     '<div><span class="tag">Template</span> <span class="tag">' + esc(t.category || '') + '</span></div>' +
     (t.description ? '<p class="tsum">' + esc(t.description) + '</p>' : '') +
@@ -3266,7 +3268,7 @@ function setCard(t) {
     (t.missing ? '' : '<a class="btn small primary-sm" href="' + href + '">Open</a>') +
     '<button type="button" class="btn small" data-act="edit">Rename</button>' +
     '<button type="button" class="btn small" data-act="dup">Duplicate</button>' +
-    '<button type="button" class="btn danger inline small" data-act="del">Remove</button></div></div>';
+    '</div></div>';
 }
 
 // One list for both kinds, newest first.

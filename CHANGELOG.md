@@ -7,6 +7,11 @@ feature the middle one, a breaking change the first. The current version is the
 `Version` constant in `internal/version/version.go`; it is shown bottom right in the
 page for signed-in people, by `blasta version`, and in `/api/health`.
 
+## [2.13.2] - 2026-10-07
+
+### Changed
+- On My favorites the Remove button is gone; each card has a **×** in its top right corner instead.
+
 ## [2.13.1] - 2026-10-07
 
 ### Fixed

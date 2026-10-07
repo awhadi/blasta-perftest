@@ -866,3 +866,9 @@ a.chip { text-decoration: none; display: inline-flex; align-items: center; gap: 
 .star.on { color: var(--accent); background: var(--accent-soft); border-color: var(--accent); }
 h2.pt .star { margin: 0 0 0 8px; }
 .run-strip { margin-bottom: 18px; }
+
+/* Remove (x) in the top right corner of a favorite */
+.tcard.mine { position: relative; }
+.tcard.mine .tcard-head { padding-right: 30px; }
+.card-x { position: absolute; top: 10px; right: 10px; width: 28px; height: 28px; padding: 0; margin: 0; display: grid; place-items: center; font-size: 20px; line-height: 1; background: transparent; border: 0; border-radius: 50%; color: var(--dim); cursor: pointer; transition: color .15s, background .15s; }
+.card-x:hover, .card-x:focus-visible { color: var(--danger); background: var(--danger-soft); }
