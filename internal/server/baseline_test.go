@@ -138,3 +138,28 @@ func TestOnlyRunningJobsCanBeListed(t *testing.T) {
 	}
 	admin.do("POST", "/api/runs/"+id+"/stop", "")
 }
+
+func TestSeveralJobsMayRunButNotWithoutLimit(t *testing.T) {
+	t.Setenv("BLASTA_MAX_RUNNING", "2")
+	srv, _ := siteWithDB(t)
+	v := newVisitor(t, srv.URL)
+	if code, _, b := v.do("POST", "/api/auth/register", `{"email":"m@example.test","name":"M","password":"correct horse battery"}`); code != 201 {
+		t.Fatalf("register: %d %s", code, b)
+	}
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(200) }))
+	defer target.Close()
+	var ids []string
+	for i, want := range []int{202, 202, 429} {
+		_, _, jb := v.do("POST", "/api/jobs", `{"name":"J","executor":"http","target":{"url":"`+target.URL+`/"},"concurrency":1,"rps":2,"duration":3000000000,"timeout":300000000,"blockPrivate":false}`)
+		code, _, rb := v.do("POST", "/api/jobs/"+idOf(t, jb)+"/start", "")
+		if code != want {
+			t.Fatalf("start %d: got %d want %d: %s", i, code, want, rb)
+		}
+		if code == 202 {
+			ids = append(ids, idOf(t, rb))
+		}
+	}
+	for _, id := range ids {
+		v.do("POST", "/api/runs/"+id+"/stop", "")
+	}
+}

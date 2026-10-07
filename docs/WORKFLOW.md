@@ -5,45 +5,37 @@ watching.
 
 ## My favorites
 
-On the **Test** page, press **Save as favorite** to keep the whole setup: target, headers, body,
-load settings and pass/fail targets. Next time open **Templates > My favorites** (or **My favorites** in
-your user menu), press **Use** and then **Start**.
+One list, **Templates > My favorites** (also in your user menu), with two kinds of card:
 
-- Favorites are **private** to the person who saved them. Nobody else sees them, not even an
-  administrator through the app.
-- The setup (which may hold an `Authorization` header or a login body) is **stored encrypted** with
-  the site's key, the same protection as the SMTP password. Only the name, description, protocol and
-  a "GET https://host/path" line (no query string) are readable in the database.
-- **Rename**, **Duplicate** and **Delete** are on each card. **Export** gives a job file you can run
-  with `blasta run`; values of credential-like headers (Authorization, Cookie, anything with token,
-  key, secret or password in its name) are left empty in the file.
-- Changing a favorite: **Use** it, change the form, press **Save changes** in the banner (or **Save as
-  favorite** to make a new one).
-- Up to 100 favorites each. They are included in **My account > Download my data** (without
-  credential values) and are removed with the account.
+- **Job**: a whole setup (target, headers, body, load settings, pass/fail targets). Keep one with
+  **Save as favorite** on the Jobs page or on a run in History, with the **star** on any job of a
+  built-in template, or by importing a file. **Use** opens it ready to start.
+- **Template**: a built-in template with your settings (your address, ports, paths) filled in. Press
+  the **star** next to a template's title to keep it; it opens later with your settings in place, and
+  a bar at the top has **Save settings**, **Rename** and **Remove**. Credential settings are never kept.
 
-## My templates
+Click a filled star again to remove it from the list. Everything here is **private** to you (not even an
+administrator sees it through the app); up to 100 of each kind. A job's setup (which may hold an
+`Authorization` header or a login body) is **stored encrypted** with the site's key, the same protection
+as the SMTP password; only the name, description, protocol and a "GET https://host/path" line (no query
+string) are readable in the database. **Rename**, **Duplicate** and **Remove** are on each card; **Export**
+(jobs) gives a job file for `blasta run`, with credential-like header values left empty. Favorites are in
+**My account > Download my data** (without credential values) and are removed with the account.
 
-Your own copies of the built-in templates, with your settings (your address, ports, paths) already
-filled in. Open a built-in template under **Templates > Built-in**, fill in its settings and press
-**Add to My templates**. Next time open it from **Templates > My templates** (or your user menu): it
-opens with your settings in place, and the jobs are ready to use.
+To change a favorite job: **Use** it, change the form, press **Save changes** in the banner (or **Save as
+favorite** to make a new one).
 
-- **Save settings**, **Rename** and **Remove** are in the bar at the top of an opened template of yours.
-- Credential settings are never kept (those stay environment-variable references).
-- Private to you, up to 100, included in **Download my data** and removed with the account. If a
-  built-in template is ever removed from BLASTA, your copy says so and can be removed.
+## Running several jobs
 
-## Running
-
-While a test is running, a **Running** item appears next to History (with a count when there are
-several). It lists the running tests with their progress; **Watch live** opens the live view on the
-Test page and **Stop** ends the test. When nothing is running the item goes away. People see their own
-tests; an administrator sees everyone's.
+You can start more than one job: press **Start job** again after changing the form. **Running now**
+at the top of the Jobs page (and the **Running jobs** item next to History, with a count) lists them with
+their progress; **Watch live** opens one's live view and **Stop** ends it. One person may have 5 running at
+once (set `BLASTA_MAX_RUNNING` to change this). The item goes away when nothing is running. People see
+only their own jobs.
 
 ## Import
 
-**Import...** on the Test page (or on My favorites) reads, without sending anything:
+**Import...** on the Jobs page (or on My favorites) reads, without sending anything:
 
 | From | How to get it |
 |---|---|
@@ -122,6 +114,6 @@ in the repository, and refresh it when you accept a new normal.
 ## Small things
 
 - **Run again** on the live results repeats the test with the same settings.
-- **Download job file** (Test page) saves the current form as a job file for the command line.
+- **Export** on a favorite job gives a job file for the command line (`blasta run`).
 - **Save as favorite** on a past run fills the form from it first (history keeps no headers or
   bodies, so add those before saving).

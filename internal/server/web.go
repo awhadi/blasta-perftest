@@ -93,7 +93,7 @@ func (s *Server) Shutdown(ctx context.Context) error {
 }
 
 // appRoutes are the addresses the app draws pages for (the first part of the path).
-var appRoutes = map[string]bool{"running": true, "test": true, "templates": true, "history": true, "login": true, "admin": true,
+var appRoutes = map[string]bool{"running": true, "jobs": true, "test": true, "templates": true, "history": true, "login": true, "admin": true,
 	"account": true, "reset": true, "confirm": true, "confirm-email": true}
 
 func uiHandler(fsys fs.FS, base func(*http.Request) string, head func() template.HTML) http.Handler {

@@ -136,7 +136,7 @@ address and other values, the page path when the job has a fixed one, and any
 credentials such as a WordPress admin cookie. Each field has a **How do I get
 this?** guide. Credentials are typed once, go straight into the form, and are not
 saved with the template or in History; the job file itself keeps `${NAME}` for the
-CLI, which reads them from environment variables. You then land on the Test page
+CLI, which reads them from environment variables. You then land on the Jobs page
 with the form filled in, ready to review and start. **Edit details** on the banner
 reopens the dialog with your answers to change the address, path or a credential;
 your rate, duration and other load settings are left as you set them.
@@ -233,7 +233,7 @@ read-only filesystem and all capabilities dropped, and has a health check.
   [docs/AUTH.md](docs/AUTH.md).
 - **Behind a reverse proxy or under a path** (Pangolin, Traefik, nginx, `/blasta`):
   see [docs/PROXY.md](docs/PROXY.md).
-- **Visitors without an account** land on the Test page and can run a few small,
+- **Visitors without an account** land on the Jobs page and can run a few small,
   time-limited tests. They can also browse and read every template, but using a job
   and history ask them to sign in or register.
 - Without Compose: `docker build -t blasta .` then

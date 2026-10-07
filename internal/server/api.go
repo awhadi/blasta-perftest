@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -314,6 +315,13 @@ func (a *API) handleStart(w http.ResponseWriter, r *http.Request) {
 		}
 		a.mgr.PruneGuests()
 	}
+	if a.auth != nil {
+		// Several jobs may run at once; the limit keeps one person from taking the whole machine.
+		if id, _ := a.owner(r); id != "" && a.mgr.RunningOwned(id) >= maxRunningPerPerson() {
+			writeErr(w, 429, fmt.Sprintf("you already have %d jobs running: stop one or wait for it to finish", maxRunningPerPerson()))
+			return
+		}
+	}
 	run, err := a.mgr.Start(r.PathValue("id"))
 	if err != nil {
 		writeErr(w, 400, err.Error())
@@ -594,4 +602,13 @@ func parseInt(s string, def int) int {
 		return def
 	}
 	return v
+}
+
+// maxRunningPerPerson is how many jobs one signed-in person may have running at once (default 5;
+// the BLASTA_MAX_RUNNING environment variable changes it).
+func maxRunningPerPerson() int {
+	if n, err := strconv.Atoi(os.Getenv("BLASTA_MAX_RUNNING")); err == nil && n > 0 {
+		return n
+	}
+	return 5
 }

@@ -61,10 +61,10 @@ __ANALYTICS__
       <span class="brand-text"><span class="brand-name">BLASTA</span><span class="byline">Performance &amp; Load Testing Platform by AWHADI</span></span>
     </a>
     <nav aria-label="Main">
-      <button class="nav-btn active" data-view="test" type="button">Test</button>
+      <button class="nav-btn active" data-view="test" type="button">Jobs</button>
       <button class="nav-btn" data-view="templates" type="button">Templates</button>
       <button class="nav-btn" data-view="history" type="button">History</button>
-      <button class="nav-btn" data-view="running" id="navRunning" type="button" hidden>Running <span class="count" id="runCount"></span></button>
+      <button class="nav-btn" data-view="running" id="navRunning" type="button" hidden>Running jobs <span class="count" id="runCount"></span></button>
     </nav>
     <div class="spacer"></div>
     <div class="usermenu" id="userMenu" hidden>
@@ -80,7 +80,6 @@ __ANALYTICS__
           <span class="tag" id="menuRole"></span>
         </div>
         <a href="account" role="menuitem">My account</a>
-        <a href="templates?mine" role="menuitem">My templates</a>
         <a href="templates?favorites" role="menuitem">My favorites</a>
         <a href="admin" id="menuAdmin" role="menuitem" hidden>Settings <span class="count" id="menuPending"></span></a>
         <button type="button" id="menuSignOut" role="menuitem">Sign out</button>
@@ -186,7 +185,7 @@ __SSR__
       <p class="form-error" id="authErr" role="alert" hidden></p>
       <p class="auth-ok" id="authOk" role="status" hidden></p>
       <p class="auth-links" id="resendRow" hidden><a href="#" id="resendLink">Send the confirmation email again</a></p>
-      <p class="auth-links guest-link" id="guestLink" hidden>Just looking? <a href="test">Try a quick test without an account</a></p>
+      <p class="auth-links guest-link" id="guestLink" hidden>Just looking? <a href="jobs">Try a quick test without an account</a></p>
       <p class="auth-links privacy-link"><a href="privacy">Privacy and cookies</a></p>
     </div>
   </section>
@@ -227,8 +226,13 @@ __SSR__
   <section id="view-test" class="view">
     <div class="intro">
       <h1 tabindex="-1">Run a <span class="grad">load test</span></h1>
-      <p>Point BLASTA at something <strong>you own</strong>, choose how hard to hit it, and press <em>Start test</em>.
+      <p>Point BLASTA at something <strong>you own</strong>, choose how hard to hit it, and press <em>Start job</em>.
          Results stream in live.</p>
+    </div>
+
+    <div class="panel run-strip" id="runStrip" hidden>
+      <div class="tpl-toolbar"><strong>Running now</strong><span class="muted" id="stripCount" role="status"></span></div>
+      <div class="tgrid" id="stripGrid"></div>
     </div>
 
     <div class="trial" id="trialBar" hidden>
@@ -449,12 +453,11 @@ __SSR__
           <div class="summary" id="summary"></div>
           <div id="formError" class="form-error" role="alert" hidden></div>
           <button id="start" class="btn primary" type="button">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>Start test</button>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>Start job</button>
           <button id="stop" class="btn danger" type="button" disabled>Stop</button>
           <p class="kbd-hint">or press <kbd>Ctrl</kbd>/<kbd>&#8984;</kbd> + <kbd>Enter</kbd></p>
           <div class="run-extras">
             <button class="btn small" id="saveTpl" type="button" title="Keep this setup to run again later" hidden>Save as template</button>
-            <button class="btn small" id="dlJob" type="button" title="Download this setup as a job file for the blasta command line (credentials left out)">Download job file</button>
           </div>
           <div id="safety" class="safety"></div>
         </div>
@@ -476,7 +479,7 @@ __SSR__
           <svg viewBox="0 0 24 24"><path d="M3 17l5-6 4 4 8-9"/><path d="M3 21h18"/></svg>
         </div>
         <p><strong>No results yet</strong></p>
-        <p class="muted-p">Set up a target above and press <em>Start test</em>. Charts and numbers appear here as the test runs.</p>
+        <p class="muted-p">Set up a target above and press <em>Start job</em>. Charts and numbers appear here as the job runs.</p>
       </div>
 
       <div id="resultsBody" hidden>
@@ -523,32 +526,13 @@ __SSR__
   <section id="view-templates" class="view" hidden>
     <div class="chips tpl-tabs" id="tplTabs" role="navigation" aria-label="Templates" hidden>
       <a class="chip on" id="tabBuiltin" href="templates">Built-in</a>
-      <a class="chip" id="tabSets" href="templates?mine">My templates <span class="n" id="setCount"></span></a>
       <a class="chip" id="tabFavs" href="templates?favorites">My favorites <span class="n" id="favCount"></span></a>
-    </div>
-
-    <div id="setView" hidden>
-      <div class="intro">
-        <h2 class="pt" role="heading" aria-level="1" tabindex="-1">My <span class="grad">templates</span></h2>
-        <p>Your own copies of the built-in templates, with your settings already filled in (your address, ports, paths). Open one and the jobs are ready to use.</p>
-        <p class="note">To add one, open a template under <a href="templates">Built-in</a>, fill in your settings and press <strong>Add to My templates</strong>.</p>
-      </div>
-      <div class="panel mine-panel">
-        <div class="tpl-toolbar"><span class="muted" id="setCount2" role="status"></span></div>
-        <div class="tgrid" id="setGrid"></div>
-        <div class="empty" id="setEmpty" hidden>
-          <div class="empty-art" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 9h8M8 13h8M8 17h5"/></svg></div>
-          <p><strong>No templates of your own yet</strong></p>
-          <p class="muted-p">Open a built-in template, fill in your settings and press <em>Add to My templates</em>. Next time it opens with your settings in place.</p>
-          <p class="empty-actions"><a class="btn small" href="templates">Browse built-in templates</a></p>
-        </div>
-      </div>
     </div>
 
     <div id="favView" hidden>
       <div class="intro">
         <h2 class="pt" role="heading" aria-level="1" tabindex="-1">My <span class="grad">favorites</span></h2>
-        <p>Tests you saved from the Test page. Each one keeps the target, headers, body, load settings and pass/fail targets, so next time you open it and press Start. Credentials are stored encrypted and are only ever visible to you.</p>
+        <p>Jobs and templates you starred or saved. A job keeps its target, headers, body, load settings and pass/fail targets; a template keeps your settings for it. Next time you open one and press Start. Credentials are stored encrypted and are only ever visible to you.</p>
       </div>
       <div class="panel mine-panel">
         <div class="tpl-toolbar">
@@ -560,8 +544,8 @@ __SSR__
         <div class="empty" id="favEmpty" hidden>
           <div class="empty-art" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m12 3 2.7 5.6 6.1.8-4.5 4.2 1.1 6.1L12 16.8 6.6 19.7l1.1-6.1L3.2 9.4l6.1-.8z"/></svg></div>
           <p><strong>No favorites yet</strong></p>
-          <p class="muted-p">Press <em>Save as favorite</em> on the Test page or on a run in History, or import a curl command, a HAR file, a Postman collection or an OpenAPI document.</p>
-          <p class="empty-actions"><a class="btn small" href="test">Go to the Test page</a></p>
+          <p class="muted-p">Press <em>Save as favorite</em> on the Jobs page or on a run in History, or import a curl command, a HAR file, a Postman collection or an OpenAPI document.</p>
+          <p class="empty-actions"><a class="btn small" href="jobs">Go to the Jobs page</a></p>
         </div>
       </div>
     </div>
@@ -570,7 +554,7 @@ __SSR__
       <div class="intro">
         <h2 class="pt" role="heading" aria-level="1" tabindex="-1">Pick a <span class="grad">template</span></h2>
         <p>Ready-made jobs for common systems. Search by system, protocol or what you want to test
-           (<em>wordpress</em>, <em>saml</em>, <em>redis</em>, <em>spike</em>, <em>login storm</em>&hellip;), pick a job, and it opens on the Test page ready to run.</p>
+           (<em>wordpress</em>, <em>saml</em>, <em>redis</em>, <em>spike</em>, <em>login storm</em>&hellip;), pick a job, and it opens on the Jobs page ready to run.</p>
         <p class="note tpl-guest-note" hidden>You are browsing as a visitor: you can read every template and job. Sign in or create an account to use them.</p>
       </div>
       <div class="tpl-toolbar">
@@ -593,7 +577,7 @@ __SSR__
     <div id="tplDetailView" hidden>
       <a class="back" href="templates">&larr; All templates</a>
       <div class="intro">
-        <h2 class="pt" role="heading" aria-level="1" tabindex="-1"><span class="ticon" id="tplIcon" aria-hidden="true"></span><span id="tplTitle">Template</span> <span class="tag" id="tplCat"></span></h2>
+        <h2 class="pt" role="heading" aria-level="1" tabindex="-1"><span class="ticon" id="tplIcon" aria-hidden="true"></span><span id="tplTitle">Template</span> <span class="tag" id="tplCat"></span> <button class="star" id="tplStar" type="button" aria-pressed="false" title="Add this template, with your settings, to My favorites" hidden>&#9734;</button></h2>
         <p id="presetSummary"></p>
         <p class="muted" id="tplStack"></p>
         <p class="note tpl-guest-note" hidden>You are browsing as a visitor: you can read every job here. Sign in or create an account to use them.</p>
@@ -604,7 +588,6 @@ __SSR__
           <button class="btn small" id="setRename" type="button">Rename</button>
           <button class="btn danger inline small" id="setRemove" type="button">Remove</button>
         </div>
-        <p class="tpl-own" id="setAddRow" hidden><button class="btn small" id="setAdd" type="button">Add to My templates</button> <span class="muted">Keep this template with the settings below, to open it again later.</span></p>
       </div>
       <div class="panel" id="tplSettings">
         <h2>Settings for this template</h2>
@@ -627,16 +610,16 @@ __SSR__
 
   <section id="view-running" class="view" hidden>
     <div class="intro">
-      <h2 class="pt" role="heading" aria-level="1" tabindex="-1">Running <span class="grad">now</span></h2>
-      <p>Tests that are running at the moment. Watch one live, or stop it.</p>
+      <h2 class="pt" role="heading" aria-level="1" tabindex="-1">Running <span class="grad">jobs</span></h2>
+      <p>Jobs that are running at the moment. Watch one live, or stop it.</p>
     </div>
     <div class="panel mine-panel">
       <div class="tpl-toolbar"><span class="muted" id="runCount2" role="status"></span></div>
       <div class="tgrid" id="runGrid"></div>
       <div class="empty" id="runEmpty" hidden>
         <p><strong>Nothing is running</strong></p>
-        <p class="muted-p">Finished tests are in History.</p>
-        <p class="empty-actions"><a class="btn small" href="history">Open History</a> <a class="btn small" href="test">Start a test</a></p>
+        <p class="muted-p">Finished jobs are in History.</p>
+        <p class="empty-actions"><a class="btn small" href="history">Open History</a> <a class="btn small" href="jobs">Start a job</a></p>
       </div>
     </div>
   </section>
@@ -645,7 +628,7 @@ __SSR__
     <div id="histListView">
       <div class="intro">
         <h2 class="pt" role="heading" aria-level="1" tabindex="-1">Run <span class="grad">history</span></h2>
-        <p>Your tests. Open one to see it the way it looked live, with its charts, load settings and server usage.</p>
+        <p>Your jobs. Open one to see it the way it looked live, with its charts, load settings and server usage.</p>
       </div>
       <div class="hist-tools" id="histTools" hidden>
         <button type="button" class="btn small danger-outline" id="histClear">Clear all history</button>
@@ -673,7 +656,7 @@ __SSR__
           <button class="btn small danger-outline can-del" id="histDelete" type="button" hidden>Delete run</button>
           <button class="btn small" id="histBaseline" type="button" title="Compare later runs of this test with this one">Set as baseline</button>
           <button class="btn small" id="histSaveTpl" type="button" hidden title="Keep this run's target and load settings as a favorite">Save as favorite</button>
-          <button class="btn small primary-sm" id="histReuse" type="button" title="Fill the Test form with this run's target and load settings">Use these settings</button>
+          <button class="btn small primary-sm" id="histReuse" type="button" title="Fill the Jobs form with this run's target and load settings">Use these settings</button>
         </div>
         <dl class="hist-meta" id="histMeta"></dl>
         <div class="cmp" id="histCompare" hidden>
@@ -704,7 +687,7 @@ __SSR__
     <p class="note" id="askNote" hidden></p>
     <div class="dlg-actions">
       <button type="button" class="btn ghost" id="askCancel">Cancel</button>
-      <button type="submit" class="btn primary-sm" id="askOk">Add to test</button>
+      <button type="submit" class="btn primary-sm" id="askOk">Add to job</button>
     </div>
   </form>
 </dialog>

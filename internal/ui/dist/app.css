@@ -859,3 +859,10 @@ a.chip { text-decoration: none; display: inline-flex; align-items: center; gap: 
 .tpl-own .btn { margin: 0; }
 .run-bar { height: 6px; border-radius: 3px; background: var(--border); overflow: hidden; margin: 6px 0; }
 .run-bar span { display: block; height: 100%; background: var(--accent); transition: width .4s linear; }
+
+/* Stars (add to My favorites) and the strip of running jobs */
+.star { flex: none; width: 30px; height: 30px; padding: 0; margin: 0 8px 0 0; display: inline-grid; place-items: center; font-size: 18px; line-height: 1; background: transparent; border: 1px solid var(--border); border-radius: 50%; color: var(--dim); cursor: pointer; vertical-align: middle; transition: color .15s, border-color .15s, background .15s; }
+.star:hover { color: var(--accent); border-color: var(--accent); }
+.star.on { color: var(--accent); background: var(--accent-soft); border-color: var(--accent); }
+h2.pt .star { margin: 0 0 0 8px; }
+.run-strip { margin-bottom: 18px; }

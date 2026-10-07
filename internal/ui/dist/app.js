@@ -14,7 +14,7 @@ const BLASTA_UA = 'BLASTA' + (APP_VERSION ? '/' + APP_VERSION : '');
 // A template may bring its own agent (the crawler test sends a Googlebot one): keep it, tagged.
 const taggedAgent = (ua) => !ua ? BLASTA_UA : /blasta/i.test(ua) ? ua : ua + ' ' + BLASTA_UA;
 const isAgentHeader = (k) => String(k).trim().toLowerCase() === 'user-agent';
-const ROUTE_RE = /^(test|templates|history|running|login|admin|account|reset|confirm|confirm-email)(\/|$)/;
+const ROUTE_RE = /^(test|jobs|templates|history|running|login|admin|account|reset|confirm|confirm-email)(\/|$)/;
 // Addresses from before pages had paths (/#/templates/auth0, and links in emails) still work.
 if (/^#\/./.test(location.hash)) history.replaceState(null, '', toUrl(location.hash));
 const api = async (path, opts = {}) => {
@@ -252,11 +252,12 @@ function go(hash) {
 function route() {
   syncMineUI();
   const parts = routeStr().replace(/^#\/?/, '').split('/');
-  const seg = parts[0].split('?')[0];
-  let view = ['reset', 'confirm', 'confirm-email'].includes(seg) ? 'login' : VIEWS.includes(seg) ? seg : 'test';   // emailed links open on the sign-in page
-  // A visitor on a free trial can use the Test page only: templates and history ask them to sign in.
+  let seg = parts[0].split('?')[0];
+  if (seg === 'test') { history.replaceState(null, '', toUrl('#/jobs' + location.search)); seg = 'jobs'; }   // the old address
+  let view = ['reset', 'confirm', 'confirm-email'].includes(seg) ? 'login' : seg === 'jobs' ? 'test' : VIEWS.includes(seg) && seg !== 'test' ? seg : 'test';   // emailed links open on the sign-in page
+  // A visitor on a free trial can use the Jobs page only: templates and history ask them to sign in.
   if (guestMode && (view === 'history' || view === 'admin' || view === 'account')) {   // templates can be browsed; using them needs an account
-    history.replaceState(null, '', toUrl('#/test'));
+    history.replaceState(null, '', toUrl('#/jobs'));
     route();
     openGate(view);
     return;
@@ -264,8 +265,8 @@ function route() {
   // Nobody else can reach a page without signing in; once signed in the sign-in page is pointless.
   if (authCfg && !me && !guestMode && view !== 'login') { go('#/login'); return; }
   // Signed in people have no use for the sign-in page, except to follow a link from an email.
-  if (me && view === 'login' && !/^#\/(reset|confirm|confirm-email)\b/.test(routeStr())) { go('#/test'); return; }
-  if (view === 'admin' && !(me && me.role === 'admin')) { go('#/test'); return; }
+  if (me && view === 'login' && !/^#\/(reset|confirm|confirm-email)\b/.test(routeStr())) { go('#/jobs'); return; }
+  if (view === 'admin' && !(me && me.role === 'admin')) { go('#/jobs'); return; }
   document.body.classList.toggle('signed-out', view === 'login');
   const apply = () => {
     document.querySelectorAll('.nav-btn').forEach((x) =>
@@ -287,14 +288,14 @@ function route() {
   if (view === 'templates' && !parts[1]) document.title = 'Load Testing Templates: Websites, APIs, Databases | BLASTA';
   if (view === 'templates') {
     document.querySelectorAll('.tpl-guest-note').forEach((n) => { n.hidden = !guestMode; });
-    const tab = parts[1] || !me ? 'built' : /[?&]mine\b/.test(routeStr()) ? 'sets' : /[?&]favorites\b/.test(routeStr()) ? 'favs' : 'built';
+    const tab = parts[1] || !me ? 'built' : /[?&](mine|favorites)\b/.test(routeStr()) ? 'favs' : 'built';
+    if (tab === 'favs' && /[?&]mine\b/.test(routeStr())) history.replaceState(null, '', toUrl('#/templates?favorites'));   // the old address
     syncTplTabs(tab);
     if (parts[1]) {
       const [pid, q] = parts[1].split('?');
       const m = /(?:^|&)my=([^&]+)/.exec(q || '');
       openTemplate(decodeURIComponent(pid), m ? decodeURIComponent(m[1]) : '');
-    } else if (tab === 'sets') showMySets();
-    else if (tab === 'favs') showFavorites();
+    } else if (tab === 'favs') showFavorites();
     else showTemplateList();
   }
   // Move focus to the new page's heading so keyboard and screen-reader users land in context.
@@ -333,7 +334,7 @@ async function startApp() {
   $('addHeader').onclick = () => { headerRow(); $('headers').lastChild.querySelector('input').focus(); };
   $('headers').addEventListener('input', countHeaders);
 
-  document.querySelectorAll('.nav-btn').forEach((b) => { b.onclick = () => go('#/' + b.dataset.view); });
+  document.querySelectorAll('.nav-btn').forEach((b) => { b.onclick = () => go('#/' + (b.dataset.view === 'test' ? 'jobs' : b.dataset.view)); });
 
   document.querySelectorAll('#profiles button').forEach((b) => {
     b.onclick = () => {
@@ -685,10 +686,10 @@ async function start() {
     if (e.code === 'captcha_required') {          // the server wants the bot check first
       await refreshGuest();
       if (guestInfo) guestInfo.needsCheck = true;
-      showFormError('Please confirm you are not a robot, then press Start test again.');
+      showFormError('Please confirm you are not a robot, then press Start job again.');
       return;
     }
-    showFormError('Could not start the test: ' + e.message);
+    showFormError('Could not start the job: ' + e.message);
     if (guestMode) refreshGuest();
   } finally {
     btn.disabled = false;
@@ -720,7 +721,7 @@ function listen(id) {
 async function stop() {
   if (!runId) return;
   $('stop').disabled = true;
-  try { await api('/runs/' + runId + '/stop', { method: 'POST' }); toast('Stopping test…'); }
+  try { await api('/runs/' + runId + '/stop', { method: 'POST' }); toast('Stopping job…'); }
   catch (e) { toast('Could not stop: ' + e.message, 'error'); }
 }
 
@@ -1169,7 +1170,7 @@ function reuseRun(run) {
   loadedFrom = null;
   showBanner();
   toast('Loaded the target and load settings. Headers and bodies are not saved with history: add them again if the job needs them.', 'ok');
-  go('#/test');
+  go('#/jobs');
 }
 
 function esc(s) {
@@ -1384,14 +1385,31 @@ async function openTemplate(id, setId) {
       }
     } catch (e) { toast('That template of yours was not found', 'error'); }
   }
+  if (me) await Promise.all([loadFavorites(), loadSets()]);
   showSetBar();
   await refreshJobs();
 }
 let openedSet = null, shownSet = '';
 
+// The star on a template: keep it, with the settings filled in, in My favorites; again to remove it.
+async function starTemplate() {
+  if (!openedSet) { openSaveDialog({ kind: 'newset' }); return; }
+  if (!confirm('Remove \u201c' + openedSet.name + '\u201d from My favorites? The built-in template stays.')) return;
+  try {
+    await api('/my-templates/' + encodeURIComponent(openedSet.id), { method: 'DELETE' });
+    toast('Removed \u201c' + openedSet.name + '\u201d', 'ok');
+    go('#/templates/' + encodeURIComponent(presetDef.id));
+  } catch (e) { toast(e.message, 'error'); }
+}
+
 function showSetBar() {
   $('setBar').hidden = !openedSet;
-  $('setAddRow').hidden = !!openedSet || !me || guestMode;
+  const star = $('tplStar');
+  star.hidden = !me || guestMode || !presetDef;
+  star.textContent = openedSet ? '\u2605' : '\u2606';
+  star.classList.toggle('on', !!openedSet);
+  star.setAttribute('aria-pressed', String(!!openedSet));
+  star.title = openedSet ? 'In My favorites: click to remove' : 'Add this template, with your settings, to My favorites';
   if (openedSet) $('setBarName').textContent = openedSet.name;
 }
 
@@ -1502,7 +1520,10 @@ function jobCard(j) {
   const tag = j.safety && j.safety !== 'read'
     ? '<span class="tag ' + esc(j.safety) + '">' + esc(j.safety) + '</span>' : '';
   const gate = j.job.slo ? '<span class="tag gate" title="Has pass/fail targets (SLO)">SLO</span>' : '';
-  return '<div class="pjob"><div><div class="pjob-name">' + esc(j.name) + ' ' + tag + gate +
+  const starred = me && !guestMode && favs.list.some((f) => f.name === j.name);
+  const star = me && !guestMode ? '<button class="star' + (starred ? ' on' : '') + '" type="button" data-star="' + esc(j.jobId) + '" aria-pressed="' + !!starred +
+    '" title="' + (starred ? 'In My favorites: click to remove' : 'Add this job to My favorites') + '">' + (starred ? '\u2605' : '\u2606') + '</button>' : '';
+  return '<div class="pjob"><div><div class="pjob-name">' + star + esc(j.name) + ' ' + tag + gate +
     '</div><div class="pjob-id">' + esc(j.jobId) + '</div></div>' +
     '<div class="pjob-actions"><button class="btn primary-sm" type="button" data-use="' + esc(j.jobId) + '">' + (guestMode ? 'Sign in to use' : 'Use this job') + '</button>' +
     '</div>' +
@@ -1528,6 +1549,17 @@ function renderJobList() {
   }
   if (!jobs.length) html = '<p class="muted-p">No jobs match. Clear the filter or the search.</p>';
   $('presetJobs').innerHTML = html;
+  $('presetJobs').querySelectorAll('[data-star]').forEach((b) => {
+    b.onclick = async () => {
+      const job = renderedJobs.find((x) => x.jobId === b.dataset.star);
+      if (!job) return;
+      const have = favs.list.find((f) => f.name === job.name);
+      if (have) {
+        if (!confirm('Remove \u201c' + have.name + '\u201d from My favorites?')) return;
+        try { await api('/my-favorites/' + encodeURIComponent(have.id), { method: 'DELETE' }); await loadFavorites(); renderJobList(); } catch (e) { toast(e.message, 'error'); }
+      } else if (await useJob(job)) openSaveDialog({ kind: 'fav' });   // asks for your details first, then names it
+    };
+  });
   $('presetJobs').querySelectorAll('[data-use]').forEach((b) => {
     b.onclick = () => {
       if (guestMode) { openGate('use'); return; }
@@ -1582,12 +1614,12 @@ function askForDetails(j, d, opts) {
     const dlg = $('askDlg');
     const short = j.name.startsWith(presetDef.title + ': ') ? j.name.slice(presetDef.title.length + 2) : j.name;
     $('askTitle').textContent = (opts.edit ? 'Edit \u201c' : 'Set up \u201c') + short + '\u201d';
-    $('askOk').textContent = opts.edit ? 'Save changes' : 'Add to test';
+    $('askOk').textContent = opts.edit ? 'Save changes' : 'Add to job';
     const unset = d.vars.filter((v) => v.placeholder).length;
     $('askIntro').textContent = opts.edit
       ? 'Change any detail. Only the address, path, headers and body are updated: your rate, duration and other load settings stay as they are.'
       : unset || d.creds.length
-        ? 'Fill in what you can. Nothing is checked here, and you can change everything on the Test page.'
+        ? 'Fill in what you can. Nothing is checked here, and you can change everything on the Jobs page.'
         : 'Check the details this job will use.';
 
     let n = 0;
@@ -1671,7 +1703,7 @@ function applySecrets(secrets) {
   document.querySelectorAll('#headers .hrow [data-role=v]').forEach((i) => { i.value = sub(i.value); });
 }
 
-// Hand a chosen job to the Test page and go back there to start it. It asks for
+// Hand a chosen job to the Jobs page and go back there to start it. It asks for
 // everything the job needs first, so it never silently uses an example address
 // or an unfilled credential.
 async function useJob(j) {
@@ -1698,7 +1730,7 @@ async function useJob(j) {
     // kept in memory only, so Edit can prefill the dialog
     vars: answers ? answers.vars : {}, path: answers ? answers.path : null, secrets: answers ? answers.secrets : {} };
   showBanner();
-  go('#/test');
+  go('#/jobs');
   return true;
 }
 
@@ -1877,7 +1909,7 @@ function usePresetJob(j) {
   syncProfileFromFields();
   updateSafety();
   showFormError('');
-  toast('Loaded \u201c' + j.name + '\u201d \u2014 review the fields, then press Start test', 'ok');
+  toast('Loaded \u201c' + j.name + '\u201d \u2014 review the fields, then press Start job', 'ok');
 }
 
 
@@ -2075,7 +2107,7 @@ function sessionEnded() {
   $('userMenu').hidden = true;
   if (authCfg && authCfg.guest) {
     store.set(SESSION_KEY, '');
-    history.replaceState(null, '', toUrl('#/test'));
+    history.replaceState(null, '', toUrl('#/jobs'));
     location.reload();
     return;
   }
@@ -2229,7 +2261,7 @@ function showLogin() {
 function afterSignIn() {
   // A full reload guarantees nothing from a previous account stays in the page.
   store.set(SESSION_KEY, '');
-  history.replaceState(null, '', toUrl('#/test'));
+  history.replaceState(null, '', toUrl('#/jobs'));
   location.reload();
 }
 
@@ -2352,7 +2384,7 @@ function wireAuth() {
   $('menuSignOut').onclick = async () => {
     await authCall('POST', 'logout');
     store.set(SESSION_KEY, '');
-    history.replaceState(null, '', toUrl(authCfg && authCfg.guest ? '#/test' : '#/login'));    // the homepage, when visitors are welcome
+    history.replaceState(null, '', toUrl(authCfg && authCfg.guest ? '#/jobs' : '#/login'));    // the homepage, when visitors are welcome
     location.reload();
   };
   wirePasswordDialog();
@@ -2386,7 +2418,7 @@ function wirePasswordDialog() {
       await api('/me', { method: 'DELETE', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password: $('delPassword').value, confirm: $('delConfirm').value }) });
       store.set(SESSION_KEY, '');
-      history.replaceState(null, '', toUrl('#/test'));
+      history.replaceState(null, '', toUrl('#/jobs'));
       location.reload();
     } catch (err) {
       $('delErr').textContent = err.message;
@@ -2709,7 +2741,7 @@ async function renderGeneral() {
 async function renderTrialSettings() {
   const d = await getSettings(), t = d.guest;
   $('adminSection').innerHTML = pageHead('Free Trial', 'Free Trial',
-    'Someone who has not registered lands on the Test page and can run a few small web tests for a short while. Templates, history and everything else ask them to sign in or register.', saveBtn('f-trial')) +
+    'Someone who has not registered lands on the Jobs page and can run a few small web tests for a short while. Templates, history and everything else ask them to sign in or register.', saveBtn('f-trial')) +
     subcard('Visitor limits', 'Trial tests are never saved and can only reach public addresses.', pill(t.enabled, 'Enabled', 'Off'),
       '<form id="f-trial" class="modal-form">' +
       toggle('s-guestOn', 'Let visitors try BLASTA without an account', t.enabled) +
@@ -3172,16 +3204,17 @@ let favs = { list: [], max: 100 }, sets = { list: [], max: 100 };
 async function loadFavorites() {
   if (!me) { favs = { list: [], max: 100 }; return; }
   try { const r = await api('/my-favorites'); favs = { list: r.favorites || [], max: r.max || 100 }; } catch (e) { favs.list = []; }
-  $('favCount').textContent = favs.list.length || '';
+  paintFavCount();
 }
 
 async function loadSets() {
   if (!me) { sets = { list: [], max: 100 }; return; }
   try { const r = await api('/my-templates'); sets = { list: r.templates || [], max: r.max || 100 }; } catch (e) { sets.list = []; }
-  $('setCount').textContent = sets.list.length || '';
+  paintFavCount();
 }
 
-function hideMine() { $('setView').hidden = true; $('favView').hidden = true; }
+function paintFavCount() { $('favCount').textContent = (favs.list.length + sets.list.length) || ''; }
+function hideMine() { $('favView').hidden = true; }
 
 function syncMineUI() {
   $('tplTabs').hidden = !me;
@@ -3192,19 +3225,8 @@ function syncMineUI() {
 function syncTplTabs(tab) {
   syncMineUI();
   $('tabBuiltin').classList.toggle('on', tab === 'built');
-  $('tabSets').classList.toggle('on', tab === 'sets');
   $('tabFavs').classList.toggle('on', tab === 'favs');
   if (me) { loadFavorites(); loadSets(); }
-}
-
-async function showMySets() {
-  $('tplListView').hidden = true;
-  $('tplDetailView').hidden = true;
-  hideMine();
-  $('setView').hidden = false;
-  document.title = 'My templates | BLASTA';
-  await loadSets();
-  renderSets();
 }
 
 async function showFavorites() {
@@ -3213,36 +3235,14 @@ async function showFavorites() {
   hideMine();
   $('favView').hidden = false;
   document.title = 'My favorites | BLASTA';
-  await loadFavorites();
+  await Promise.all([loadFavorites(), loadSets()]);
   renderFavorites();
 }
 
-function setCard(t) {
-  const href = 'templates/' + encodeURIComponent(t.presetId) + '?my=' + encodeURIComponent(t.id);
-  return '<div class="tcard mine" data-id="' + esc(t.id) + '">' +
-    '<div class="tcard-head"><span class="ticon">' + catIcon(t.category) + '</span><h3>' + esc(t.name) + '</h3></div>' +
-    '<div><span class="tag">' + esc(t.category || 'Template') + '</span></div>' +
-    (t.description ? '<p class="tsum">' + esc(t.description) + '</p>' : '') +
-    '<div class="tstack">' + (t.missing ? 'The built-in template this came from is gone' : 'From ' + esc(t.title) + ' · ' + t.jobs + ' jobs') + '</div>' +
-    '<div class="mine-meta muted">Saved ' + esc(ago(t.updatedAt)) + '</div>' +
-    '<div class="mine-actions">' +
-    (t.missing ? '' : '<a class="btn small primary-sm" href="' + href + '">Open</a>') +
-    '<button type="button" class="btn small" data-act="edit">Rename</button>' +
-    '<button type="button" class="btn small" data-act="dup">Duplicate</button>' +
-    '<button type="button" class="btn danger inline small" data-act="del">Remove</button></div></div>';
-}
-
-function renderSets() {
-  const L = sets.list;
-  $('setCount2').textContent = L.length + ' of ' + sets.max + ' saved';
-  $('setEmpty').hidden = L.length > 0;
-  $('setGrid').innerHTML = L.map(setCard).join('');
-}
-
 function favCard(t) {
-  return '<div class="tcard mine" data-id="' + esc(t.id) + '">' +
+  return '<div class="tcard mine" data-id="' + esc(t.id) + '" data-kind="job">' +
     '<div class="tcard-head"><span class="ticon">' + catIcon('Generic') + '</span><h3>' + esc(t.name) + '</h3></div>' +
-    '<div><span class="tag">' + esc(t.executor || 'http') + '</span></div>' +
+    '<div><span class="tag">Job</span> <span class="tag">' + esc(t.executor || 'http') + '</span></div>' +
     (t.description ? '<p class="tsum">' + esc(t.description) + '</p>' : '') +
     (t.summary ? '<div class="tstack">' + esc(t.summary) + '</div>' : '') +
     '<div class="mine-meta muted">Saved ' + esc(ago(t.updatedAt)) + '</div>' +
@@ -3251,14 +3251,31 @@ function favCard(t) {
     '<button type="button" class="btn small" data-act="edit">Rename</button>' +
     '<button type="button" class="btn small" data-act="dup">Duplicate</button>' +
     '<a class="btn small" href="api/my-favorites/' + encodeURIComponent(t.id) + '/export" download>Export</a>' +
-    '<button type="button" class="btn danger inline small" data-act="del">Delete</button></div></div>';
+    '<button type="button" class="btn danger inline small" data-act="del">Remove</button></div></div>';
 }
 
+function setCard(t) {
+  const href = 'templates/' + encodeURIComponent(t.presetId) + '?my=' + encodeURIComponent(t.id);
+  return '<div class="tcard mine" data-id="' + esc(t.id) + '" data-kind="set">' +
+    '<div class="tcard-head"><span class="ticon">' + catIcon(t.category) + '</span><h3>' + esc(t.name) + '</h3></div>' +
+    '<div><span class="tag">Template</span> <span class="tag">' + esc(t.category || '') + '</span></div>' +
+    (t.description ? '<p class="tsum">' + esc(t.description) + '</p>' : '') +
+    '<div class="tstack">' + (t.missing ? 'The built-in template this came from is gone' : 'From ' + esc(t.title) + ' \u00b7 ' + t.jobs + ' jobs') + '</div>' +
+    '<div class="mine-meta muted">Saved ' + esc(ago(t.updatedAt)) + '</div>' +
+    '<div class="mine-actions">' +
+    (t.missing ? '' : '<a class="btn small primary-sm" href="' + href + '">Open</a>') +
+    '<button type="button" class="btn small" data-act="edit">Rename</button>' +
+    '<button type="button" class="btn small" data-act="dup">Duplicate</button>' +
+    '<button type="button" class="btn danger inline small" data-act="del">Remove</button></div></div>';
+}
+
+// One list for both kinds, newest first.
 function renderFavorites() {
-  const L = favs.list;
-  $('favCount2').textContent = L.length + ' of ' + favs.max + ' saved';
-  $('favEmpty').hidden = L.length > 0;
-  $('favGrid').innerHTML = L.map(favCard).join('');
+  const all = favs.list.map((t) => ({ t, set: false })).concat(sets.list.map((t) => ({ t, set: true })))
+    .sort((a, b) => String(b.t.updatedAt).localeCompare(String(a.t.updatedAt)));
+  $('favCount2').textContent = all.length + ' saved';
+  $('favEmpty').hidden = all.length > 0;
+  $('favGrid').innerHTML = all.map((x) => (x.set ? setCard : favCard)(x.t)).join('');
 }
 
 async function useFavorite(id) {
@@ -3267,54 +3284,37 @@ async function useFavorite(id) {
   usePresetJob({ jobId: t.id, name: t.name, notes: t.description || '', safety: 'read', job: t.job });
   loadedFrom = { id: t.id, title: 'My favorites', job: t.name, notes: t.description || '', safety: 'read', gate: !!(t.job && t.job.slo), mine: true };
   showBanner();
-  go('#/test');
+  go('#/jobs');
 }
 
 function wireMine() {
   $('favGrid').onclick = async (e) => {
     const b = e.target.closest('[data-act]');
     if (!b) return;
-    const t = favs.list.find((x) => x.id === b.closest('.tcard').dataset.id);
+    const card = b.closest('.tcard');
+    const isSet = card.dataset.kind === 'set';
+    const t = (isSet ? sets : favs).list.find((x) => x.id === card.dataset.id);
     if (!t) return;
+    const base = isSet ? '/my-templates/' : '/my-favorites/';
     try {
       if (b.dataset.act === 'use') await useFavorite(t.id);
-      else if (b.dataset.act === 'edit') openSaveDialog({ kind: 'fav', edit: t });
+      else if (b.dataset.act === 'edit') openSaveDialog({ kind: isSet ? 'set' : 'fav', edit: t });
       else if (b.dataset.act === 'dup') {
-        await api('/my-favorites/' + encodeURIComponent(t.id) + '/duplicate', { method: 'POST' });
-        toast('Duplicated “' + t.name + '”', 'ok');
-        await loadFavorites(); renderFavorites();
+        await api(base + encodeURIComponent(t.id) + '/duplicate', { method: 'POST' });
+        toast('Duplicated \u201c' + t.name + '\u201d', 'ok');
       } else if (b.dataset.act === 'del') {
-        if (!confirm('Delete “' + t.name + '”? This cannot be undone.')) return;
-        await api('/my-favorites/' + encodeURIComponent(t.id), { method: 'DELETE' });
-        if (loadedFrom && loadedFrom.mine && loadedFrom.id === t.id) { loadedFrom = null; showBanner(); }
-        toast('Deleted “' + t.name + '”', 'ok');
-        await loadFavorites(); renderFavorites();
+        if (!confirm('Remove \u201c' + t.name + '\u201d from My favorites?' + (isSet ? ' The built-in template stays.' : ' This cannot be undone.'))) return;
+        await api(base + encodeURIComponent(t.id), { method: 'DELETE' });
+        if (!isSet && loadedFrom && loadedFrom.mine && loadedFrom.id === t.id) { loadedFrom = null; showBanner(); }
+        toast('Removed \u201c' + t.name + '\u201d', 'ok');
       }
-    } catch (err) { toast(err.message, 'error'); }
-  };
-  $('setGrid').onclick = async (e) => {
-    const b = e.target.closest('[data-act]');
-    if (!b) return;
-    const t = sets.list.find((x) => x.id === b.closest('.tcard').dataset.id);
-    if (!t) return;
-    try {
-      if (b.dataset.act === 'edit') openSaveDialog({ kind: 'set', edit: t });
-      else if (b.dataset.act === 'dup') {
-        await api('/my-templates/' + encodeURIComponent(t.id) + '/duplicate', { method: 'POST' });
-        toast('Duplicated “' + t.name + '”', 'ok');
-        await loadSets(); renderSets();
-      } else if (b.dataset.act === 'del') {
-        if (!confirm('Remove “' + t.name + '” from My templates? The built-in template stays.')) return;
-        await api('/my-templates/' + encodeURIComponent(t.id), { method: 'DELETE' });
-        toast('Removed “' + t.name + '”', 'ok');
-        await loadSets(); renderSets();
-      }
+      await Promise.all([loadFavorites(), loadSets()]); renderFavorites();
     } catch (err) { toast(err.message, 'error'); }
   };
   $('favImport').onclick = () => openImport('');
   $('saveTpl').onclick = () => openSaveDialog({ kind: 'fav' });
   $('tplSave').onclick = updateLoadedFavorite;
-  $('setAdd').onclick = () => openSaveDialog({ kind: 'newset' });
+  $('tplStar').onclick = starTemplate;
   $('setRename').onclick = () => openedSet && openSaveDialog({ kind: 'set', edit: openedSet, stay: true });
   $('setSave').onclick = async () => {
     if (!openedSet) return;
@@ -3328,10 +3328,9 @@ function wireMine() {
     try {
       await api('/my-templates/' + encodeURIComponent(openedSet.id), { method: 'DELETE' });
       toast('Removed “' + openedSet.name + '”', 'ok');
-      go('#/templates?mine');
+      go('#/templates?favorites');
     } catch (e) { toast(e.message, 'error'); }
   };
-  $('dlJob').onclick = downloadJobFile;
   $('importBtn').onclick = () => openImport('');
   $('runAgain').onclick = () => { if (!$('start').disabled) start(); };
 
@@ -3360,7 +3359,7 @@ function wireMine() {
         toast('Template updated', 'ok');
         $('saveTplDlg').close();
         await loadSets();
-        if (!$('setView').hidden) renderSets();
+        if (!$('favView').hidden) renderFavorites();
         return;
       }
       if (edit) {
@@ -3422,23 +3421,6 @@ async function updateLoadedFavorite() {
   } catch (e) { toast(e.message, 'error'); }
 }
 
-// A job file for the command line (blasta run). Values of credential-like headers are left empty.
-function downloadJobFile() {
-  const problem = validate();
-  showFormError(problem && problem[0], problem && problem[1]);
-  if (problem) return;
-  const job = buildJob();
-  job.headers = Object.fromEntries(Object.entries(job.headers || {}).map(([k, v]) => [k, SECRET_HEADER.test(k) ? '' : v]));
-  const blob = new Blob([JSON.stringify(job, null, 2) + '\n'], { type: 'application/json' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'blasta-' + manualTestHost().replace(/[^a-z0-9.-]+/gi, '-') + '.json';
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-  toast('Downloaded a job file. Credentials were left out: add them as ${ENV} references.', 'ok');
-}
 
 /* Import: a curl command, a HAR file, a Postman collection or an OpenAPI document. */
 
@@ -3511,7 +3493,7 @@ function wireImport() {
     usePresetJob({ jobId: 'import', name: r.name, notes: '', safety: 'read', job: importedJob(r) });
     loadedFrom = null;
     showBanner();
-    go('#/test');
+    go('#/jobs');
   };
   $('impSaveAll').onclick = async () => {
     if (!impResult) return;
@@ -3527,7 +3509,7 @@ function wireImport() {
     if (!saved) { $('impErr').textContent = last || 'Nothing could be saved.'; $('impErr').hidden = false; return; }
     $('importDlg').close();
     toast('Saved ' + saved + (saved === 1 ? ' favorite' : ' favorites') + (last ? ' (some could not be saved: ' + last + ')' : ''), 'ok');
-    go('#/templates?mine');
+    go('#/templates?favorites');
   };
 }
 
@@ -3620,7 +3602,18 @@ function paintRunning() {
   const n = runningNow.length;
   $('navRunning').hidden = n === 0 || guestMode;
   $('runCount').textContent = n > 1 ? n : '';
+  renderStrip();
   if (!$('view-running').hidden) renderRunning();
+}
+
+// The page's security policy forbids style attributes in markup, so bar widths are set here.
+function paintBars(root) { root.querySelectorAll('.run-bar span[data-pct]').forEach((s) => { s.style.width = s.dataset.pct + '%'; }); }
+
+function renderStrip() {
+  const n = runningNow.length;
+  $('runStrip').hidden = n === 0 || guestMode;
+  $('stripCount').textContent = n === 1 ? '1 job' : n + ' jobs';
+  if (n) { $('stripGrid').innerHTML = runningNow.map(runCard).join(''); paintBars($('stripGrid')); }
 }
 
 function runCard(r) {
@@ -3632,7 +3625,7 @@ function runCard(r) {
     '<div class="tcard-head"><span class="ticon">' + catIcon('Generic') + '</span><h3>' + esc(testName(r.jobName)) + '</h3></div>' +
     '<div><span class="tag">' + esc(r.executor || 'http') + '</span> <span class="state running">running</span></div>' +
     '<div class="tstack">' + esc(r.target || '') + '</div>' +
-    '<div class="run-bar" role="progressbar" aria-valuenow="' + pct + '" aria-valuemin="0" aria-valuemax="100"><span style="width:' + pct + '%"></span></div>' +
+    '<div class="run-bar" role="progressbar" aria-valuenow="' + pct + '" aria-valuemin="0" aria-valuemax="100"><span data-pct="' + pct + '"></span></div>' +
     '<div class="mine-meta muted">' + Math.round(el) + (secs ? ' of ' + Math.round(secs) : '') + ' s' + (s.total ? ' · ' + s.total + ' requests' : '') +
     (r.ownerName && me && r.owner !== me.id ? ' · ' + esc(r.ownerName) : '') + '</div>' +
     '<div class="mine-actions">' +
@@ -3642,12 +3635,13 @@ function runCard(r) {
 
 function renderRunning() {
   $('runGrid').innerHTML = runningNow.map(runCard).join('');
+  paintBars($('runGrid'));
   $('runEmpty').hidden = runningNow.length > 0;
   $('runCount2').textContent = runningNow.length ? runningNow.length + ' running' : '';
 }
 
 function wireRunning() {
-  $('runGrid').onclick = async (e) => {
+  $('stripGrid').onclick = $('runGrid').onclick = async (e) => {
     const b = e.target.closest('[data-act]');
     if (!b) return;
     const id = b.closest('.tcard').dataset.id;
@@ -3655,11 +3649,12 @@ function wireRunning() {
       if (b.dataset.act === 'watch') {
         saveSession({ runId: id, slo: null });
         await restoreSession(id);
-        go('#/test');
+        go('#/jobs');
+        $('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
       } else if (!b.disabled) {
         b.disabled = true;
         await api('/runs/' + encodeURIComponent(id) + '/stop', { method: 'POST' });
-        toast('Stopping test…');
+        toast('Stopping job…');
         setTimeout(pollRunning, 800);
       }
     } catch (err) { toast(err.message, 'error'); }
@@ -3703,7 +3698,7 @@ async function init() {
   syncRegistrationLinks();
   // Opening the bare sign-in address (a bookmark, or where a sign-out used to land)
   // goes to the homepage when visitors are welcome; "Sign in" links still work.
-  if (guestMode && /^#\/login\/?$/.test(routeStr())) history.replaceState(null, '', toUrl('#/test'));
+  if (guestMode && /^#\/login\/?$/.test(routeStr())) history.replaceState(null, '', toUrl('#/jobs'));
   if (signedIn) await startApp(); else route();
 }
 init();

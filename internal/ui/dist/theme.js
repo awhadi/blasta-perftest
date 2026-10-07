@@ -5,7 +5,7 @@
   var p = location.pathname;
   // A page's own address (/templates/auth0) needs nothing: the server has already said where
   // the files are. Only the bare root of a mount point needs its slash.
-  if (/\/(test|templates|history|running|login|admin|account|reset|confirm|confirm-email)(\/|$)/.test(p)) return;
+  if (/\/(test|jobs|templates|history|running|login|admin|account|reset|confirm|confirm-email)(\/|$)/.test(p)) return;
   if (p.slice(-1) !== '/' && p.split('/').pop().indexOf('.') < 0) location.replace(p + '/' + location.search + location.hash);
 })();
 // Runs before first paint so the page never flashes the wrong colour scheme.

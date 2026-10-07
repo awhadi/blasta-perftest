@@ -305,6 +305,19 @@ func (m *Manager) CountOwned(owner string) (jobs int, running bool) {
 	return
 }
 
+// RunningOwned counts the owner's runs that are running now.
+func (m *Manager) RunningOwned(owner string) int {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	n := 0
+	for _, r := range m.runs {
+		if v := r.view(); v.Owner == owner && v.State == "running" {
+			n++
+		}
+	}
+	return n
+}
+
 // ErrRunning is returned when asked to delete a run that has not finished.
 var ErrRunning = errors.New("that test is still running: stop it first")
 

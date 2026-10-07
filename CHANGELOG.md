@@ -7,6 +7,29 @@ feature the middle one, a breaking change the first. The current version is the
 `Version` constant in `internal/version/version.go`; it is shown bottom right in the
 page for signed-in people, by `blasta version`, and in `/api/health`.
 
+## [2.13.0] - 2026-10-07
+
+### Added
+- A **star** on every job of a built-in template, and next to a template's title: click it to keep the
+  job (after BLASTA asks for your details) or the template (with your settings) in My favorites; click
+  a filled star to remove it.
+- **Several jobs at once.** Press Start job again after changing the form. **Running now** at the top of the
+  Jobs page lists your running jobs with progress, Watch live and Stop. One person may run 5 at once
+  (`BLASTA_MAX_RUNNING` changes it); one more gets a clear message.
+
+### Changed
+- **My templates and My favorites are one list**, My favorites, with a Job or Template tag on each card.
+  The My templates tab and menu item are gone; old `templates?mine` links open My favorites. Nothing
+  you saved is lost.
+- The Test page is now **Jobs** (`/jobs`; `/test` still opens it): "Start job", "Running jobs" and so on.
+
+### Removed
+- The **Download job file** button on the Jobs page. Favorite jobs still have **Export**.
+
+### Fixed
+- The progress bars on the Running page were drawn full width because the page's security policy blocks
+  style attributes; they are now set from the script.
+
 ## [2.12.0] - 2026-10-07
 
 ### Added
