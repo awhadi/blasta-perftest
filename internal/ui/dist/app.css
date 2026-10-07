@@ -341,7 +341,7 @@ td a:hover { text-decoration: underline; }
 @media (max-width: 600px) { .pjob { grid-template-columns: 1fr; } }
 
 /* ================= Toasts ================= */
-.toasts { position: fixed; left: 24px; bottom: 24px; display: grid; gap: 12px; z-index: 60; width: min(440px, calc(100vw - 48px)); pointer-events: none; }
+.toasts { position: fixed; right: 24px; bottom: 48px; display: grid; gap: 12px; z-index: 60; width: min(440px, calc(100vw - 48px)); pointer-events: none; }
 .toast { pointer-events: auto; cursor: pointer; background: var(--panel); border: 1px solid var(--border); border-left: 4px solid var(--accent); border-radius: 12px; padding: 16px 20px; font-size: 15px; line-height: 1.45; box-shadow: 0 22px 48px -14px var(--shadow); animation: toast-in .38s cubic-bezier(.2,.8,.2,1) both; }
 .toast.leaving { animation: toast-out .32s cubic-bezier(.5,0,.8,.4) both; }
 .toast.error { border-left-color: var(--danger); } .toast.ok { border-left-color: var(--ok); }
@@ -350,8 +350,8 @@ td a:hover { text-decoration: underline; }
 .toast-lines li { padding-left: 14px; position: relative; overflow-wrap: anywhere; }
 .toast-lines li::before { content: ""; position: absolute; left: 0; top: .62em; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
 /* in from the left edge, out the same way */
-@keyframes toast-in { from { transform: translateX(-120%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-@keyframes toast-out { from { transform: translateX(0); opacity: 1; } to { transform: translateX(-120%); opacity: 0; } }
+@keyframes toast-in { from { transform: translateX(120%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+@keyframes toast-out { from { transform: translateX(0); opacity: 1; } to { transform: translateX(120%); opacity: 0; } }
 @keyframes slide { from { transform: translateY(10px); opacity: 0; } }
 
 /* ================= Motion ================= */
