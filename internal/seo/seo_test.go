@@ -2,6 +2,7 @@ package seo
 
 import (
 	"encoding/json"
+	"encoding/xml"
 	stdhtml "html"
 	"os"
 	"regexp"
@@ -236,8 +237,8 @@ func TestSitemapRobotsAndLLMs(t *testing.T) {
 			t.Errorf("sitemap lacks %s", loc)
 		}
 	}
-	if strings.Contains(sm, "#") || !strings.Contains(sm, `href="sitemap.xsl"`) {
-		t.Error("the sitemap should hold real addresses and point at its stylesheet")
+	if strings.Contains(sm, "#") || strings.Contains(sm, "xml-stylesheet") {
+		t.Error("the sitemap should hold real addresses and be plain sitemap XML")
 	}
 	r := Robots(base)
 	if !strings.Contains(r, "Disallow: /api/") || !strings.Contains(r, "Sitemap: "+base+"/sitemap.xml") || strings.Contains(r, "Disallow: /\n") {
@@ -246,5 +247,31 @@ func TestSitemapRobotsAndLLMs(t *testing.T) {
 	l := LLMs(base)
 	if !strings.HasPrefix(l, "# BLASTA\n\n> ") || !strings.Contains(l, "("+base+"/templates/wordpress)") {
 		t.Errorf("llms.txt: %.300s", l)
+	}
+}
+
+// Search engines read the sitemap with a strict parser: it must be well-formed XML in the
+// sitemap namespace, one <loc> per address, with nothing in front of the XML declaration.
+func TestSitemapIsStrictXML(t *testing.T) {
+	sm := Sitemap("https://blasta.example.org")
+	if !strings.HasPrefix(sm, `<?xml version="1.0" encoding="UTF-8"?>`) {
+		t.Fatal("the XML declaration must come first")
+	}
+	var doc struct {
+		XMLName xml.Name `xml:"urlset"`
+		URLs    []struct {
+			Loc string `xml:"loc"`
+		} `xml:"url"`
+	}
+	if err := xml.Unmarshal([]byte(sm), &doc); err != nil {
+		t.Fatalf("not well-formed XML: %v", err)
+	}
+	if doc.XMLName.Space != "http://www.sitemaps.org/schemas/sitemap/0.9" || len(doc.URLs) < 3 {
+		t.Errorf("wrong namespace or too few urls: %q, %d", doc.XMLName.Space, len(doc.URLs))
+	}
+	for _, u := range doc.URLs {
+		if !strings.HasPrefix(u.Loc, "https://blasta.example.org/") {
+			t.Errorf("address not on the site: %s", u.Loc)
+		}
 	}
 }
