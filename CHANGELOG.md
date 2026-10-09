@@ -7,6 +7,13 @@ feature the middle one, a breaking change the first. The current version is the
 `Version` constant in `internal/version/version.go`; it is shown bottom right in the
 page for signed-in people, by `blasta version`, and in `/api/health`.
 
+## [2.14.5] - 2026-10-09
+
+### Fixed
+- The Public URL set with `BLASTA_PUBLIC_URL` is no longer wiped when Settings > General was saved with the
+  address left empty. It now applies unless an address is typed in Settings. This is what the sitemap,
+  robots.txt, canonical links and SSO redirects use.
+
 ## [2.14.4] - 2026-10-09
 
 ### Fixed

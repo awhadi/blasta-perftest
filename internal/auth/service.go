@@ -218,7 +218,11 @@ func (s *Service) compose() (Config, error) {
 	if ok, err := s.settings.Get(settings.KeyGeneral, &g); err != nil {
 		return cfg, err
 	} else if ok {
-		cfg.PublicURL, cfg.Registration, cfg.AllowedDomains = g.PublicURL, g.Registration, g.AllowedDomains
+		// An address left empty in Settings keeps the one from BLASTA_PUBLIC_URL.
+		if g.PublicURL != "" {
+			cfg.PublicURL = g.PublicURL
+		}
+		cfg.Registration, cfg.AllowedDomains = g.Registration, g.AllowedDomains
 		cfg.OTPLogin, cfg.DisableReset = g.OTPLogin, g.DisableReset
 	}
 	if v, ok, err := s.settings.GetSSO(); err != nil {
